@@ -48,7 +48,12 @@ Example templates are included to get you started!
 
 ## 🔌 API Usage
 
-Convert Markdown with a simple POST request:
+The full contract lives in [`swagger.yaml`](swagger.yaml) (OpenAPI 3.0). Integration suite:
+`./test_api.sh [base_url]` (or `make test-api`) against a running server.
+
+### Legacy endpoint — `POST /` (FormData)
+
+Unchanged, still supported:
 
 ```bash
 curl --data-urlencode 'markdown=# Heading 1' \
@@ -57,8 +62,6 @@ curl --data-urlencode 'markdown=# Heading 1' \
      --output document.pdf \
      https://your-deployment-url
 ```
-
-### Parameters
 
 | Parameter          | Required | Description                                                           |
 |--------------------|----------|-----------------------------------------------------------------------|
@@ -69,20 +72,71 @@ curl --data-urlencode 'markdown=# Heading 1' \
 | `footer_template`  | ❌       | Specify a custom footer template from the `templates` folder          |
 | `client_id`        | ❌       | Optional client identifier for document tracking                      |
 | `pdf_name`         | ❌       | Custom name for the generated PDF                                     |
-| `blurred_paragraphs`| ❌      | Alternative way to specify paragraphs to blur (array of indexes)      |
+
+### JSON API — `/api/*`
+
+| Endpoint              | Method | Description                                                        |
+|-----------------------|--------|--------------------------------------------------------------------|
+| `/api/health`         | GET    | Status, version and the PDF engines actually installed             |
+| `/api/convert`        | POST   | Markdown → PDF (`markdown`, `css`, `engine`, `options`, header/footer) |
+| `/api/render`         | POST   | Tera template + `data` → PDF                                       |
+| `/api/html-to-pdf`    | POST   | Raw HTML → PDF                                                     |
+| `/api/preview`        | POST   | First page as a PNG (`markdown`, `html`, or `template` + `data`)   |
+| `/api/merge`          | POST   | Merge ≥ 2 previously saved PDFs                                    |
+| `/api/watermark`      | POST   | Overlay a text watermark on a saved PDF                            |
+| `/api/protect`        | POST   | AES-256 password protection on a saved PDF                         |
+| `/download/{client_id}/{pdf_name}` | GET | Fetch a saved PDF                                     |
+
+Every endpoint that produces a PDF returns the **binary PDF** by default, or
+`{"download_url": "/download/<client_id>/<pdf_name>.pdf"}` when both `client_id` and
+`pdf_name` are provided. `client_id` and `pdf_name` must be plain names
+(`[A-Za-z0-9._-]`, not starting with a dot).
+
+`options` accepts `paper_size` (`a4`, `a3`, `letter`), `orientation`, `margins`,
+`page_numbers`, `page_number_format`, `toc`, `toc_depth` and `watermark`.
+
+Errors are always JSON: `{"error": "...", "details": "..."}` (the legacy endpoint keeps
+its plain-text errors).
+
+```bash
+curl -X POST http://localhost:8000/api/convert \
+  -H 'Content-Type: application/json' \
+  -d '{"markdown": "# Hello", "options": {"paper_size": "a4", "page_numbers": true}}' \
+  --output document.pdf
+```
 
 ## 🔧 Deployment
 
-Run your own instance using Docker:
+Production stack (build, volume for saved PDFs, healthcheck, log rotation):
 
 ```bash
-docker run --publish=8000:8000 aismarttalk/md-to-pdf
+make prod         # docker compose -f docker-compose.prod.yml up -d --build
+make logs-prod    # follow the logs
+make prod-down    # stop
 ```
+
+`./install.sh` provisions a fresh Debian/Ubuntu host end to end (Docker, NGINX, network,
+build, health check).
+
+### Configuration
+
+| Variable                   | Default | Description                                                          |
+|----------------------------|---------|----------------------------------------------------------------------|
+| `API_KEY`                  | *unset* | When set, `/api/*` requires `X-API-Key` or `Authorization: Bearer`. Unset keeps the API open. |
+| `PDF_PROCESS_TIMEOUT_SECS` | `60`    | Wall-clock limit for pandoc / weasyprint / qpdf / pdftoppm            |
+| `RUST_LOG`                 | `info`  | Log level                                                            |
+
+> ⚠️ `/api/html-to-pdf` and `/api/render` render arbitrary HTML: WeasyPrint will fetch any
+> URL the document references. Keep the service on a private network or set `API_KEY`.
+
+Saved PDFs live in `public/pdf/` inside the container — the production compose file mounts
+the `pdf-storage` volume there so `download_url`s survive a redeploy.
 
 For local development:
 
 ```bash
-make serve
+make dev          # build, compile and serve with the dev containers
+make check        # cargo check + clippy
 ```
 
 ## 🌐 Web Interface

@@ -1,0 +1,39 @@
+services:
+  md-to-pdf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 8000:8000
+    restart: unless-stopped
+    environment:
+      # Set API_KEY to close the /api endpoints (X-API-Key or Authorization: Bearer).
+      # Left empty, the API stays open — same behaviour as before.
+      API_KEY: "${API_KEY:-}"
+      # Wall-clock limit for pandoc / weasyprint / qpdf
+      PDF_PROCESS_TIMEOUT_SECS: "${PDF_PROCESS_TIMEOUT_SECS:-60}"
+      RUST_LOG: "${RUST_LOG:-info}"
+    volumes:
+      # Saved PDFs must survive a redeploy, otherwise every download_url already handed
+      # out turns into a 404.
+      - pdf-storage:/home/rocket/public/pdf
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - ai-toolkit-network
+
+volumes:
+  pdf-storage:
+
+networks:
+  ai-toolkit-network:
+    external: true

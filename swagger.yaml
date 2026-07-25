@@ -14,7 +14,16 @@ info:
     |--------------------------|---------|
     | **fournis** | Le PDF est sauvegardé sur le serveur et un JSON `{ "download_url": "/download/…" }` est retourné |
     | **absents** | Le fichier PDF binaire est retourné directement dans le body |
-  version: 1.0.0
+
+    `client_id` et `pdf_name` servent à construire un chemin sur disque : ils doivent être
+    des noms simples (`[A-Za-z0-9._-]`, 128 caractères max, ne commençant pas par un point).
+
+    ## Authentification
+
+    Si la variable d'environnement `API_KEY` est définie côté serveur, tous les endpoints
+    `/api/*` (sauf `/api/health`) exigent l'en-tête `X-API-Key` ou
+    `Authorization: Bearer <clé>`. Si elle n'est pas définie, l'API est ouverte.
+  version: 0.2.0
   contact:
     name: AI SmartTalk
   license:
@@ -25,6 +34,10 @@ servers:
     description: Développement local
   - url: https://pdf.aismarttalk.tech
     description: Production
+
+security:
+  - ApiKeyHeader: []
+  - BearerToken: []
 
 tags:
   - name: Convert
@@ -56,8 +69,12 @@ paths:
     get:
       tags: [Health]
       summary: Health check
-      description: Vérifie que le service est opérationnel et retourne la version et les moteurs PDF disponibles.
+      description: |
+        Vérifie que le service est opérationnel et retourne la version ainsi que les moteurs
+        PDF réellement installés dans l'image. `status` vaut `degraded` si pandoc ou
+        weasyprint sont absents. Endpoint jamais authentifié (utilisé par le healthcheck).
       operationId: health
+      security: []
       responses:
         "200":
           description: Service opérationnel
@@ -67,7 +84,7 @@ paths:
                 $ref: "#/components/schemas/HealthResponse"
               example:
                 status: ok
-                version: "0.1.0"
+                version: "0.2.0"
                 engines:
                   - weasyprint
                   - wkhtmltopdf
@@ -122,8 +139,12 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "504":
+          $ref: "#/components/responses/Timeout"
 
   # ───────────────────────────────────────────────
   # Render  (Template Tera + JSON → PDF)
@@ -165,8 +186,12 @@ paths:
                 format: binary
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "504":
+          $ref: "#/components/responses/Timeout"
 
   # ───────────────────────────────────────────────
   # HTML to PDF
@@ -210,8 +235,12 @@ paths:
                 format: binary
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "504":
+          $ref: "#/components/responses/Timeout"
 
   # ───────────────────────────────────────────────
   # Preview  (→ PNG)
@@ -262,8 +291,12 @@ paths:
                 format: binary
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "504":
+          $ref: "#/components/responses/Timeout"
 
   # ───────────────────────────────────────────────
   # Merge
@@ -278,8 +311,8 @@ paths:
         Les chemins PDF doivent être des URLs de type `/download/{client_id}/{pdf_name}`.
         Minimum **2 PDFs** requis.
 
-        Si `client_id` et `pdf_name` ne sont pas fournis, le PDF fusionné est
-        automatiquement sauvegardé sous `client_id=temp` avec un nom UUID.
+        Comme les autres endpoints : JSON `download_url` si `client_id` + `pdf_name` sont
+        fournis, sinon le PDF fusionné est retourné directement dans le body.
       operationId: merge
       requestBody:
         required: true
@@ -295,19 +328,27 @@ paths:
               pdf_name: "merged-doc"
       responses:
         "200":
-          description: PDF fusionné
+          description: PDF fusionné (JSON si sauvegardé, binaire sinon)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConvertResponse"
               example:
                 download_url: "/download/client-123/merged-doc.pdf"
+            application/pdf:
+              schema:
+                type: string
+                format: binary
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "504":
+          $ref: "#/components/responses/Timeout"
 
   # ───────────────────────────────────────────────
   # Watermark
@@ -349,8 +390,12 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "504":
+          $ref: "#/components/responses/Timeout"
 
   # ───────────────────────────────────────────────
   # Protect
@@ -390,8 +435,12 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "504":
+          $ref: "#/components/responses/Timeout"
 
   # ───────────────────────────────────────────────
   # Download
@@ -484,6 +533,20 @@ paths:
 # Components
 # ═══════════════════════════════════════════════
 components:
+
+  # ─── Security ─────────────────────────────────
+  securitySchemes:
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        Clé d'API, active uniquement si `API_KEY` est définie côté serveur.
+    BearerToken:
+      type: http
+      scheme: bearer
+      description: |
+        Même clé que `X-API-Key`, transmise via `Authorization: Bearer <clé>`.
 
   # ─── Schemas ──────────────────────────────────
   schemas:
@@ -798,6 +861,26 @@ components:
           example:
             error: "Not found"
             details: "PDF not found: /download/client-123/missing.pdf"
+
+    Unauthorized:
+      description: Clé d'API manquante ou invalide (uniquement si `API_KEY` est configurée)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Unauthorized"
+            details: "Missing or invalid API key (X-API-Key or Authorization: Bearer)"
+
+    Timeout:
+      description: La génération a dépassé la limite de temps (`PDF_PROCESS_TIMEOUT_SECS`)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Timeout"
+            details: "weasyprint exceeded the 60s time limit"
 
     InternalError:
       description: Erreur interne du serveur

@@ -8,18 +8,13 @@ use std::io;
 
 // ------------ PDF Engine enum ------------
 
-#[derive(Debug, Clone, Deserialize, FromFormField)]
+#[derive(Debug, Clone, Default, Deserialize, FromFormField)]
 #[serde(rename_all = "lowercase")]
 pub enum PdfEngine {
+    #[default]
     Weasyprint,
     Wkhtmltopdf,
     Pdflatex,
-}
-
-impl Default for PdfEngine {
-    fn default() -> Self {
-        PdfEngine::Weasyprint
-    }
 }
 
 impl Display for PdfEngine {
@@ -34,18 +29,13 @@ impl Display for PdfEngine {
 
 // ------------ Paper Size ------------
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PaperSize {
+    #[default]
     A4,
     A3,
     Letter,
-}
-
-impl Default for PaperSize {
-    fn default() -> Self {
-        PaperSize::A4
-    }
 }
 
 impl Display for PaperSize {
@@ -60,17 +50,12 @@ impl Display for PaperSize {
 
 // ------------ Orientation ------------
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Orientation {
+    #[default]
     Portrait,
     Landscape,
-}
-
-impl Default for Orientation {
-    fn default() -> Self {
-        Orientation::Portrait
-    }
 }
 
 // ------------ Margins ------------
@@ -214,6 +199,8 @@ pub enum AppError {
     BadRequest(String),
     NotFound(String),
     TemplateError(String),
+    Timeout(String),
+    Unauthorized(String),
 }
 
 impl From<io::Error> for AppError {
@@ -241,13 +228,13 @@ impl<'r> Responder<'r, 'static> for AppError {
             ),
             AppError::BadRequest(msg) => (Status::BadRequest, "Bad request".to_string(), msg),
             AppError::NotFound(msg) => (Status::NotFound, "Not found".to_string(), msg),
-            AppError::TemplateError(msg) => {
-                (Status::BadRequest, "Template error".to_string(), msg)
-            }
+            AppError::TemplateError(msg) => (Status::BadRequest, "Template error".to_string(), msg),
+            AppError::Timeout(msg) => (Status::GatewayTimeout, "Timeout".to_string(), msg),
+            AppError::Unauthorized(msg) => (Status::Unauthorized, "Unauthorized".to_string(), msg),
         };
 
-        let body = serde_json::json!({ "error": error, "details": details });
-        let body_str = body.to_string();
+        let body_str = serde_json::to_string(&ErrorResponse { error, details })
+            .unwrap_or_else(|_| r#"{"error":"Internal error","details":""}"#.to_string());
 
         Response::build()
             .header(ContentType::JSON)
@@ -271,7 +258,7 @@ impl<'r> Responder<'r, 'static> for PdfResponse {
 
 #[derive(Debug)]
 pub enum ConvertError {
-    Output(std::process::Output),
+    Message(Status, String),
     IO(#[allow(dead_code)] io::Error),
 }
 
@@ -281,14 +268,33 @@ impl From<io::Error> for ConvertError {
     }
 }
 
+/// The legacy endpoint answers in plain text, so AppError is flattened into a message
+/// while keeping the status the JSON API would have returned.
+impl From<AppError> for ConvertError {
+    fn from(err: AppError) -> ConvertError {
+        match err {
+            AppError::Io(e) => ConvertError::IO(e),
+            AppError::ProcessFailed { message, stderr } => ConvertError::Message(
+                Status::BadRequest,
+                if stderr.is_empty() { message } else { stderr },
+            ),
+            AppError::BadRequest(msg) => ConvertError::Message(Status::BadRequest, msg),
+            AppError::NotFound(msg) => ConvertError::Message(Status::NotFound, msg),
+            AppError::TemplateError(msg) => ConvertError::Message(Status::BadRequest, msg),
+            AppError::Timeout(msg) => ConvertError::Message(Status::GatewayTimeout, msg),
+            AppError::Unauthorized(msg) => ConvertError::Message(Status::Unauthorized, msg),
+        }
+    }
+}
+
 impl<'r> Responder<'r, 'static> for ConvertError {
     fn respond_to(self, _: &Request) -> response::Result<'static> {
         let mut builder = Response::build();
         match self {
-            ConvertError::Output(output) => builder
+            ConvertError::Message(status, message) => builder
                 .header(ContentType::Plain)
-                .sized_body(output.stderr.len(), io::Cursor::new(output.stderr))
-                .status(Status::BadRequest),
+                .sized_body(message.len(), io::Cursor::new(message))
+                .status(status),
             ConvertError::IO(_) => builder.status(Status::InternalServerError),
         };
         builder.ok()

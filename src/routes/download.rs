@@ -1,21 +1,22 @@
+use crate::helpers;
 use crate::types::PdfResponse;
 use rocket::fs::NamedFile;
 use rocket::http::{ContentType, Header};
 use rocket::response::Response;
-use std::path::Path;
 
 #[get("/<client_id>/<pdf_name>")]
 pub async fn download_pdf(client_id: &str, pdf_name: &str) -> Option<PdfResponse> {
-    let path = Path::new("public")
-        .join("pdf")
-        .join(client_id)
-        .join(pdf_name);
+    // Both segments are used to build a filesystem path: reject anything but a plain name
+    let client_id = helpers::sanitize_path_component(client_id, "client_id").ok()?;
+    let pdf_name = helpers::sanitize_path_component(pdf_name, "pdf_name").ok()?;
+
+    let path = helpers::pdf_root().join(&client_id).join(&pdf_name);
 
     NamedFile::open(path).await.ok().map(|file| {
         let download_name = if !pdf_name.ends_with(".pdf") {
             format!("{}.pdf", pdf_name)
         } else {
-            pdf_name.to_string()
+            pdf_name
         };
 
         PdfResponse(
