@@ -50,6 +50,9 @@ fn rocket() -> _ {
         .mount("/", routes![routes::legacy::convert])
         // Static files
         .mount("/static", FileServer::from("static"))
+        // Landing page, API reference and test console at the service root.
+        // Ranked below every declared route so /api and /download always win.
+        .mount("/", FileServer::from("static").rank(20))
         // Download saved PDFs
         .mount("/download", routes![routes::download::download_pdf])
         // New JSON API endpoints

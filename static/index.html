@@ -1,243 +1,285 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="Description" content="A web service for converting markdown to PDF">
-
-    <title>md-to-pdf</title>
-
-    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
-    <link rel="icon" href="favicon.ico" type="image/x-icon">
-
-    <link href="codemirror.css" rel="stylesheet" />
-    <link href="theme-ayu-dark.css" rel="stylesheet"/>
-    <script src="codemirror.js"></script>
-    <script src="mode-markdown.js"></script>
-    <script src="mode-css.js"></script>
-
-    <style>
-        body {
-            background: #243247;
-            color: #b3b1ad;
-            font-family: monospace;
-            margin: 0;
-        }
-
-        main {
-            padding: 1em;
-        }
-
-        /* Class is automatically added to textarea elements, see https://codemirror.net/5/doc/manual.html#styling. */
-        .CodeMirror {
-            border-radius: 1em;
-            padding: 1em;
-            height: auto;
-        }
-
-        select, input {
-            padding: 0.5em;
-            border-radius: 0.2em;
-        }
-
-        code {
-            background: #4f5a6b;
-            padding: 0.125em 0.25em;
-        }
-
-        button {
-            background: #c2d94c;
-            color: #0a0e14;
-            padding: 0.5em;
-            border-radius: 0.2em;
-            border-color: #c2d94c;
-            font-family: monospace;
-            cursor: pointer;
-        }
-
-        footer {
-            position: absolute;
-            bottom: 0;
-            width: 100%;
-            height: 2.5rem;
-            text-align: center;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>md-to-pdf — Moteur de documents PDF</title>
+<meta name="description" content="Service de génération PDF : Markdown, HTML et templates Tera vers PDF, preview PNG, fusion, filigrane et protection par mot de passe. Documentation et console de test intégrées.">
+<link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
+<link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/static/console.css">
 </head>
 <body>
-<main>
-<h1 hidden="hidden">md-to-pdf</h1>
 
-<label for="markdown">Markdown</label>
-<br>
-<br>
-<textarea id="markdown">
-# md-to-pdf
+<a class="skip-link" href="#doc">Aller à la documentation</a>
 
-A web service for converting markdown to PDF
+<header class="topbar">
+  <a class="brand" href="#top">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path d="M6 2h8l5 5v15H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M14 2v5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M9 13h6M9 17h6M9 9h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    <span>md-to-pdf</span>
+  </a>
 
-## Web UI
+  <nav class="topnav" aria-label="Navigation principale">
+    <a href="#features">Fonctionnalités</a>
+    <a href="#quickstart">Démarrage</a>
+    <a href="#doc">API</a>
+    <a href="#playground">Console</a>
+    <a href="#deploy">Déploiement</a>
+  </nav>
 
-For quick experimentation, you can use [the web version](https://md-to-pdf.fly.dev) hosted on [Fly.io](https://fly.io).
-Just paste your markdown and download the converted PDF.
+  <div class="topbar-right">
+    <a class="health" id="healthPill" href="#playground" title="Statut du service">
+      <span class="dot" id="healthDot"></span>
+      <span id="healthText">connexion…</span>
+    </a>
+    <button id="themeToggle" class="icon-btn" aria-label="Basculer le thème clair / sombre" title="Thème clair / sombre">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path id="themeIcon" fill="currentColor" d="M12 3a9 9 0 109 9 7 7 0 01-9-9z"/></svg>
+    </button>
+  </div>
+</header>
 
-Availability of the service is not guaranteed, see [Fly.io status](https://status.flyio.net) when it is down.
-If you need guaranteed availability, [deploy it yourself](#deploy).
+<!-- ───────────────────────────── hero ───────────────────────────── -->
+<main id="top">
+<section class="hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="hero-inner">
+    <p class="eyebrow">Rust · Rocket · pandoc · WeasyPrint</p>
+    <h1>Un moteur de documents<br><span class="grad">prêt pour la production</span></h1>
+    <p class="lede">
+      Markdown, HTML ou templates Tera en entrée. PDF paginé, preview PNG, fusion,
+      filigrane et chiffrement AES-256 en sortie. Une seule API JSON, un seul conteneur.
+    </p>
 
-## API
-
-You can convert markdown by sending a `POST` request to `https://md-to-pdf.fly.dev`.
-
-    curl --data-urlencode 'markdown=# Heading 1' --output md-to-pdf.pdf https://md-to-pdf.fly.dev
-
-| Parameter  | Required | Description                                                                                           |
-|------------|----------|-------------------------------------------------------------------------------------------------------|
-| `markdown` | Required | The markdown content to convert                                                                       |
-| `css`      | Optional | CSS styles to apply                                                                                   |
-| `engine`   | Optional | The PDF conversion engine, can be `weasyprint`, `wkhtmltopdf` or `pdflatex`, defaults to `weasyprint` |
-
-Send data from files like this:
-
-    curl --data-urlencode "markdown=$(cat example.md)"
-
-## Deploy
-
-A prebuilt container image is available at [Docker Hub](https://hub.docker.com/r/spawnia/md-to-pdf).
-You can run it yourself like this:
-
-    docker run --publish=8000:8000 spawnia/md-to-pdf
-
-## Built with
-
-- [Rocket - a web framework for Rust](https://rocket.rs)
-- [Pandoc - a universal document converter](https://pandoc.org)
-- [Codemirror - a text editor for the browser](https://codemirror.net)
-</textarea>
-
-<br>
-
-<label for="css">CSS</label>
-<br>
-<br>
-<textarea id="css">
-/* You can add some CSS styles too, if you want. */
-
-h1, h2 {
-    color: ouéblack;
-}
-
-table {
-  border-collapse: collapse;
-}
-
-table, th, td {
-  border: 1px solid DimGray;
-}
-
-th, td {
-  text-align: left;
-  padding: 1em;
-}
-</textarea>
-
-<br>
-
-<label for="header_template">Header Template</label>
-<br>
-<br>
-<input type="text" id="header_template">
-<br>
-<br>
-
-<label for="footer_template">Footer Template</label>
-<br>
-<br>
-<input type="text" id="footer_template">
-<br>
-<br>
-
-<div style="display: flex; flex-direction: row; gap: 5em;">
-    <div>
-        <label for="engine">Conversion Engine (just try which works better for you)</label>
-        <br />
-        <br />
-        <select id="engine">
-            <option>weasyprint</option>
-            <option>wkhtmltopdf</option>
-            <option label="pdflatex (CSS will have no effect)">pdflatex</option>
-        </select>
+    <div class="hero-cta">
+      <a class="btn primary" href="#playground">Ouvrir la console</a>
+      <a class="btn" href="#doc">Lire la doc API</a>
     </div>
 
-    <div>
-        <label for="filename">Filename (defaults to <code>md-to-pdf</code>, extension <code>.pdf</code> is always added)</label>
-        <br />
-        <br />
-        <input type="text" id="filename">
+    <div class="hero-stats" id="heroStats">
+      <div class="stat"><span class="stat-value" id="statVersion">—</span><span class="stat-label">version</span></div>
+      <div class="stat"><span class="stat-value" id="statEndpoints">—</span><span class="stat-label">endpoints</span></div>
+      <div class="stat"><span class="stat-value" id="statEngines">—</span><span class="stat-label">moteurs PDF</span></div>
+      <div class="stat"><span class="stat-value" id="statStatus">—</span><span class="stat-label">statut</span></div>
     </div>
-</div>
+  </div>
 
-<br>
-<br>
+  <div class="pipeline" aria-hidden="true">
+    <div class="pipe-card in">
+      <div class="pipe-head"><span class="chip">entrée</span> document.md</div>
+<pre class="pipe-body"><span class="tok-h"># Rapport 2026</span>
 
-<button onclick="mdToPdf()">Convert and download PDF</button>
+Chiffre d'affaires en <span class="tok-b">hausse</span>.
 
-<script>
-    const markdown = CodeMirror.fromTextArea(
-        document.querySelector('#markdown'),
-        { mode: 'markdown', theme: 'ayu-dark' },
-    );
-    const css = CodeMirror.fromTextArea(
-        document.querySelector('#css'),
-        { mode: 'css', theme: 'ayu-dark' },
-    );
+<span class="tok-c">{{CENSOR}}</span>
 
-    async function mdToPdf() {
-        const formData = new FormData();
-        formData.append('markdown', markdown.getValue());
-        formData.append('css', css.getValue());
-        formData.append('engine', document.querySelector('#engine').value);
-        formData.append('header_template', document.querySelector('#header_template').value);
-        formData.append('footer_template', document.querySelector('#footer_template').value);
+| Trimestre | CA   |
+|-----------|------|
+| T1        | 1.2M |</pre>
+    </div>
 
-        const response = await fetch('/', {
-            method: 'POST',
-            body: new URLSearchParams(formData),
-        });
-        if (response.ok) {
-            const blob = await response.blob();
-            downloadBlob(blob);
-        } else {
-            const text = await response.text()
-            alert(text);
-        }
-    }
+    <div class="pipe-arrow">
+      <span class="pipe-engine">pandoc + weasyprint</span>
+      <svg viewBox="0 0 120 24" width="120" height="24"><path d="M2 12h108m0 0l-8-6m8 6l-8 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
 
-    function downloadBlob(blob) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const filename = document.querySelector('#filename').value || 'md-to-pdf'
+    <div class="pipe-card out">
+      <div class="pipe-head"><span class="chip">sortie</span> document.pdf</div>
+      <div class="page">
+        <div class="page-h"></div>
+        <div class="page-l"></div>
+        <div class="page-l short"></div>
+        <div class="page-blur">contenu premium</div>
+        <div class="page-l"></div>
+        <div class="page-l short"></div>
+        <div class="page-num">1 / 4</div>
+      </div>
+    </div>
+  </div>
+</section>
 
-        a.href = url;
-        a.download = `${filename}.pdf`;
+<!-- ─────────────────────────── features ─────────────────────────── -->
+<section id="features" class="section">
+  <header class="section-head">
+    <h2>Ce que le service sait faire</h2>
+    <p><span id="endpointCount">—</span> endpoints, un contrat unique : PDF binaire par défaut, URL de téléchargement si vous demandez la sauvegarde.</p>
+  </header>
 
-        const clickHandler = () => {
-            setTimeout(() => {
-                URL.revokeObjectURL(url);
-                this.removeEventListener('click', clickHandler);
-            });
-        };
-        a.addEventListener('click', clickHandler);
-        a.click();
-    }
-</script>
+  <div class="cards" id="featureCards"></div>
+</section>
+
+<!-- ─────────────────────────── quickstart ───────────────────────── -->
+<section id="quickstart" class="section alt">
+  <header class="section-head">
+    <h2>Démarrage en trente secondes</h2>
+    <p>Le service écoute sur <code>:8000</code>. Aucun SDK : de l'HTTP et du JSON.</p>
+  </header>
+
+  <div class="quickstart">
+    <div class="tabs" role="tablist" aria-label="Exemples de code">
+      <button role="tab" class="active" data-lang="curl">curl</button>
+      <button role="tab" data-lang="js">JavaScript</button>
+      <button role="tab" data-lang="python">Python</button>
+      <button role="tab" data-lang="docker">Docker</button>
+    </div>
+    <div class="code-wrap">
+      <button class="copy-btn" data-copy="#quickCode">copier</button>
+      <pre id="quickCode"></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── API doc ──────────────────────────── -->
+<section id="doc" class="section">
+  <header class="section-head">
+    <h2>Référence de l'API</h2>
+    <p>
+      Générée depuis la même source que la console ci-dessous — la doc ne peut pas
+      diverger de ce que la console envoie réellement.
+      <a href="/static/swagger.yaml" download>swagger.yaml</a>
+    </p>
+  </header>
+
+  <div class="doc-layout">
+    <aside class="doc-nav" aria-label="Endpoints">
+      <div class="doc-nav-inner" id="docNav"></div>
+    </aside>
+    <div class="doc-body" id="docBody"></div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── playground ───────────────────────── -->
+<section id="playground" class="section alt">
+  <header class="section-head">
+    <h2>Console de test</h2>
+    <p>Tous les endpoints, en vrai, depuis le navigateur. Les PDFs générés restent à portée de main pour alimenter <code>merge</code>, <code>watermark</code> et <code>protect</code>.</p>
+  </header>
+
+  <div class="console">
+    <div class="console-bar">
+      <div class="field inline">
+        <label for="baseUrl">base URL</label>
+        <input id="baseUrl" type="text" spellcheck="false">
+      </div>
+      <div class="field inline">
+        <label for="apiKey">API_KEY</label>
+        <input id="apiKey" type="password" placeholder="vide si non configurée" autocomplete="off">
+      </div>
+      <div class="grow"></div>
+      <button id="pingBtn" class="btn small">tester la connexion</button>
+    </div>
+
+    <div class="console-grid">
+      <nav class="console-nav" aria-label="Endpoints de la console">
+        <div id="endpointList"></div>
+        <div class="saved">
+          <h3>PDFs générés</h3>
+          <ul id="savedList"></ul>
+        </div>
+      </nav>
+
+      <section class="console-req">
+        <div class="req-head">
+          <span class="method" id="reqMethod">POST</span>
+          <code id="reqPath">/api/convert</code>
+        </div>
+        <p class="req-desc" id="reqDesc"></p>
+        <form id="form" autocomplete="off"></form>
+        <div class="actions">
+          <button class="btn primary" id="sendBtn">Envoyer <kbd>⌘⏎</kbd></button>
+          <button class="btn" id="resetBtn">Réinitialiser</button>
+          <button class="btn" id="curlBtn">Copier le curl</button>
+        </div>
+      </section>
+
+      <section class="console-res">
+        <div class="res-status">
+          <span id="statusBadge" class="badge idle">en attente</span>
+          <span class="meta" id="timing"></span>
+          <span class="meta" id="size"></span>
+          <span class="meta" id="ctype"></span>
+        </div>
+        <div class="tabs small" role="tablist">
+          <button role="tab" class="active" data-tab="preview">Aperçu</button>
+          <button role="tab" data-tab="raw">Brut</button>
+          <button role="tab" data-tab="curl">curl</button>
+        </div>
+        <div id="tabPreview" class="res-pane"></div>
+        <pre id="tabRaw" class="res-pane" hidden></pre>
+        <pre id="tabCurl" class="res-pane" hidden></pre>
+      </section>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── deploy ───────────────────────────── -->
+<section id="deploy" class="section">
+  <header class="section-head">
+    <h2>Déploiement</h2>
+    <p>Une image, un volume, un healthcheck.</p>
+  </header>
+
+  <div class="deploy-grid">
+    <div class="code-wrap">
+      <button class="copy-btn" data-copy="#deployCode">copier</button>
+      <pre id="deployCode"></pre>
+    </div>
+
+    <div class="conf">
+      <h3>Configuration</h3>
+      <div class="table-wrap">
+      <table class="conf-table">
+        <thead><tr><th>Variable</th><th>Défaut</th><th>Rôle</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>API_KEY</code></td><td><em>non définie</em></td>
+            <td>Si définie, <code>/api/*</code> exige <code>X-API-Key</code> ou <code>Authorization: Bearer</code>. Non définie, l'API reste ouverte.</td>
+          </tr>
+          <tr>
+            <td><code>PDF_PROCESS_TIMEOUT_SECS</code></td><td><code>60</code></td>
+            <td>Limite de temps pour pandoc, WeasyPrint, qpdf et pdftoppm.</td>
+          </tr>
+          <tr><td><code>RUST_LOG</code></td><td><code>info</code></td><td>Niveau de log.</td></tr>
+          <tr><td><code>ROCKET_PORT</code></td><td><code>8000</code></td><td>Port d'écoute.</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div class="callout warn">
+        <strong>À savoir avant d'exposer publiquement.</strong>
+        <code>/api/html-to-pdf</code> et <code>/api/render</code> rendent du HTML arbitraire :
+        WeasyPrint ira chercher les URL que le document référence. Gardez le service sur un
+        réseau privé ou définissez <code>API_KEY</code>.
+      </div>
+
+      <div class="callout">
+        <strong>Persistance.</strong> Les PDFs sauvegardés vivent dans
+        <code>public/pdf/</code>. Le compose de production monte le volume
+        <code>pdf-storage</code> à cet emplacement pour que les <code>download_url</code>
+        survivent à un redéploiement.
+      </div>
+    </div>
+  </div>
+</section>
 </main>
 
-<footer>
-    <a href="https://github.com/spawnia/md-to-pdf" title="md-to-pdf GitHub repository">
-        <svg height="30" width="30" viewBox="0 0 16 16">
-            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-        </svg>
-    </a>
+<footer class="footer">
+  <div>
+    <strong>md-to-pdf</strong> — fork maintenu par
+    <a href="https://aismarttalk.tech" target="_blank" rel="noopener">AI SmartTalk</a>,
+    d'après le projet original de
+    <a href="https://github.com/Spawnia/md-to-pdf" target="_blank" rel="noopener">Spawnia</a>.
+  </div>
+  <div class="footer-links">
+    <a href="/static/editor.html">éditeur markdown</a>
+    <a href="/api/health">/api/health</a>
+    <a href="https://github.com/AI-SmartTalk/md-to-pdf" target="_blank" rel="noopener">GitHub</a>
+  </div>
 </footer>
+
+<script src="/static/console.js"></script>
 </body>
 </html>

@@ -48,8 +48,11 @@ Example templates are included to get you started!
 
 ## 🔌 API Usage
 
-The full contract lives in [`swagger.yaml`](swagger.yaml) (OpenAPI 3.0). Integration suite:
-`./test_api.sh [base_url]` (or `make test-api`) against a running server.
+Point a browser at the service root (`http://localhost:8000`) for the landing page, the full
+API reference and an interactive console that hits every endpoint for real. The contract is
+also published as OpenAPI 3.0 in [`static/swagger.yaml`](static/swagger.yaml), served at
+`/static/swagger.yaml`. Integration suite: `./test_api.sh [base_url]` (or `make test-api`)
+against a running server.
 
 ### Legacy endpoint — `POST /` (FormData)
 
@@ -141,7 +144,20 @@ make check        # cargo check + clippy
 
 ## 🌐 Web Interface
 
-A user-friendly web interface is available for quick conversions at `http://localhost:8000` when running locally.
+The service root (`http://localhost:8000`) serves a self-contained page — no CDN, works
+offline — with three things:
+
+- **Landing** — what the engine does, live status and installed engines pulled from `/api/health`
+- **API reference** — every endpoint with its parameters, request/response examples and status codes
+- **Console** — a real client for all ten endpoints: fill the form, send, and see the PDF, the
+  PNG preview or the JSON inline. Generated PDFs stay in a side list to feed `merge`,
+  `watermark` and `protect`. Each request can be copied as a ready-to-run `curl` command
+  (the API key is never copied in clear — it comes out as `$API_KEY`).
+
+Reference and console are generated from a single spec in `static/console.js`, so the
+documented payload is exactly the one the console sends.
+
+The original CodeMirror markdown editor is still available at `/static/editor.html`.
 
 ## 🔄 Compatibility
 
