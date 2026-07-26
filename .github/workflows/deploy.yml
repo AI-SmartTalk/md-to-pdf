@@ -157,38 +157,11 @@ jobs:
             < /tmp/pdf.env
           rm -f /tmp/pdf.env
 
-          ssh -p "$PORT" "$USER@$HOST" DEPLOY_PATH="$DEPLOY_PATH" 'bash -s' <<'EOF'
-            set -euo pipefail
-            cd "$DEPLOY_PATH"
-            umask 077
-
-            if [ -f .env ]; then
-              # Une clé absente du secret mais présente sur la machine est
-              # reportée telle quelle. Les commentaires et l'ordre du secret sont
-              # conservés ; les reports sont regroupés en fin de fichier.
-              incoming_keys="$(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' .env.incoming | tr -d '=' || true)"
-              carried=""
-              while IFS= read -r line; do
-                case "$line" in
-                  [A-Za-z_]*=*) key="${line%%=*}" ;;
-                  *) continue ;;
-                esac
-                printf '%s\n' "$incoming_keys" | grep -qx "$key" && continue
-                carried="$carried$line
-"
-              done < .env
-              if [ -n "$carried" ]; then
-                {
-                  printf '\n# Reporté du .env précédent : absent de PDF_ENV.\n'
-                  printf '%s' "$carried"
-                } >> .env.incoming
-                echo "Clés reportées : $(printf '%s' "$carried" | grep -cE '^[A-Za-z_]' || true)"
-              fi
-            fi
-
-            mv .env.incoming .env
-EOF
-          echo ".env écrit (fusion, sans perte)."
+          # La fusion vit dans deploy/merge-env.sh, déjà présent sur le VPS après
+          # l'étape de synchronisation : versionné et testable, contrairement à
+          # un script en ligne dans ce fichier.
+          ssh -p "$PORT" "$USER@$HOST" \
+            "cd '$DEPLOY_PATH' && DEPLOY_PATH='$DEPLOY_PATH' bash deploy/merge-env.sh"
 
       - name: Déployer
         env:
