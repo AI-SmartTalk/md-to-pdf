@@ -9,8 +9,10 @@ name: deploy
 #   PDF_SSH_HOST  hôte ou IP du VPS
 #   PDF_SSH_USER  utilisateur SSH
 #   PDF_ENV       contenu intégral du .env de production, API_KEY comprise
-# Variable optionnelle :
+# Variables optionnelles :
+#   PDF_SSH_PORT     port SSH (défaut : 22 — nos VPS n'écoutent pas tous dessus)
 #   PDF_DEPLOY_PATH  chemin du dépôt sur le VPS (défaut : /opt/md-to-pdf)
+#   PDF_PUBLIC_URL   URL publique, vérifiée après déploiement si renseignée
 
 on:
   push:
@@ -64,9 +66,36 @@ jobs:
       - name: Enregistrer la clé d'hôte
         env:
           HOST: ${{ secrets.PDF_SSH_HOST }}
+          PORT: ${{ vars.PDF_SSH_PORT || '22' }}
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Échouer ici plutôt qu'au milieu d'un déploiement, avec de quoi corriger :
+      # « Permission denied » ne dit pas si c'est la clé, l'utilisateur ou le port.
+      - name: Vérifier l'accès SSH
+        env:
+          HOST: ${{ secrets.PDF_SSH_HOST }}
+          USER: ${{ secrets.PDF_SSH_USER }}
+          PORT: ${{ vars.PDF_SSH_PORT || '22' }}
+        run: |
+          if ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10 \
+                 -p "$PORT" "$USER@$HOST" 'echo OK: $(whoami)@$(hostname)'; then
+            exit 0
+          fi
+
+          echo "::error::Connexion SSH refusée sur le port $PORT."
+          echo ""
+          echo "La clé chargée dans l'agent est la suivante — elle doit figurer"
+          echo "dans ~/.ssh/authorized_keys de l'utilisateur cible sur le VPS :"
+          echo ""
+          ssh-add -L || echo "(aucune clé dans l'agent : PDF_SSH_KEY est vide ou mal formée)"
+          echo ""
+          echo "À vérifier, dans l'ordre :"
+          echo "  1. la clé publique ci-dessus est-elle autorisée pour PDF_SSH_USER sur PDF_SSH_HOST ?"
+          echo "  2. PDF_SSH_USER correspond-il au compte qui l'autorise (root et debian n'ont pas le même authorized_keys) ?"
+          echo "  3. le sshd écoute-t-il bien sur le port $PORT ? Définir la variable PDF_SSH_PORT sinon."
+          exit 1
 
       # Le dépôt est cloné s'il est absent, mis à jour sinon : le même workflow
       # sert pour un VPS vierge et pour celui qui tourne déjà.
@@ -74,11 +103,12 @@ jobs:
         env:
           HOST: ${{ secrets.PDF_SSH_HOST }}
           USER: ${{ secrets.PDF_SSH_USER }}
+          PORT: ${{ vars.PDF_SSH_PORT || '22' }}
           DEPLOY_PATH: ${{ vars.PDF_DEPLOY_PATH || '/opt/md-to-pdf' }}
           DEPLOY_REF: ${{ github.sha }}
           REPO_URL: https://github.com/${{ github.repository }}.git
         run: |
-          ssh -o StrictHostKeyChecking=no "$USER@$HOST" \
+          ssh -o StrictHostKeyChecking=no -p "$PORT" "$USER@$HOST" \
             "DEPLOY_PATH='$DEPLOY_PATH' DEPLOY_REF='$DEPLOY_REF' REPO_URL='$REPO_URL' bash -s" << 'EOF'
             set -euo pipefail
 
@@ -104,20 +134,22 @@ jobs:
         env:
           HOST: ${{ secrets.PDF_SSH_HOST }}
           USER: ${{ secrets.PDF_SSH_USER }}
+          PORT: ${{ vars.PDF_SSH_PORT || '22' }}
           DEPLOY_PATH: ${{ vars.PDF_DEPLOY_PATH || '/opt/md-to-pdf' }}
           PDF_ENV: ${{ secrets.PDF_ENV }}
         run: |
           printf '%s' "$PDF_ENV" \
-            | ssh "$USER@$HOST" "umask 077 && cat > '$DEPLOY_PATH/.env'"
+            | ssh -p "$PORT" "$USER@$HOST" "umask 077 && cat > '$DEPLOY_PATH/.env'"
           echo ".env écrit."
 
       - name: Déployer
         env:
           HOST: ${{ secrets.PDF_SSH_HOST }}
           USER: ${{ secrets.PDF_SSH_USER }}
+          PORT: ${{ vars.PDF_SSH_PORT || '22' }}
           DEPLOY_PATH: ${{ vars.PDF_DEPLOY_PATH || '/opt/md-to-pdf' }}
         run: |
-          ssh -o StrictHostKeyChecking=no "$USER@$HOST" \
+          ssh -o StrictHostKeyChecking=no -p "$PORT" "$USER@$HOST" \
             "cd '$DEPLOY_PATH' && chmod +x deploy/*.sh && ./deploy/bootstrap.sh"
 
       # bootstrap.sh vérifie déjà la santé et revient en arrière en cas d'échec.

@@ -128,8 +128,15 @@ Configure once, in *Settings → Secrets and variables → Actions*:
 
 | Variable (optional) | Default          | Purpose                                    |
 |---------------------|------------------|--------------------------------------------|
+| `PDF_SSH_PORT`      | `22`             | SSH port — set it when the host listens elsewhere |
 | `PDF_DEPLOY_PATH`   | `/opt/md-to-pdf` | Where the repository lives on the VPS      |
 | `PDF_PUBLIC_URL`    | *unset*          | Public URL — when set, the workflow checks `/api/health` through the proxy after deploying |
+
+The public key matching `PDF_SSH_KEY` must be present in `~/.ssh/authorized_keys`
+of `PDF_SSH_USER` on the target host — GitHub cannot authenticate otherwise. Derive
+it from the private key with `ssh-keygen -y -f <keyfile>`, or read it from the
+workflow log: the *Vérifier l'accès SSH* step prints the loaded public key when the
+connection is refused, along with what to check.
 
 `PDF_ENV` is the source of truth for the production key: it overwrites `.env` on
 every deployment. The workflow refuses to run if it does not contain a non-empty
