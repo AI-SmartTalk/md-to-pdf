@@ -53,9 +53,25 @@ pub fn unprocessable_entity(_: &Request) -> Json<ErrorResponse> {
     )
 }
 
+#[catch(429)]
+pub fn too_many_requests(_: &Request) -> Json<ErrorResponse> {
+    error(
+        "Too many requests",
+        "The render queue is full; retry in a few seconds",
+    )
+}
+
 #[catch(500)]
 pub fn internal_error(_: &Request) -> Json<ErrorResponse> {
     error("Internal error", "The server failed to handle the request")
+}
+
+#[catch(502)]
+pub fn bad_gateway(_: &Request) -> Json<ErrorResponse> {
+    error(
+        "Upstream failure",
+        "A service this request depends on did not answer",
+    )
 }
 
 #[catch(504)]
