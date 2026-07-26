@@ -1,4 +1,5 @@
 use crate::auth::ApiKey;
+use crate::exec;
 use crate::helpers;
 use crate::types::*;
 use rocket::fs::NamedFile;
@@ -6,7 +7,7 @@ use rocket::serde::json::Json;
 use rocket::Either;
 use std::io::Write;
 use std::process::Command;
-use tempfile::Builder;
+use tempfile::{Builder, TempPath};
 
 #[post("/watermark", format = "json", data = "<req>")]
 pub async fn watermark(
@@ -14,8 +15,6 @@ pub async fn watermark(
     req: Json<WatermarkRequest>,
 ) -> Result<Either<NamedFile, Json<ConvertResponse>>, AppError> {
     let req = req.into_inner();
-
-    let source_path = helpers::resolve_pdf_path(&req.pdf)?;
 
     let opacity = req.opacity.unwrap_or(0.06);
     if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
@@ -30,6 +29,33 @@ pub async fn watermark(
             "\"angle\" must be between -360 and 360".to_string(),
         ));
     }
+
+    let WatermarkRequest {
+        pdf,
+        text,
+        client_id,
+        pdf_name,
+        ..
+    } = req;
+
+    // weasyprint then qpdf, both long blocking runs on a large document: they belong on a
+    // render slot like every other tool, or two watermarks pin every tokio worker and the
+    // healthcheck restarts a service that was merely busy.
+    let (output, download_url) =
+        exec::offload(move || overlay(&pdf, &text, opacity, angle, client_id, pdf_name)).await?;
+
+    helpers::deliver(output, download_url).await
+}
+
+fn overlay(
+    pdf: &str,
+    text: &str,
+    opacity: f32,
+    angle: f32,
+    client_id: Option<String>,
+    pdf_name: Option<String>,
+) -> Result<(TempPath, Option<String>), AppError> {
+    let source_path = helpers::resolve_pdf_path(pdf)?;
 
     // Create a watermark overlay PDF using weasyprint
     let watermark_html = format!(
@@ -62,7 +88,7 @@ body {{
 </html>"#,
         opacity = opacity,
         angle = angle,
-        text = helpers::escape_html(&req.text)
+        text = helpers::escape_html(text)
     );
 
     // Write watermark HTML to temp file
@@ -97,14 +123,8 @@ body {{
         "Watermark overlay failed",
     )?;
 
-    if let (Some(client_id), Some(pdf_name)) = (req.client_id, req.pdf_name) {
-        let download_url = helpers::save_pdf(output_temp.path(), &client_id, &pdf_name)?;
-        Ok(Either::Right(Json(ConvertResponse { download_url })))
-    } else {
-        Ok(Either::Left(
-            NamedFile::open(output_temp.path())
-                .await
-                .map_err(AppError::Io)?,
-        ))
-    }
+    let output = output_temp.into_temp_path();
+    let download_url = helpers::save_if_requested(&output, client_id, pdf_name)?;
+
+    Ok((output, download_url))
 }

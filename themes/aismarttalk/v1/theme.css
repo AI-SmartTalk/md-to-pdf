@@ -1,0 +1,541 @@
+/* AI SmartTalk — v1
+ *
+ * Couleurs et typographie reprises de static/app.css (thème clair du produit) pour qu'un PDF
+ * et l'application se ressemblent. Pas de var() : WeasyPrint ne résout pas les variables
+ * partout (descripteurs @page, content des boîtes de marge), et un thème doit se comporter
+ * pareil dans tous les contextes.
+ *
+ * Cible : WeasyPrint. Aucune police téléchargée — TeX Gyre Heros (Helvetica) et
+ * DejaVu Sans Mono sont présentes dans l'image Debian.
+ */
+
+/* ---------- Page ---------- */
+
+@page {
+    size: A4;
+    margin: 20mm 18mm 18mm;
+
+    @top-right {
+        content: "";
+        border-bottom: 0.6pt solid #dbe3ef;
+        width: 100%;
+    }
+
+    @bottom-left {
+        content: "AI SmartTalk";
+        font-family: "TeX Gyre Heros", "Nimbus Sans", sans-serif;
+        font-size: 7.5pt;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #7b8aa3;
+        vertical-align: top;
+        padding-top: 4mm;
+    }
+
+    @bottom-right {
+        content: counter(page) " / " counter(pages);
+        font-family: "TeX Gyre Heros", "Nimbus Sans", sans-serif;
+        font-size: 8pt;
+        color: #4a5a73;
+        vertical-align: top;
+        padding-top: 4mm;
+    }
+}
+
+/* ---------- Corps ---------- */
+
+body {
+    font-family: "TeX Gyre Heros", "Nimbus Sans", "DejaVu Sans", sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: #101a2b;
+    /* La couche par défaut ajoute 2em de padding, qui doublerait la marge de @page */
+    padding: 0;
+    margin: 0;
+    max-width: none;
+}
+
+p {
+    margin: 0 0 8pt;
+    orphans: 3;
+    widows: 3;
+}
+
+strong {
+    color: #101a2b;
+    font-weight: 700;
+}
+
+em {
+    color: inherit;
+}
+
+small,
+.caption {
+    font-size: 8.5pt;
+    color: #7b8aa3;
+}
+
+/* ---------- Titres ---------- */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    color: #101a2b;
+    font-weight: 700;
+    line-height: 1.2;
+    break-after: avoid;
+    break-inside: avoid;
+}
+
+h1 {
+    font-size: 22pt;
+    letter-spacing: -0.015em;
+    margin: 0 0 4pt;
+    padding: 0 0 8pt;
+    border-bottom: 2pt solid #0e8ea3;
+}
+
+h2 {
+    font-size: 15pt;
+    letter-spacing: -0.01em;
+    margin: 20pt 0 7pt;
+    padding: 0;
+    border-bottom: none;
+}
+
+/* Filet court sous les h2 : sépare les sections sans barrer la page */
+h2::after {
+    content: "";
+    display: block;
+    width: 28pt;
+    margin-top: 5pt;
+    border-top: 1.5pt solid #0e8ea3;
+}
+
+h3 {
+    font-size: 12.5pt;
+    margin: 15pt 0 5pt;
+}
+
+h4 {
+    font-size: 11pt;
+    margin: 13pt 0 4pt;
+}
+
+h5 {
+    font-size: 9.5pt;
+    margin: 12pt 0 4pt;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #4a5a73;
+}
+
+h6 {
+    font-size: 8.5pt;
+    margin: 12pt 0 4pt;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #7b8aa3;
+}
+
+/* ---------- Liens ---------- */
+
+a {
+    color: #0e8ea3;
+    text-decoration: none;
+}
+
+/* Un lien imprimé doit rester utilisable : l'URL suit le libellé. Les ancres internes
+ * (notes de bas de page, numéros de ligne) en sont exclues. */
+a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 7.5pt;
+    font-weight: 400;
+    color: #7b8aa3;
+    word-break: break-all;
+}
+
+/* La couche par défaut transforme tout lien aismarttalk.tech en encadré rouge :
+ * un thème possède ses liens. */
+a[href*="aismarttalk.tech"] {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    color: #0e8ea3;
+    font-weight: inherit;
+    text-align: inherit;
+}
+
+/* ---------- Tableaux ---------- */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12pt 0 14pt;
+    font-size: 9.5pt;
+    background: transparent;
+    /* La couche par défaut interdit la coupure : un tableau de trois pages déborderait */
+    break-inside: auto;
+}
+
+/* En-tête répété sur chaque page traversée par le tableau */
+thead {
+    display: table-header-group;
+}
+
+tr {
+    break-inside: avoid;
+}
+
+th,
+td {
+    border: none;
+    border-bottom: 0.6pt solid #e7ecf5;
+    padding: 5pt 7pt;
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: break-word;
+}
+
+th {
+    background: #eef2f8;
+    border-bottom: 1.5pt solid #0e8ea3;
+    color: #101a2b;
+    font-size: 8.5pt;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+tbody tr:nth-child(even) {
+    background-color: #f7f9fc;
+}
+
+tbody tr:last-child td {
+    border-bottom: 1pt solid #dbe3ef;
+}
+
+/* Tableaux à beaucoup de colonnes : ::: wide autour du tableau */
+.wide table {
+    font-size: 8pt;
+}
+
+.wide th,
+.wide td {
+    padding: 3.5pt 5pt;
+}
+
+/* ---------- Listes ---------- */
+
+ul,
+ol {
+    margin: 8pt 0;
+    padding-left: 1.5em;
+}
+
+li {
+    margin: 3pt 0;
+    orphans: 2;
+    widows: 2;
+}
+
+li::marker {
+    color: #0e8ea3;
+}
+
+li > ul,
+li > ol {
+    margin: 3pt 0 3pt;
+}
+
+/* ---------- Citations ---------- */
+
+blockquote {
+    margin: 14pt 0;
+    padding: 2pt 0 2pt 14pt;
+    border-left: 2pt solid #0e8ea3;
+    color: #4a5a73;
+    font-style: italic;
+    break-inside: avoid;
+}
+
+blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+/* ---------- Code ---------- */
+
+code {
+    font-family: "DejaVu Sans Mono", "Nimbus Mono PS", monospace;
+    font-size: 8.5pt;
+    background: #eef2f8;
+    color: #6d4bd6;
+    padding: 0.5pt 3pt;
+    border-radius: 2pt;
+}
+
+div.sourceCode,
+pre {
+    background: #f7f9fc;
+    border: 0.6pt solid #e7ecf5;
+    border-left: 2.5pt solid #0e8ea3;
+    border-radius: 3pt;
+    margin: 12pt 0;
+    padding: 8pt 10pt;
+    break-inside: avoid;
+}
+
+/* pre dans div.sourceCode : le cadre est porté par le div */
+div.sourceCode pre {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    margin: 0;
+    padding: 0;
+}
+
+pre code {
+    background: transparent;
+    color: #101a2b;
+    padding: 0;
+    font-size: 8.5pt;
+    line-height: 1.45;
+}
+
+/* Une ligne trop longue doit revenir à la ligne au lieu de sortir de la page */
+pre,
+pre > code.sourceCode {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+/* Le gabarit pandoc décale les lignes de -5em en media print pour les numéros de ligne
+ * que nous n'affichons pas : sans cette remise à zéro, tout le code est décalé. */
+pre > code.sourceCode > span {
+    text-indent: 0;
+    padding-left: 0;
+}
+
+/* ---------- Figures ---------- */
+
+figure {
+    margin: 14pt 0;
+    text-align: center;
+    break-inside: avoid;
+}
+
+figure img {
+    /* La couche par défaut force margin-left/right à 0 en !important */
+    margin-left: auto !important;
+    margin-right: auto !important;
+    max-width: 100%;
+    border-radius: 3pt;
+}
+
+figcaption {
+    margin-top: 5pt;
+    font-size: 8.5pt;
+    color: #7b8aa3;
+    text-align: center;
+}
+
+/* ---------- Encadrés ---------- */
+
+.success,
+.warning,
+.danger,
+.info,
+.note {
+    margin: 12pt 0;
+    padding: 8pt 11pt;
+    border: none;
+    border-left: 2.5pt solid #7b8aa3;
+    border-radius: 0 3pt 3pt 0;
+    background: #f4f7fb;
+    font-size: 10pt;
+    break-inside: avoid;
+}
+
+.success {
+    background: #edf6f1;
+    border-left-color: #12805a;
+}
+
+.warning {
+    background: #fbf5e9;
+    border-left-color: #8a5a00;
+}
+
+.danger {
+    background: #fbeeee;
+    border-left-color: #c0322f;
+}
+
+.info,
+.note {
+    background: #eef4fb;
+    border-left-color: #0e8ea3;
+}
+
+.success > p:last-child,
+.warning > p:last-child,
+.danger > p:last-child,
+.info > p:last-child,
+.note > p:last-child {
+    margin-bottom: 0;
+}
+
+/* ---------- Notes de bas de page ---------- */
+
+a.footnote-ref sup {
+    font-size: 7pt;
+    color: #0e8ea3;
+    font-weight: 700;
+}
+
+section.footnotes {
+    margin-top: 20pt;
+    padding-top: 8pt;
+    border-top: 0.6pt solid #dbe3ef;
+    font-size: 8.5pt;
+    color: #4a5a73;
+}
+
+section.footnotes hr {
+    display: none;
+}
+
+section.footnotes ol {
+    padding-left: 1.2em;
+}
+
+section.footnotes li {
+    margin: 2pt 0;
+}
+
+/* Le lien de retour n'a aucun sens sur papier */
+a.footnote-back {
+    display: none;
+}
+
+/* ---------- Sommaire ---------- */
+
+nav#TOC {
+    margin: 16pt 0 20pt;
+    padding: 10pt 12pt;
+    background: #f4f7fb;
+    border-radius: 3pt;
+    break-after: page;
+}
+
+nav#TOC ul {
+    list-style: none;
+    padding-left: 1em;
+    margin: 0;
+}
+
+nav#TOC > ul {
+    padding-left: 0;
+}
+
+nav#TOC a {
+    color: #101a2b;
+}
+
+nav#TOC a::after {
+    content: "";
+}
+
+/* ---------- Filets ---------- */
+
+hr {
+    border: none;
+    border-top: 0.6pt solid #dbe3ef;
+    margin: 18pt 0;
+}
+
+/* ---------- Couverture ---------- */
+
+@page cover {
+    margin: 0;
+
+    @top-right {
+        content: "";
+        border: none;
+    }
+
+    @bottom-left {
+        content: "";
+    }
+
+    @bottom-right {
+        content: "";
+    }
+}
+
+.pdf-cover {
+    page: cover;
+    break-after: page;
+    height: 100%;
+    padding: 0;
+}
+
+.pdf-cover-band {
+    height: 34mm;
+    background: #0e8ea3;
+}
+
+.pdf-cover-body {
+    padding: 26mm 24mm 0;
+}
+
+.pdf-cover-logo {
+    max-height: 18mm;
+    max-width: 70mm;
+    margin: 0 0 14mm !important;
+}
+
+.pdf-cover-title {
+    font-size: 30pt;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: #101a2b;
+}
+
+.pdf-cover-subtitle {
+    margin-top: 6mm;
+    font-size: 13pt;
+    line-height: 1.4;
+    color: #4a5a73;
+}
+
+.pdf-cover-rule {
+    width: 34mm;
+    margin-top: 10mm;
+    border-top: 2pt solid #0e8ea3;
+}
+
+.pdf-cover-date {
+    margin-top: 6mm;
+    font-size: 9.5pt;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7b8aa3;
+}
+
+.pdf-cover-brand {
+    position: absolute;
+    bottom: 22mm;
+    left: 24mm;
+    font-size: 9pt;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #7b8aa3;
+}

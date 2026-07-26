@@ -5,10 +5,23 @@ extern crate rocket;
 extern crate log;
 
 mod auth;
+mod blocks;
+mod cache;
 mod catchers;
+mod censor;
+mod charts;
+mod config;
+mod exec;
 mod helpers;
+mod layout;
+mod mermaid;
+mod obs;
+mod pdfops;
+mod pipeline;
 mod routes;
+mod themes;
 mod types;
+mod urlguard;
 
 use rocket::fs::FileServer;
 use rocket::http::Method;
@@ -17,6 +30,11 @@ use rocket_cors::{AllowedOrigins, CorsOptions};
 #[launch]
 fn rocket() -> _ {
     env_logger::init();
+
+    // Configuration first: everything below, including the log shipper, reads from it
+    info!("Configuration: {}", config::config().summary());
+    obs::init();
+    themes::init();
 
     // Generated PDFs live here; create it up front so the very first request cannot fail
     if let Err(e) = std::fs::create_dir_all(helpers::pdf_root()) {
@@ -46,6 +64,7 @@ fn rocket() -> _ {
 
     rocket::build()
         .attach(cors)
+        .attach(obs::Observer)
         // Legacy FormData endpoint (backward compatible)
         .mount("/", routes![routes::legacy::convert])
         // Static files
@@ -67,6 +86,12 @@ fn rocket() -> _ {
                 routes::merge::merge,
                 routes::watermark::watermark,
                 routes::protect::protect,
+                routes::redact::redact,
+                routes::diff::diff,
+                routes::layout::analyze_layout,
+                routes::metrics::metrics,
+                routes::themes::list_themes,
+                routes::themes::theme_preview,
             ],
         )
         .register(
@@ -78,7 +103,9 @@ fn rocket() -> _ {
                 catchers::payload_too_large,
                 catchers::unsupported_media_type,
                 catchers::unprocessable_entity,
+                catchers::too_many_requests,
                 catchers::internal_error,
+                catchers::bad_gateway,
                 catchers::gateway_timeout,
             ],
         )

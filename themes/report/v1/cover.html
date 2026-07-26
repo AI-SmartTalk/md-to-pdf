@@ -1,0 +1,10 @@
+<section class="pdf-cover">
+<div class="pdf-cover-body">
+{% if logo %}<img class="pdf-cover-logo" src="{{ logo }}" alt="" />{% endif %}
+<div class="pdf-cover-rule"></div>
+<div class="pdf-cover-title">{{ title }}</div>
+{% if subtitle %}<div class="pdf-cover-subtitle">{{ subtitle }}</div>{% endif %}
+{% if date %}<div class="pdf-cover-date">{{ date }}</div>{% endif %}
+</div>
+<div class="pdf-cover-brand">AI SmartTalk</div>
+</section>

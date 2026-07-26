@@ -130,6 +130,11 @@ jobs:
 
       # Écrit APRÈS le checkout : le .env n'est pas suivi par git, un checkout
       # ne l'écrase pas, mais l'ordre inverse resterait fragile.
+      #
+      # PDF_ENV faisait un `cat >` : tout ce qui n'y figurait pas disparaissait à
+      # chaque déploiement, y compris une variable posée sur le VPS la veille. Le
+      # secret reste la source de vérité pour les clés qu'il porte, mais les
+      # autres survivent — un déploiement ne doit rien exiger de personne.
       - name: Écrire le .env depuis PDF_ENV
         env:
           HOST: ${{ secrets.PDF_SSH_HOST }}
@@ -137,10 +142,26 @@ jobs:
           PORT: ${{ vars.PDF_SSH_PORT || '22' }}
           DEPLOY_PATH: ${{ vars.PDF_DEPLOY_PATH || '/opt/md-to-pdf' }}
           PDF_ENV: ${{ secrets.PDF_ENV }}
+          LOG420_INGEST_TOKEN: ${{ secrets.LOG420_INGEST_TOKEN }}
         run: |
-          printf '%s' "$PDF_ENV" \
-            | ssh -p "$PORT" "$USER@$HOST" "umask 077 && cat > '$DEPLOY_PATH/.env'"
-          echo ".env écrit."
+          # Les valeurs vivent dans des variables d'environnement transmises par
+          # ssh -o SendEnv=… plutôt que dans la ligne de commande : un secret sur
+          # la ligne de commande est lisible par tout utilisateur du VPS.
+          printf '%s' "$PDF_ENV" > /tmp/pdf.env
+          if [ -n "$LOG420_INGEST_TOKEN" ] \
+             && ! grep -qE '^LOG420_INGEST_TOKEN=.+' /tmp/pdf.env; then
+            printf '\nLOG420_INGEST_TOKEN=%s\n' "$LOG420_INGEST_TOKEN" >> /tmp/pdf.env
+          fi
+
+          ssh -p "$PORT" "$USER@$HOST" "umask 077 && cat > '$DEPLOY_PATH/.env.incoming'" \
+            < /tmp/pdf.env
+          rm -f /tmp/pdf.env
+
+          # La fusion vit dans deploy/merge-env.sh, déjà présent sur le VPS après
+          # l'étape de synchronisation : versionné et testable, contrairement à
+          # un script en ligne dans ce fichier.
+          ssh -p "$PORT" "$USER@$HOST" \
+            "cd '$DEPLOY_PATH' && DEPLOY_PATH='$DEPLOY_PATH' bash deploy/merge-env.sh"
 
       - name: Déployer
         env:

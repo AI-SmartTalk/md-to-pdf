@@ -3,7 +3,8 @@ info:
   title: md-to-pdf Document Engine API
   description: |
     Moteur de documents complet : conversion Markdown/HTML/Template vers PDF,
-    preview PNG, fusion, watermark et protection par mot de passe.
+    thèmes, graphiques et diagrammes, aperçu PNG, fusion, filigrane, protection
+    par mot de passe, caviardage, audit de mise en page et comparaison visuelle.
 
     ## Comportement conditionnel des réponses
 
@@ -21,8 +22,20 @@ info:
     ## Authentification
 
     Si la variable d'environnement `API_KEY` est définie côté serveur, tous les endpoints
-    `/api/*` (sauf `/api/health`) exigent l'en-tête `X-API-Key` ou
+    `/api/*` (sauf `/api/health`, sonde du conteneur) exigent l'en-tête `X-API-Key` ou
     `Authorization: Bearer <clé>`. Si elle n'est pas définie, l'API est ouverte.
+
+    ## Corrélation des requêtes
+
+    Toute réponse porte un en-tête `X-Request-Id`. Envoyez le vôtre en entrée — ASCII
+    imprimable, 128 caractères au plus — il est repris tel quel et attaché à chaque
+    événement journalisé.
+
+    ## Champs additifs des réponses
+
+    Les endpoints de génération ajoutent `cached`, `layout` et `warnings` **uniquement
+    quand ils s'appliquent** : une requête qui ne demande rien de nouveau reçoit
+    exactement `{ "download_url": "…" }`, comme avant.
   version: 0.2.0
   contact:
     name: AI SmartTalk
@@ -47,7 +60,7 @@ tags:
   - name: HTML
     description: Conversion HTML directe → PDF
   - name: Preview
-    description: Génération de preview PNG (première page)
+    description: Génération de preview PNG (une page, plusieurs pages ou planche contact)
   - name: Merge
     description: Fusion de plusieurs PDFs
   - name: Watermark
@@ -56,8 +69,18 @@ tags:
     description: Protection par mot de passe d'un PDF
   - name: Download
     description: Téléchargement de PDFs sauvegardés
+  - name: Redact
+    description: Caviardage irréversible d'un PDF existant
+  - name: Layout
+    description: Audit de mise en page d'un PDF existant
+  - name: Diff
+    description: Comparaison visuelle de deux PDFs
+  - name: Themes
+    description: Kits de marque livrés avec le service
   - name: Health
     description: Health check du service
+  - name: Metrics
+    description: Exposition Prometheus
   - name: Legacy
     description: Endpoint legacy (backward compatible)
 
@@ -100,8 +123,13 @@ paths:
       description: |
         Convertit du Markdown en PDF via pandoc + moteur PDF (weasyprint par défaut).
 
-        Supporte les tags CENSOR (`{{CENSOR}}`, `<CENSOR>`, etc.) qui sont remplacés
-        par une image floutée pour le contenu premium.
+        Tags CENSOR ponctuels (`{{CENSOR}}`, `<CENSOR>`) et régions
+        (`{{CENSOR:start}}` … `{{CENSOR:end}}`, `{{CENSOR:teaser=25}}`, `{{CENSOR:inline}}`) :
+        le texte censuré est retiré avant pandoc, il n'atteint jamais le PDF.
+
+        Les blocs ```chart et ```mermaid deviennent du SVG inline. Un bloc qui ne peut pas
+        être rendu reste un bloc de code et la raison revient dans `warnings` — jamais une
+        erreur de requête.
 
         `header_html` est prioritaire sur `header_template` (inline > fichier serveur).
       operationId: convert
@@ -112,13 +140,14 @@ paths:
             schema:
               $ref: "#/components/schemas/ConvertRequest"
             example:
-              markdown: "# Mon Document\n\nContenu en **Markdown**."
+              markdown: "# Mon Document\n\n```chart\n{\"type\": \"bar\", \"labels\": [\"Q1\", \"Q2\"], \"series\": [{\"name\": \"2026\", \"data\": [12000, 18000]}]}\n```\n\n```mermaid\ngraph TD; A[Requête] --> B[PDF];\n```\n\n{{CENSOR:start,premium}}\nRéservé aux abonnés.\n{{CENSOR:end}}\n"
               css: "h1 { color: navy; }"
               engine: weasyprint
               options:
                 paper_size: a4
                 orientation: portrait
                 page_numbers: true
+                theme: report
               header_template: "header.html"
               client_id: "client-123"
               pdf_name: "rapport-2024"
@@ -143,6 +172,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "504":
           $ref: "#/components/responses/Timeout"
 
@@ -190,6 +221,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "504":
           $ref: "#/components/responses/Timeout"
 
@@ -239,6 +272,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "504":
           $ref: "#/components/responses/Timeout"
 
@@ -248,17 +283,21 @@ paths:
   /api/preview:
     post:
       tags: [Preview]
-      summary: Génération de preview PNG (première page)
+      summary: Génération de preview PNG
       description: |
-        Génère un PDF à partir de l'un des trois modes d'entrée, puis retourne
-        une image PNG de la première page (150 DPI).
+        Génère un PDF à partir de l'un des trois modes d'entrée, puis en retourne
+        une ou plusieurs pages en PNG.
 
         **Modes d'entrée** (mutuellement exclusifs, par ordre de priorité) :
         1. `markdown` — conversion Markdown → PDF → PNG
         2. `template` + `data` — rendu Tera → PDF → PNG
         3. `html` — HTML → PDF → PNG
 
-        Retourne toujours `image/png`, jamais de JSON.
+        **Rétro-compatibilité** : un corps qui ne porte aucun des champs `pages`, `dpi`
+        ou `layout` retourne toujours l'image PNG de la première page, comme avant.
+
+        Sans `layout` explicite, une seule page donne un `image/png` brut et plusieurs
+        pages donnent le JSON `images`.
       operationId: preview
       requestBody:
         required: true
@@ -283,18 +322,25 @@ paths:
                     title: "Mon titre"
       responses:
         "200":
-          description: Image PNG de la première page
+          description: |
+            Image PNG (page unique ou planche contact), ou JSON `images` pour
+            plusieurs pages.
           content:
             image/png:
               schema:
                 type: string
                 format: binary
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreviewPages"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "504":
           $ref: "#/components/responses/Timeout"
 
@@ -347,6 +393,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "504":
           $ref: "#/components/responses/Timeout"
 
@@ -394,6 +442,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "504":
           $ref: "#/components/responses/Timeout"
 
@@ -439,8 +489,246 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "504":
           $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Redact
+  # ───────────────────────────────────────────────
+  /api/redact:
+    post:
+      tags: [Redact]
+      summary: Caviarder un PDF sauvegardé
+      description: |
+        Localise le texte à masquer, pose des rectangles noirs, puis **reconstruit chaque
+        page à partir de pixels**. Le texte caviardé disparaît du fichier, et avec lui la
+        couche texte, les signets, les annotations, les pièces jointes et les métadonnées
+        de la source. Le résultat n'est ni sélectionnable ni cherchable, et il est plus
+        lourd que l'original.
+
+        Deux vérifications sont faites sur le fichier avant de le servir : le nombre de
+        pages doit être celui de la source, et l'extraction de texte doit ne rien rendre.
+
+        Au moins un de `patterns` ou `entities` est obligatoire.
+
+        > Un PDF **scanné** (sans couche texte) ressort aplati avec `redactions: []` :
+        > rien n'a pu être localisé, il n'y a pas d'OCR.
+      operationId: redact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RedactRequest"
+            examples:
+              entities:
+                summary: Caviarder les données personnelles
+                value:
+                  pdf: "/download/client-123/contrat.pdf"
+                  entities: [email, iban, phone]
+                  client_id: "client-123"
+                  pdf_name: "contrat-caviarde"
+      responses:
+        "200":
+          description: PDF binaire, ou JSON quand `client_id` et `pdf_name` sont fournis
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RedactResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Layout
+  # ───────────────────────────────────────────────
+  /api/layout:
+    post:
+      tags: [Layout]
+      summary: Auditer la mise en page d'un PDF existant
+      description: |
+        Même analyse que `options.autolayout`, appliquée à un PDF déjà produit — y compris
+        fabriqué ailleurs. Ne modifie rien.
+      operationId: analyzeLayout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pdf]
+              properties:
+                pdf:
+                  type: string
+                  example: "/download/client-123/rapport.pdf"
+      responses:
+        "200":
+          description: Rapport de mise en page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LayoutReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Diff
+  # ───────────────────────────────────────────────
+  /api/diff:
+    post:
+      tags: [Diff]
+      summary: Comparer deux PDFs pixel à pixel
+      description: |
+        Rastérise les deux documents et compare les pixels page par page.
+
+        `threshold` vaut **0** par défaut : toute page qui a visiblement bougé rend le
+        verdict `changed`. C'est ce qu'attend une intégration continue ; un défaut
+        tolérant annoncerait `identical` sur un titre renommé.
+      operationId: diff
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiffRequest"
+      responses:
+        "200":
+          description: Résultat de la comparaison
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiffResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Themes
+  # ───────────────────────────────────────────────
+  /api/themes:
+    get:
+      tags: [Themes]
+      summary: Lister les thèmes disponibles
+      description: |
+        Les valeurs que `options.theme` accepte, avec leurs polices, leurs jetons de
+        couleur et l'URL de leur aperçu.
+
+        Un thème publié est **immuable** : la clé du cache de rendu contient `nom@version`,
+        donc modifier un `theme.css` en place resservirait les PDF de l'ancienne version.
+      operationId: listThemes
+      responses:
+        "200":
+          description: Liste des thèmes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  themes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ThemeInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/themes/{name}/{version}/preview.png:
+    get:
+      tags: [Themes]
+      summary: Aperçu PNG d'un thème
+      description: Première page du document d'exemple rendue avec le thème demandé.
+      operationId: themePreview
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+          example: report
+        - name: version
+          in: path
+          required: true
+          description: Numéro de version, ou `latest`
+          schema:
+            type: string
+          example: latest
+        - name: cover
+          in: query
+          required: false
+          description: "`true` rend la page de couverture au lieu du corps"
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Image PNG
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Metrics
+  # ───────────────────────────────────────────────
+  /api/metrics:
+    get:
+      tags: [Metrics]
+      summary: Exposition Prometheus
+      description: |
+        Compteurs de requêtes et histogrammes de latence. Les étiquettes se limitent au
+        motif de route Rocket et au code de statut : jamais de `client_id` ni de nom de
+        fichier.
+      operationId: metrics
+      responses:
+        "200":
+          description: Format d'exposition Prometheus
+          content:
+            text/plain:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   # ───────────────────────────────────────────────
   # Download
@@ -495,6 +783,11 @@ paths:
         Endpoint original de conversion Markdown → PDF, conservé pour
         la compatibilité ascendante. Utilise `application/x-www-form-urlencoded`
         ou `multipart/form-data`.
+
+        Endpoint ouvert, donc plus étroit : moteur `weasyprint` uniquement
+        (`PDF_UNAUTHENTICATED_ENGINES`), pas d'expansion des blocs ```chart et
+        ```mermaid, et une URL bloquée est signalée sans faire échouer le
+        document.
 
         **Pour les nouvelles intégrations, préférez `/api/convert`.**
       operationId: legacyConvert
@@ -614,6 +907,43 @@ components:
         watermark:
           type: string
           description: Texte de watermark léger appliqué via CSS
+        theme:
+          type: string
+          description: |
+            Kit de marque : `"nom"` pour la dernière version, `"nom@2"` pour figer.
+            Voir `GET /api/themes`. Un thème publié est immuable.
+          example: report
+        cover:
+          $ref: "#/components/schemas/Cover"
+        autolayout:
+          type: boolean
+          default: false
+          description: |
+            Analyse le PDF produit et le re-rend avec du CSS correctif tant que le score
+            progresse. Le rapport est renvoyé dans le champ `layout` de la réponse.
+        censor_label:
+          type: string
+          description: |
+            Libellé des blocs CENSOR qui ne nomment pas de niveau. Cascade :
+            niveau du tag > `censor_label` > libellé historique.
+        charts:
+          type: boolean
+          default: true
+          description: "`false` coupe l'expansion des blocs ```chart ET ```mermaid"
+
+    Cover:
+      type: object
+      description: Page de couverture insérée en tête du document
+      properties:
+        title:
+          type: string
+        subtitle:
+          type: string
+        logo:
+          type: string
+          description: URL ou chemin de l'image, soumis au contrôle anti-SSRF
+        date:
+          type: string
 
     ConvertRequest:
       type: object
@@ -713,6 +1043,21 @@ components:
           $ref: "#/components/schemas/PdfEngine"
         options:
           $ref: "#/components/schemas/PdfOptions"
+        pages:
+          type: string
+          description: '`"3"`, `"2-5"` ou `"all"`. Absent : la page 1 seule.'
+          example: "1-4"
+        dpi:
+          type: integer
+          minimum: 36
+          maximum: 300
+          default: 150
+        layout:
+          type: string
+          enum: [png, images, sheet]
+          description: |
+            `png` image brute, `images` un PNG par page en JSON, `sheet` une planche
+            contact en une seule image. Absent : `png` pour une page, `images` au-delà.
         header_html:
           type: string
         footer_html:
@@ -793,7 +1138,11 @@ components:
           type: string
           description: CSS additionnel
         engine:
-          $ref: "#/components/schemas/PdfEngine"
+          allOf:
+            - $ref: "#/components/schemas/PdfEngine"
+          description: |
+            Sur cet endpoint ouvert, seul `weasyprint` est accepté : les autres
+            renvoient 400 (voir `PDF_UNAUTHENTICATED_ENGINES`).
         header_template:
           type: string
           description: Nom du fichier template header
@@ -805,13 +1154,295 @@ components:
         pdf_name:
           type: string
 
+    RedactRequest:
+      type: object
+      required: [pdf]
+      description: Au moins un de `patterns` ou `entities` doit être fourni.
+      properties:
+        pdf:
+          type: string
+          description: Chemin `/download/…` du PDF source
+        patterns:
+          type: array
+          description: |
+            Chaînes **littérales**, pas des expressions régulières. La comparaison ignore
+            la casse et normalise les blancs, donc une correspondance peut franchir un
+            retour à la ligne.
+
+            Un motif qui ressemble à une regex (`\d{4}`, `[A-Z]+`, `.*`, `(?i)`) est
+            refusé en 400 plutôt que traité littéralement : recevoir un document où rien
+            n'a été noirci en croyant le travail fait est le scénario que ce refus évite.
+          maxItems: 64
+          items:
+            type: string
+            maxLength: 256
+        entities:
+          type: array
+          description: |
+            Chaque entité est validée par sa clé de contrôle (modulo 97 pour l'IBAN, Luhn
+            pour SIRET/SIREN et cartes), ce qui empêche un numéro de facture à 14 chiffres
+            d'être pris pour un SIRET.
+          items:
+            type: string
+            enum: [email, iban, phone, siret, credit_card]
+        dpi:
+          type: integer
+          minimum: 72
+          maximum: 400
+          default: 200
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+
+    RedactResponse:
+      type: object
+      properties:
+        download_url:
+          type: string
+        redactions:
+          type: array
+          description: Zones noircies, par page. Vide sur un PDF sans couche texte.
+          items:
+            type: object
+            properties:
+              page:
+                type: integer
+              count:
+                type: integer
+        pages:
+          type: integer
+        mode:
+          type: string
+          enum: [flatten]
+          description: Toujours `flatten` — aucun mode de cet endpoint ne garde de couche texte
+        notice:
+          type: string
+          description: Le compromis accepté, rappelé dans la réponse elle-même
+
+    DiffRequest:
+      type: object
+      required: [before, after]
+      properties:
+        before:
+          type: string
+          description: Chemin `/download/…` de la version de référence
+        after:
+          type: string
+          description: Chemin `/download/…` de la version à contrôler
+        dpi:
+          type: integer
+          minimum: 36
+          maximum: 300
+          default: 100
+        threshold:
+          type: number
+          format: float
+          default: 0
+          description: Part de pixels changés tolérée. 0 ne tolère rien.
+        images:
+          type: boolean
+          default: false
+          description: Renvoie une image de surlignage par page changée
+
+    DiffResponse:
+      type: object
+      properties:
+        pages_total:
+          type: integer
+          description: Pages du plus long des deux documents
+        pages_before:
+          type: integer
+        pages_after:
+          type: integer
+        pages_changed:
+          type: array
+          items:
+            type: integer
+        pages_added:
+          type: array
+          items:
+            type: integer
+        pages_removed:
+          type: array
+          items:
+            type: integer
+        changed_ratio:
+          type: number
+          format: float
+          description: |
+            Moyenne des parts de pixels changés sur tout le document. Publiée arrondie ;
+            le verdict est décidé sur la valeur exacte.
+        verdict:
+          type: string
+          enum: [identical, changed]
+        threshold:
+          type: number
+          format: float
+        dpi:
+          type: integer
+        per_page:
+          type: array
+          items:
+            type: object
+            properties:
+              page:
+                type: integer
+              ratio:
+                type: number
+                format: float
+              status:
+                type: string
+                enum: [added, removed, geometry]
+                description: Absent quand la page a simplement changé
+        images:
+          type: array
+          items:
+            type: object
+            properties:
+              page:
+                type: integer
+              png:
+                type: string
+                description: Image de surlignage encodée en base64
+              width:
+                type: integer
+              height:
+                type: integer
+        truncated:
+          type: boolean
+
+    ThemeInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: integer
+        description:
+          type: string
+        label:
+          type: string
+        latest:
+          type: boolean
+          description: Vrai pour la version que `"nom"` sans version résout
+        author:
+          type: string
+        fonts:
+          type: array
+          items:
+            type: string
+        colors:
+          type: object
+          additionalProperties:
+            type: string
+        cover:
+          type: boolean
+          description: Le thème livre une page de couverture
+        header:
+          type: boolean
+        footer:
+          type: boolean
+        preview_url:
+          type: string
+          example: "/api/themes/report/1/preview.png"
+
+    PreviewPages:
+      type: object
+      properties:
+        pages:
+          type: array
+          items:
+            type: object
+            properties:
+              page:
+                type: integer
+                description: Numéro de page 1-indexé dans le document source
+              png:
+                type: string
+                description: Image encodée en base64
+              width:
+                type: integer
+              height:
+                type: integer
+        pages_total:
+          type: integer
+          description: Pages du document, qui peuvent être plus nombreuses que celles rendues
+        truncated:
+          type: boolean
+          description: Présent uniquement quand le plafond de pages a écourté la réponse
+
     ConvertResponse:
       type: object
+      description: |
+        Strictement additive : une requête qui ne demande rien de nouveau reçoit
+        exactement `{ "download_url": "…" }`, comme avant.
       properties:
         download_url:
           type: string
           description: URL relative pour télécharger le PDF généré
           example: "/download/client-123/rapport-2024.pdf"
+        cached:
+          type: boolean
+          description: Présent (et vrai) uniquement quand le PDF vient du cache de rendu
+        layout:
+          allOf:
+            - $ref: "#/components/schemas/LayoutReport"
+          description: Présent uniquement quand `options.autolayout` a été demandé
+        warnings:
+          type: array
+          description: |
+            Présent uniquement s'il y en a : un bloc `chart` ou `mermaid` qui n'a pas pu
+            être rendu est laissé tel quel dans le document et la raison arrive ici.
+          items:
+            $ref: "#/components/schemas/BlockWarning"
+
+    BlockWarning:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [chart, mermaid]
+        message:
+          type: string
+        line:
+          type: integer
+          description: Ligne 1-indexée du bloc fautif dans le document source
+
+    LayoutReport:
+      type: object
+      properties:
+        pages:
+          type: integer
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 100 = aucun défaut détecté
+        passes:
+          type: integer
+          description: Nombre de passes correctives appliquées (autolayout uniquement)
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              kind:
+                type: string
+                enum: [overflow, blank_page, widow_page, orphan_heading, split_table, long_table]
+              page:
+                type: integer
+                description: Numéro de page 1-indexé
+              severity:
+                type: string
+                enum: [error, warn, info]
+              detail:
+                type: string
+              bbox:
+                type: array
+                description: x0, y0, x1, y1 en points PDF, quand le défaut est localisé
+                items:
+                  type: number
 
     HealthResponse:
       type: object
@@ -871,6 +1502,15 @@ components:
           example:
             error: "Unauthorized"
             details: "Missing or invalid API key (X-API-Key or Authorization: Bearer)"
+
+    TooManyRequests:
+      description: |
+        La file de rendu est pleine : la requête a attendu plus de
+        `PDF_QUEUE_TIMEOUT_SECS` sans obtenir de place. Réessayer quelques secondes plus tard.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
 
     Timeout:
       description: La génération a dépassé la limite de temps (`PDF_PROCESS_TIMEOUT_SECS`)

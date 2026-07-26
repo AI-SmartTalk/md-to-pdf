@@ -1,0 +1,551 @@
+/* Report — v1
+ *
+ * Rapport corporate dense : sérif Pagella pour le corps, sans-serif Heros pour les titres,
+ * numérotation automatique des sections, tableaux à en-tête tenu.
+ * Cible WeasyPrint, pas de var() (non résolu dans les descripteurs @page), pas de police
+ * téléchargée : TeX Gyre Pagella / Heros / DejaVu Sans Mono sont dans l'image Debian.
+ */
+
+/* ---------- Page ---------- */
+
+@page {
+    size: A4;
+    margin: 22mm 20mm 20mm;
+
+    @top-left {
+        content: "";
+        border-bottom: 0.5pt solid #c9d2dd;
+        width: 100%;
+    }
+
+    @bottom-center {
+        content: "Page " counter(page) " sur " counter(pages);
+        font-family: "TeX Gyre Heros", "Nimbus Sans", sans-serif;
+        font-size: 8pt;
+        color: #5a6577;
+        vertical-align: top;
+        padding-top: 5mm;
+    }
+}
+
+/* ---------- Corps ---------- */
+
+body {
+    font-family: "TeX Gyre Pagella", "TeX Gyre Termes", "DejaVu Serif", serif;
+    font-size: 10pt;
+    line-height: 1.42;
+    color: #1a1f29;
+    /* La couche par défaut ajoute 2em de padding, qui doublerait la marge de @page */
+    padding: 0;
+    margin: 0;
+    max-width: none;
+}
+
+p {
+    margin: 0 0 6.5pt;
+    orphans: 3;
+    widows: 3;
+    /* La couche par défaut impose text-align: left en !important */
+    text-align: justify !important;
+}
+
+strong {
+    color: #1a1f29;
+    font-weight: 700;
+}
+
+em {
+    color: inherit;
+}
+
+/* ---------- Titres numérotés ---------- */
+
+body {
+    counter-reset: section;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: "TeX Gyre Heros", "Nimbus Sans", sans-serif;
+    color: #16243a;
+    line-height: 1.22;
+    break-after: avoid;
+    break-inside: avoid;
+}
+
+h1 {
+    font-size: 20pt;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 10pt;
+    padding: 0 0 9pt;
+    border-bottom: 1.5pt solid #16243a;
+}
+
+h2 {
+    counter-increment: section;
+    counter-reset: subsection;
+    font-size: 13pt;
+    font-weight: 700;
+    margin: 18pt 0 7pt;
+    padding: 0 0 4pt;
+    border-bottom: 0.5pt solid #c9d2dd;
+}
+
+h2::before {
+    content: counter(section) ". ";
+    color: #1f3b63;
+}
+
+h3 {
+    counter-increment: subsection;
+    counter-reset: subsubsection;
+    font-size: 11pt;
+    font-weight: 700;
+    margin: 14pt 0 5pt;
+    border-bottom: none;
+}
+
+h3::before {
+    content: counter(section) "." counter(subsection) " ";
+    color: #1f3b63;
+}
+
+h4 {
+    counter-increment: subsubsection;
+    font-size: 10pt;
+    font-weight: 700;
+    margin: 12pt 0 4pt;
+}
+
+h4::before {
+    content: counter(section) "." counter(subsection) "." counter(subsubsection) " ";
+    color: #1f3b63;
+}
+
+h5 {
+    font-size: 9pt;
+    font-weight: 700;
+    margin: 11pt 0 3pt;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #3c4757;
+}
+
+h6 {
+    font-size: 8.5pt;
+    font-weight: 700;
+    margin: 11pt 0 3pt;
+    font-style: italic;
+    color: #5a6577;
+}
+
+/* ---------- Liens ---------- */
+
+a {
+    color: #1f3b63;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+/* Une référence citée dans un rapport doit rester atteignable une fois imprimée */
+a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-family: "TeX Gyre Heros", "Nimbus Sans", sans-serif;
+    font-size: 7pt;
+    font-weight: 400;
+    color: #5a6577;
+    word-break: break-all;
+}
+
+/* La couche par défaut transforme tout lien aismarttalk.tech en encadré rouge */
+a[href*="aismarttalk.tech"] {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    color: #1f3b63;
+    font-weight: 600;
+    text-align: inherit;
+}
+
+/* ---------- Tableaux ---------- */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10pt 0 12pt;
+    font-family: "TeX Gyre Heros", "Nimbus Sans", sans-serif;
+    font-size: 8.5pt;
+    background: transparent;
+    /* La couche par défaut interdit la coupure : un tableau de trois pages déborderait */
+    break-inside: auto;
+}
+
+/* En-tête répété sur chaque page traversée par le tableau */
+thead {
+    display: table-header-group;
+}
+
+tr {
+    break-inside: avoid;
+}
+
+th,
+td {
+    border: none;
+    padding: 4pt 6pt;
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: break-word;
+}
+
+th {
+    background: #16243a;
+    color: #ffffff;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border: none;
+}
+
+td {
+    border-bottom: 0.4pt solid #dde3ea;
+}
+
+tbody tr:nth-child(even) {
+    background-color: #f4f6f9;
+}
+
+tbody tr:last-child td {
+    border-bottom: 0.8pt solid #16243a;
+}
+
+/* Tableaux à beaucoup de colonnes : ::: wide autour du tableau */
+.wide table {
+    font-size: 7.5pt;
+}
+
+.wide th,
+.wide td {
+    padding: 3pt 4pt;
+}
+
+/* ---------- Listes ---------- */
+
+ul,
+ol {
+    margin: 6pt 0;
+    padding-left: 1.4em;
+}
+
+li {
+    margin: 2pt 0;
+    orphans: 2;
+    widows: 2;
+}
+
+li::marker {
+    color: #1f3b63;
+}
+
+li > ul,
+li > ol {
+    margin: 2pt 0;
+}
+
+/* ---------- Citations ---------- */
+
+blockquote {
+    margin: 10pt 0 10pt 6pt;
+    padding: 1pt 0 1pt 12pt;
+    border-left: 1.5pt solid #1f3b63;
+    color: #3c4757;
+    font-size: 9.5pt;
+    font-style: italic;
+    break-inside: avoid;
+}
+
+blockquote p {
+    text-align: left !important;
+}
+
+blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+/* ---------- Code ---------- */
+
+code {
+    font-family: "DejaVu Sans Mono", "Nimbus Mono PS", monospace;
+    font-size: 8pt;
+    background: #f0f3f7;
+    color: #16243a;
+    padding: 0.5pt 2.5pt;
+    border-radius: 2pt;
+}
+
+div.sourceCode,
+pre {
+    background: #f7f9fb;
+    border: 0.5pt solid #dde3ea;
+    border-radius: 0;
+    margin: 10pt 0;
+    padding: 7pt 9pt;
+    break-inside: avoid;
+}
+
+div.sourceCode pre {
+    background: transparent;
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+
+pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 8pt;
+    line-height: 1.4;
+}
+
+/* Une ligne trop longue doit revenir à la ligne au lieu de sortir de la page */
+pre,
+pre > code.sourceCode {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+/* Le gabarit pandoc décale les lignes de -5em en media print pour les numéros de ligne
+ * que nous n'affichons pas */
+pre > code.sourceCode > span {
+    text-indent: 0;
+    padding-left: 0;
+}
+
+/* ---------- Figures ---------- */
+
+figure {
+    margin: 12pt 0;
+    text-align: center;
+    break-inside: avoid;
+}
+
+figure img {
+    /* La couche par défaut force margin-left/right à 0 en !important */
+    margin-left: auto !important;
+    margin-right: auto !important;
+    max-width: 100%;
+    border: 0.5pt solid #dde3ea;
+}
+
+figcaption {
+    margin-top: 4pt;
+    font-family: "TeX Gyre Heros", "Nimbus Sans", sans-serif;
+    font-size: 8pt;
+    color: #5a6577;
+    text-align: center;
+}
+
+/* ---------- Encadrés ---------- */
+
+.success,
+.warning,
+.danger,
+.info,
+.note {
+    margin: 10pt 0;
+    padding: 7pt 10pt;
+    border: 0.5pt solid #c9d2dd;
+    border-left: 3pt solid #5a6577;
+    border-radius: 0;
+    background: #f7f9fb;
+    font-size: 9.5pt;
+    break-inside: avoid;
+}
+
+.success {
+    border-left-color: #17694d;
+    background: #f2f7f5;
+}
+
+.warning {
+    border-left-color: #8a5a00;
+    background: #faf6ef;
+}
+
+.danger {
+    border-left-color: #9d2a27;
+    background: #faf1f1;
+}
+
+.info,
+.note {
+    border-left-color: #1f3b63;
+    background: #f2f5fa;
+}
+
+.success > p:last-child,
+.warning > p:last-child,
+.danger > p:last-child,
+.info > p:last-child,
+.note > p:last-child {
+    margin-bottom: 0;
+}
+
+/* ---------- Notes de bas de page ---------- */
+
+a.footnote-ref sup {
+    font-size: 7pt;
+    color: #1f3b63;
+}
+
+section.footnotes {
+    margin-top: 16pt;
+    padding-top: 6pt;
+    border-top: 0.5pt solid #c9d2dd;
+    font-size: 8pt;
+    line-height: 1.35;
+    color: #3c4757;
+}
+
+section.footnotes hr {
+    display: none;
+}
+
+section.footnotes ol {
+    padding-left: 1.1em;
+}
+
+section.footnotes li {
+    margin: 1.5pt 0;
+}
+
+section.footnotes p {
+    text-align: left !important;
+}
+
+/* Le lien de retour n'a aucun sens sur papier */
+a.footnote-back {
+    display: none;
+}
+
+/* ---------- Sommaire ---------- */
+
+nav#TOC {
+    margin: 14pt 0 18pt;
+    padding: 10pt 0;
+    border-top: 0.5pt solid #c9d2dd;
+    border-bottom: 0.5pt solid #c9d2dd;
+    font-family: "TeX Gyre Heros", "Nimbus Sans", sans-serif;
+    font-size: 9pt;
+    break-after: page;
+}
+
+nav#TOC ul {
+    list-style: none;
+    margin: 0;
+    padding-left: 1.2em;
+}
+
+nav#TOC > ul {
+    padding-left: 0;
+}
+
+nav#TOC a {
+    color: #1a1f29;
+    font-weight: 400;
+}
+
+nav#TOC a::after {
+    content: "";
+}
+
+/* ---------- Filets ---------- */
+
+hr {
+    border: none;
+    border-top: 0.5pt solid #c9d2dd;
+    margin: 14pt 0;
+}
+
+/* ---------- Couverture ---------- */
+
+@page cover {
+    margin: 0;
+
+    @top-left {
+        content: "";
+        border: none;
+    }
+
+    @bottom-center {
+        content: "";
+    }
+}
+
+.pdf-cover {
+    page: cover;
+    break-after: page;
+    height: 100%;
+    padding: 0;
+}
+
+.pdf-cover-body {
+    /* padding et non margin : la couche par défaut force margin-left/right à 0 en
+     * !important sur tous les div */
+    padding: 62mm 24mm 0;
+}
+
+.pdf-cover-rule {
+    width: 45mm;
+    margin-bottom: 9mm;
+    border-top: 3pt solid #16243a;
+}
+
+.pdf-cover-logo {
+    max-height: 16mm;
+    max-width: 60mm;
+    margin: 0 0 12mm !important;
+}
+
+.pdf-cover-title {
+    font-family: "TeX Gyre Heros", "Nimbus Sans", sans-serif;
+    font-size: 26pt;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #16243a;
+}
+
+.pdf-cover-subtitle {
+    margin-top: 5mm;
+    font-size: 12pt;
+    line-height: 1.4;
+    color: #3c4757;
+}
+
+.pdf-cover-date {
+    margin-top: 12mm;
+    font-family: "TeX Gyre Heros", "Nimbus Sans", sans-serif;
+    font-size: 9pt;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #5a6577;
+}
+
+.pdf-cover-brand {
+    position: absolute;
+    bottom: 24mm;
+    left: 24mm;
+    font-family: "TeX Gyre Heros", "Nimbus Sans", sans-serif;
+    font-size: 8.5pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #5a6577;
+}

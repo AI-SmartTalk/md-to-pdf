@@ -1,4 +1,5 @@
 use crate::auth::ApiKey;
+use crate::exec;
 use crate::helpers;
 use crate::types::*;
 use rocket::fs::NamedFile;
@@ -6,7 +7,7 @@ use rocket::serde::json::Json;
 use rocket::Either;
 use std::io::Write;
 use std::process::Command;
-use tempfile::Builder;
+use tempfile::{Builder, TempPath};
 
 #[post("/protect", format = "json", data = "<req>")]
 pub async fn protect(
@@ -27,7 +28,28 @@ pub async fn protect(
         ));
     }
 
-    let source_path = helpers::resolve_pdf_path(&req.pdf)?;
+    let ProtectRequest {
+        pdf,
+        password,
+        client_id,
+        pdf_name,
+    } = req;
+
+    // qpdf on a large document is a long blocking run: it belongs on a render slot, not on
+    // a tokio worker that `/api/health` needs.
+    let (output, download_url) =
+        exec::offload(move || encrypt(&pdf, &password, client_id, pdf_name)).await?;
+
+    helpers::deliver(output, download_url).await
+}
+
+fn encrypt(
+    pdf: &str,
+    password: &str,
+    client_id: Option<String>,
+    pdf_name: Option<String>,
+) -> Result<(TempPath, Option<String>), AppError> {
+    let source_path = helpers::resolve_pdf_path(pdf)?;
 
     let output_temp = Builder::new().suffix(".pdf").tempfile()?;
     let output_path = helpers::path_to_str(output_temp.path())?.to_string();
@@ -38,7 +60,7 @@ pub async fn protect(
     writeln!(
         arg_file,
         "--encrypt\n{password}\n{password}\n256\n--\n{input}\n{output}",
-        password = req.password,
+        password = password,
         input = helpers::path_to_str(&source_path)?,
         output = output_path,
     )?;
@@ -50,14 +72,7 @@ pub async fn protect(
         "PDF encryption failed",
     )?;
 
-    if let (Some(client_id), Some(pdf_name)) = (req.client_id, req.pdf_name) {
-        let download_url = helpers::save_pdf(output_temp.path(), &client_id, &pdf_name)?;
-        Ok(Either::Right(Json(ConvertResponse { download_url })))
-    } else {
-        Ok(Either::Left(
-            NamedFile::open(output_temp.path())
-                .await
-                .map_err(AppError::Io)?,
-        ))
-    }
+    let output = output_temp.into_temp_path();
+    let download_url = helpers::save_if_requested(&output, client_id, pdf_name)?;
+    Ok((output, download_url))
 }

@@ -1,5 +1,6 @@
 use crate::auth::ApiKey;
-use crate::helpers;
+use crate::obs::RequestId;
+use crate::pipeline::{self, RenderSpec, Source, UrlPolicy};
 use crate::types::*;
 use rocket::fs::NamedFile;
 use rocket::serde::json::Json;
@@ -8,38 +9,23 @@ use rocket::Either;
 #[post("/convert", format = "json", data = "<req>")]
 pub async fn convert(
     _key: ApiKey,
+    trace: RequestId,
     req: Json<ConvertRequest>,
 ) -> Result<Either<NamedFile, Json<ConvertResponse>>, AppError> {
     let req = req.into_inner();
 
-    let processed_markdown = helpers::process_censor(&req.markdown);
+    let spec = RenderSpec {
+        source: Source::Markdown(req.markdown),
+        css: req.css,
+        engine: req.engine.unwrap_or_default(),
+        options: req.options.unwrap_or_default(),
+        header_html: req.header_html,
+        footer_html: req.footer_html,
+        header_template: req.header_template,
+        footer_template: req.footer_template,
+        url_policy: UrlPolicy::default(),
+    };
 
-    let css_path = helpers::build_css(req.css.as_deref(), req.options.as_ref())?;
-    let css_path_str = helpers::path_to_str(&css_path)?;
-
-    let engine = req.engine.unwrap_or_default();
-
-    // Resolve header/footer (inline HTML takes priority over template file)
-    let header_temp =
-        helpers::resolve_header_footer(req.header_html.as_deref(), req.header_template.as_deref())?;
-    let footer_temp =
-        helpers::resolve_header_footer(req.footer_html.as_deref(), req.footer_template.as_deref())?;
-
-    let pdf_path = helpers::run_pandoc(
-        &processed_markdown,
-        css_path_str,
-        &engine,
-        req.options.as_ref(),
-        header_temp.as_ref().and_then(|p| p.to_str()),
-        footer_temp.as_ref().and_then(|p| p.to_str()),
-    )?;
-
-    if let (Some(client_id), Some(pdf_name)) = (req.client_id, req.pdf_name) {
-        let download_url = helpers::save_pdf(&pdf_path, &client_id, &pdf_name)?;
-        Ok(Either::Right(Json(ConvertResponse { download_url })))
-    } else {
-        Ok(Either::Left(
-            NamedFile::open(&pdf_path).await.map_err(AppError::Io)?,
-        ))
-    }
+    let outcome = pipeline::render_traced(spec, trace.0).await?;
+    pipeline::respond(outcome, req.client_id, req.pdf_name).await
 }

@@ -1,0 +1,23 @@
+{
+  "label": "AI SmartTalk",
+  "description": "Identité de marque AI SmartTalk : sans-serif, accent turquoise, filets fins, en-tête de tableau tenu et numérotation en pied de page.",
+  "author": "AI SmartTalk",
+  "fonts": [
+    "TeX Gyre Heros",
+    "DejaVu Sans Mono"
+  ],
+  "colors": {
+    "accent": "#0e8ea3",
+    "accent-2": "#6d4bd6",
+    "danger": "#c0322f",
+    "ink": "#101a2b",
+    "ink-dim": "#4a5a73",
+    "ink-faint": "#7b8aa3",
+    "line": "#dbe3ef",
+    "line-soft": "#e7ecf5",
+    "success": "#12805a",
+    "surface": "#f4f7fb",
+    "surface-2": "#eef2f8",
+    "warning": "#8a5a00"
+  }
+}

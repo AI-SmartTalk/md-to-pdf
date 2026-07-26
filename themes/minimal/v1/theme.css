@@ -1,0 +1,487 @@
+/* Minimal — v1
+ *
+ * Sobre et très lisible : une seule famille, aucune couleur d'accent, aucun aplat, aucun
+ * cadre. Tout le contraste vient de la taille, de la graisse et du blanc.
+ * Cible WeasyPrint, pas de var() (non résolu dans les descripteurs @page), pas de police
+ * téléchargée : TeX Gyre Heros et DejaVu Sans Mono sont dans l'image Debian.
+ */
+
+/* ---------- Page ---------- */
+
+@page {
+    size: A4;
+    margin: 25mm 24mm 22mm;
+
+    @bottom-center {
+        content: counter(page);
+        font-family: "TeX Gyre Heros", "Nimbus Sans", sans-serif;
+        font-size: 8.5pt;
+        color: #8a8a8a;
+        vertical-align: top;
+        padding-top: 6mm;
+    }
+}
+
+/* ---------- Corps ---------- */
+
+body {
+    font-family: "TeX Gyre Heros", "Nimbus Sans", "DejaVu Sans", sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.68;
+    color: #121212;
+    /* La couche par défaut ajoute 2em de padding, qui doublerait la marge de @page */
+    padding: 0;
+    margin: 0;
+    max-width: none;
+}
+
+p {
+    margin: 0 0 10pt;
+    orphans: 3;
+    widows: 3;
+}
+
+strong {
+    color: #121212;
+    font-weight: 700;
+}
+
+em {
+    color: inherit;
+}
+
+/* ---------- Titres ---------- */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    color: #121212;
+    line-height: 1.25;
+    border: none;
+    break-after: avoid;
+    break-inside: avoid;
+}
+
+h1 {
+    font-size: 19pt;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    margin: 0 0 16pt;
+    padding: 0;
+}
+
+h2 {
+    font-size: 13.5pt;
+    font-weight: 700;
+    margin: 24pt 0 8pt;
+    padding: 0;
+}
+
+h3 {
+    font-size: 11.5pt;
+    font-weight: 700;
+    margin: 18pt 0 6pt;
+}
+
+h4 {
+    font-size: 10.5pt;
+    font-weight: 700;
+    margin: 15pt 0 5pt;
+}
+
+h5 {
+    font-size: 10.5pt;
+    font-weight: 400;
+    font-style: italic;
+    margin: 14pt 0 5pt;
+    color: #3a3a3a;
+}
+
+h6 {
+    font-size: 9pt;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 14pt 0 5pt;
+    color: #6a6a6a;
+}
+
+/* ---------- Liens ---------- */
+
+a {
+    color: #121212;
+    text-decoration: underline;
+}
+
+/* Sans couleur pour distinguer un lien, l'URL imprimée est le seul repère qui reste.
+ * Elle reste dans le flux du lien, donc soulignée avec lui : la sortir en inline-block
+ * renverrait une URL longue à la ligne suivante en laissant un blanc. */
+a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 8pt;
+    color: #6a6a6a;
+    text-decoration: none;
+    word-break: break-all;
+}
+
+/* La couche par défaut transforme tout lien aismarttalk.tech en encadré rouge */
+a[href*="aismarttalk.tech"] {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    color: #121212;
+    font-weight: inherit;
+    text-align: inherit;
+}
+
+/* ---------- Tableaux ---------- */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14pt 0 16pt;
+    font-size: 9.5pt;
+    background: transparent;
+    /* La couche par défaut interdit la coupure : un tableau de trois pages déborderait */
+    break-inside: auto;
+}
+
+/* En-tête répété sur chaque page traversée par le tableau */
+thead {
+    display: table-header-group;
+}
+
+tr {
+    break-inside: avoid;
+}
+
+th,
+td {
+    border: none;
+    padding: 5pt 8pt 5pt 0;
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: break-word;
+}
+
+th {
+    background: transparent;
+    border-bottom: 1pt solid #121212;
+    color: #121212;
+    font-weight: 700;
+    font-size: 9pt;
+}
+
+td {
+    border-bottom: 0.4pt solid #dcdcdc;
+}
+
+/* Le blanc suffit à séparer les lignes : pas de zébrures */
+tbody tr:nth-child(even) {
+    background-color: transparent;
+}
+
+tbody tr:last-child td {
+    border-bottom: 0.6pt solid #9a9a9a;
+}
+
+/* Tableaux à beaucoup de colonnes : ::: wide autour du tableau */
+.wide table {
+    font-size: 8.5pt;
+}
+
+.wide th,
+.wide td {
+    padding: 4pt 6pt 4pt 0;
+}
+
+/* ---------- Listes ---------- */
+
+ul,
+ol {
+    margin: 10pt 0;
+    padding-left: 1.3em;
+}
+
+li {
+    margin: 4pt 0;
+    orphans: 2;
+    widows: 2;
+}
+
+li::marker {
+    color: #6a6a6a;
+}
+
+li > ul,
+li > ol {
+    margin: 4pt 0;
+}
+
+/* ---------- Citations ---------- */
+
+blockquote {
+    margin: 16pt 0 16pt 2pt;
+    padding: 0 0 0 14pt;
+    border-left: 1pt solid #c4c4c4;
+    color: #3a3a3a;
+    font-style: normal;
+    break-inside: avoid;
+}
+
+blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+/* ---------- Code ---------- */
+
+code {
+    font-family: "DejaVu Sans Mono", "Nimbus Mono PS", monospace;
+    font-size: 8.5pt;
+    background: #f2f2f2;
+    color: #121212;
+    padding: 0.5pt 3pt;
+    border-radius: 0;
+}
+
+div.sourceCode,
+pre {
+    background: #f7f7f7;
+    border: none;
+    border-radius: 0;
+    margin: 14pt 0;
+    padding: 9pt 11pt;
+    break-inside: avoid;
+}
+
+div.sourceCode pre {
+    background: transparent;
+    margin: 0;
+    padding: 0;
+}
+
+pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 8.5pt;
+    line-height: 1.5;
+}
+
+/* Une ligne trop longue doit revenir à la ligne au lieu de sortir de la page */
+pre,
+pre > code.sourceCode {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+/* Le gabarit pandoc décale les lignes de -5em en media print pour les numéros de ligne
+ * que nous n'affichons pas */
+pre > code.sourceCode > span {
+    text-indent: 0;
+    padding-left: 0;
+}
+
+/* Ce thème n'a pas de couleur : la coloration syntaxique de pandoc devient du gris.
+ * Le sélecteur d'attribut est là pour la spécificité : le gabarit pandoc colore chaque
+ * jeton avec `code span.xx`, qui l'emporterait sur `pre code span`. */
+pre > code span[class] {
+    color: #121212;
+    font-weight: 400;
+}
+
+pre > code span.co,
+pre > code span.do,
+pre > code span.an {
+    color: #7a7a7a;
+    font-style: italic;
+}
+
+pre > code span.st,
+pre > code span.vs,
+pre > code span.ss,
+pre > code span.ch {
+    color: #4a4a4a;
+}
+
+pre > code span.kw,
+pre > code span.cf {
+    font-weight: 700;
+}
+
+/* ---------- Figures ---------- */
+
+figure {
+    margin: 18pt 0;
+    text-align: center;
+    break-inside: avoid;
+}
+
+figure img {
+    /* La couche par défaut force margin-left/right à 0 en !important */
+    margin-left: auto !important;
+    margin-right: auto !important;
+    max-width: 100%;
+}
+
+figcaption {
+    margin-top: 6pt;
+    font-size: 8.5pt;
+    color: #6a6a6a;
+    text-align: center;
+}
+
+/* ---------- Encadrés ---------- */
+
+.success,
+.warning,
+.danger,
+.info,
+.note {
+    margin: 14pt 0;
+    padding: 0 0 0 14pt;
+    border: none;
+    border-left: 2pt solid #c4c4c4;
+    border-radius: 0;
+    background: transparent;
+    break-inside: avoid;
+}
+
+.success {
+    border-left-color: #6a6a6a;
+}
+
+.warning {
+    border-left-color: #3a3a3a;
+}
+
+.danger {
+    border-left-color: #121212;
+}
+
+.success > p:last-child,
+.warning > p:last-child,
+.danger > p:last-child,
+.info > p:last-child,
+.note > p:last-child {
+    margin-bottom: 0;
+}
+
+/* ---------- Notes de bas de page ---------- */
+
+a.footnote-ref sup {
+    font-size: 7.5pt;
+    color: #121212;
+    text-decoration: none;
+}
+
+section.footnotes {
+    margin-top: 22pt;
+    padding-top: 8pt;
+    border-top: 0.4pt solid #dcdcdc;
+    font-size: 8.5pt;
+    line-height: 1.5;
+    color: #3a3a3a;
+}
+
+section.footnotes hr {
+    display: none;
+}
+
+section.footnotes ol {
+    padding-left: 1.1em;
+}
+
+section.footnotes li {
+    margin: 3pt 0;
+}
+
+/* Le lien de retour n'a aucun sens sur papier */
+a.footnote-back {
+    display: none;
+}
+
+/* ---------- Sommaire ---------- */
+
+nav#TOC {
+    margin: 18pt 0 24pt;
+    padding: 0;
+    background: transparent;
+    break-after: page;
+}
+
+nav#TOC ul {
+    list-style: none;
+    margin: 0;
+    padding-left: 1.2em;
+}
+
+nav#TOC > ul {
+    padding-left: 0;
+}
+
+nav#TOC a {
+    color: #121212;
+    text-decoration: none;
+}
+
+nav#TOC a::after {
+    content: "";
+}
+
+/* ---------- Filets ---------- */
+
+hr {
+    border: none;
+    border-top: 0.4pt solid #dcdcdc;
+    margin: 22pt 0;
+}
+
+/* ---------- Couverture ---------- */
+/* Ce thème ne livre pas de cover.html : il habille le gabarit intégré. */
+
+@page cover {
+    margin: 0;
+
+    @bottom-center {
+        content: "";
+    }
+}
+
+.pdf-cover {
+    page: cover;
+    break-after: page;
+    height: 100%;
+    padding: 90mm 24mm 0;
+}
+
+.pdf-cover-logo {
+    max-height: 16mm;
+    max-width: 60mm;
+    margin: 0 0 14mm !important;
+}
+
+.pdf-cover-title {
+    font-size: 24pt;
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.015em;
+    color: #121212;
+}
+
+.pdf-cover-subtitle {
+    margin-top: 6mm;
+    font-size: 12pt;
+    line-height: 1.45;
+    color: #3a3a3a;
+}
+
+.pdf-cover-date {
+    margin-top: 14mm;
+    font-size: 9pt;
+    color: #6a6a6a;
+}

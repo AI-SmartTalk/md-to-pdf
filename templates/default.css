@@ -59,6 +59,40 @@ div:has(> img[alt*="CONTENU PREMIUM"]) {
     text-align: left !important;
 }
 
+/* ===== CENSOR blocks (region syntax) — begin =====
+   The blocks carry their own inline geometry so they still read as a hole when a client
+   stylesheet replaces this one; what follows is what needs a selector. */
+
+.censor-block, .censor-inline {
+    -webkit-print-color-adjust: exact;
+}
+
+.censor-block {
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+.censor-block .censor-label {
+    font-family: 'Helvetica', 'Arial', sans-serif;
+    text-align: center;
+    /* A long label wraps rather than being clipped: it is the sales pitch */
+    white-space: normal;
+}
+
+/* A cell must not inherit the height of the paragraphs that were removed from it */
+td .censor-block, th .censor-block {
+    height: 12mm !important;
+    line-height: 12mm !important;
+    margin: 0 !important;
+}
+
+/* Inside a list item or a quotation the block belongs to the flow, not to the page */
+li .censor-block, blockquote .censor-block {
+    margin: 0.4em 0 !important;
+}
+
+/* ===== CENSOR blocks — end ===== */
+
 /* Blur effect for paragraphs */
 .blur {
     filter: blur(15px);

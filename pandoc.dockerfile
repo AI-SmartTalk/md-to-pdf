@@ -15,6 +15,24 @@ RUN apt-get update \
  && pip3 install --break-system-packages weasyprint \
  && pandoc --version
 
+# Même enveloppe anti-SSRF qu'en production : sans elle le développement rend sans
+# garde et un écart dev/prod ne se voit qu'une fois déployé.
+COPY deploy/weasyprint-safe.py /usr/local/lib/weasyprint-safe.py
+
+RUN set -eu \
+ && if [ -e /usr/local/bin/weasyprint ] \
+    && ! grep -q '^# urlguard-wrapper' /usr/local/bin/weasyprint; then \
+      mv /usr/local/bin/weasyprint /usr/local/bin/weasyprint-real; \
+    fi \
+ && install -m 0755 /usr/local/lib/weasyprint-safe.py /usr/local/bin/weasyprint \
+ && weasyprint --version \
+ && printf '# titre\n\ntexte\n' > /tmp/smoke.md \
+ && printf '@page { size: A5 }\n' > /tmp/.tmpSm0ke1.css \
+ && pandoc --standalone --to=html5 --css=/tmp/.tmpSm0ke1.css --pdf-engine=weasyprint \
+      --output=/tmp/smoke.pdf /tmp/smoke.md \
+ && pdfinfo /tmp/smoke.pdf | grep -q '419.528 x 595.276' \
+ && rm -f /tmp/smoke.md /tmp/.tmpSm0ke1.css /tmp/smoke.pdf
+
 EXPOSE 8000
 
 WORKDIR /workdir

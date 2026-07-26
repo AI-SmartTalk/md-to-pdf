@@ -70,6 +70,8 @@ pub struct Margins {
 
 // ------------ PDF Options ------------
 
+/// Every field is optional and every addition is opt-in: an options object that does not
+/// mention a new field must render exactly as it did before the field existed.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct PdfOptions {
     pub paper_size: Option<PaperSize>,
@@ -80,6 +82,21 @@ pub struct PdfOptions {
     pub toc: Option<bool>,
     pub toc_depth: Option<u8>,
     pub watermark: Option<String>,
+    pub theme: Option<String>,
+    pub autolayout: Option<bool>,
+    pub censor_label: Option<String>,
+    pub charts: Option<bool>,
+    pub cover: Option<Cover>,
+}
+
+// ------------ Cover page ------------
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct Cover {
+    pub title: Option<String>,
+    pub subtitle: Option<String>,
+    pub logo: Option<String>,
+    pub date: Option<String>,
 }
 
 // ------------ Legacy Form Data (backward compat) ------------
@@ -172,9 +189,91 @@ pub struct ProtectRequest {
 
 // ------------ JSON Response Types ------------
 
-#[derive(Serialize)]
+/// The extra fields are skipped when absent, so a response to a request that asked for
+/// nothing new is byte-for-byte the one clients already parse.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ConvertResponse {
     pub download_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cached: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layout: Option<LayoutReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warnings: Option<Vec<BlockWarning>>,
+}
+
+impl ConvertResponse {
+    /// The historical response: a download URL and nothing else
+    pub fn new(download_url: String) -> ConvertResponse {
+        ConvertResponse {
+            download_url,
+            ..Default::default()
+        }
+    }
+}
+
+// ------------ Layout Doctor report ------------
+
+/// Result of inspecting a rendered PDF. Travels in the API response, hence Serialize here.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct LayoutReport {
+    pub pages: usize,
+    /// 0..=100, where 100 is a document with nothing to report
+    pub score: u8,
+    pub issues: Vec<LayoutIssue>,
+    /// Corrective passes actually applied before this report was produced
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub passes: Option<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayoutIssue {
+    /// Stable identifier such as `overflow`, `empty-page`, `orphan-heading`
+    pub kind: String,
+    /// 1-based page number
+    pub page: usize,
+    /// `info`, `warn` or `error`
+    pub severity: String,
+    pub detail: String,
+    /// x0, y0, x1, y1 in PDF points, when the issue is localized
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bbox: Option<[f32; 4]>,
+}
+
+impl LayoutIssue {
+    pub fn new(kind: &str, page: usize, severity: &str, detail: String) -> LayoutIssue {
+        LayoutIssue {
+            kind: kind.to_string(),
+            page,
+            severity: severity.to_string(),
+            detail,
+            bbox: None,
+        }
+    }
+}
+
+// ------------ Block expansion warnings ------------
+
+/// A chart or diagram that could not be rendered. Never fails the request: the block is
+/// left as-is and the reason is reported here.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockWarning {
+    /// `chart` or `mermaid`
+    pub kind: String,
+    pub message: String,
+    /// 1-based line of the offending block in the source document
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<usize>,
+}
+
+impl BlockWarning {
+    pub fn new(kind: &str, message: String, line: Option<usize>) -> BlockWarning {
+        BlockWarning {
+            kind: kind.to_string(),
+            message,
+            line,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -194,13 +293,23 @@ pub struct ErrorResponse {
 
 #[derive(Debug)]
 pub enum AppError {
-    ProcessFailed { message: String, stderr: String },
+    ProcessFailed {
+        message: String,
+        stderr: String,
+    },
     Io(io::Error),
     BadRequest(String),
     NotFound(String),
     TemplateError(String),
     Timeout(String),
     Unauthorized(String),
+    /// No render slot within the queue timeout: the client should come back later
+    TooManyRequests(String),
+    /// A service we depend on (Mermaid Studio, log420, ...) failed or timed out
+    Upstream {
+        service: String,
+        details: String,
+    },
 }
 
 impl From<io::Error> for AppError {
@@ -215,8 +324,27 @@ impl From<tera::Error> for AppError {
     }
 }
 
+impl AppError {
+    /// Short, stable identifier used as `err.type` so log420 groups issues consistently
+    pub fn kind(&self) -> &'static str {
+        match self {
+            AppError::ProcessFailed { .. } => "process_failed",
+            AppError::Io(_) => "io",
+            AppError::BadRequest(_) => "bad_request",
+            AppError::NotFound(_) => "not_found",
+            AppError::TemplateError(_) => "template_error",
+            AppError::Timeout(_) => "timeout",
+            AppError::Unauthorized(_) => "unauthorized",
+            AppError::TooManyRequests(_) => "too_many_requests",
+            AppError::Upstream { .. } => "upstream",
+        }
+    }
+}
+
 impl<'r> Responder<'r, 'static> for AppError {
     fn respond_to(self, _: &'r Request<'_>) -> response::Result<'static> {
+        let mut retry_after = None;
+
         let (status, error, details) = match self {
             AppError::ProcessFailed { message, stderr } => {
                 (Status::InternalServerError, message, stderr)
@@ -231,17 +359,45 @@ impl<'r> Responder<'r, 'static> for AppError {
             AppError::TemplateError(msg) => (Status::BadRequest, "Template error".to_string(), msg),
             AppError::Timeout(msg) => (Status::GatewayTimeout, "Timeout".to_string(), msg),
             AppError::Unauthorized(msg) => (Status::Unauthorized, "Unauthorized".to_string(), msg),
+            AppError::TooManyRequests(msg) => {
+                // Tell the caller when a retry has a chance instead of letting it hammer us
+                retry_after = Some(retry_after_secs());
+                (
+                    Status::TooManyRequests,
+                    "Too many requests".to_string(),
+                    msg,
+                )
+            }
+            AppError::Upstream { service, details } => (
+                Status::BadGateway,
+                format!("Upstream error ({})", service),
+                details,
+            ),
         };
 
         let body_str = serde_json::to_string(&ErrorResponse { error, details })
             .unwrap_or_else(|_| r#"{"error":"Internal error","details":""}"#.to_string());
 
-        Response::build()
+        let mut builder = Response::build();
+        builder
             .header(ContentType::JSON)
             .status(status)
-            .sized_body(body_str.len(), io::Cursor::new(body_str))
-            .ok()
+            .sized_body(body_str.len(), io::Cursor::new(body_str));
+
+        if let Some(secs) = retry_after {
+            builder.raw_header("Retry-After", secs.to_string());
+        }
+
+        builder.ok()
     }
+}
+
+/// A saturated queue clears in about the time a render takes, bounded so the hint stays useful
+fn retry_after_secs() -> u64 {
+    crate::config::config()
+        .queue_timeout
+        .as_secs()
+        .clamp(1, 120)
 }
 
 // ------------ PdfResponse wrapper (for download with headers) ------------
@@ -283,6 +439,11 @@ impl From<AppError> for ConvertError {
             AppError::TemplateError(msg) => ConvertError::Message(Status::BadRequest, msg),
             AppError::Timeout(msg) => ConvertError::Message(Status::GatewayTimeout, msg),
             AppError::Unauthorized(msg) => ConvertError::Message(Status::Unauthorized, msg),
+            AppError::TooManyRequests(msg) => ConvertError::Message(Status::TooManyRequests, msg),
+            AppError::Upstream { service, details } => ConvertError::Message(
+                Status::BadGateway,
+                format!("{} unavailable: {}", service, details),
+            ),
         }
     }
 }
