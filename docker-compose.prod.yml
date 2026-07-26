@@ -20,11 +20,54 @@ services:
       API_KEY: "${API_KEY:?API_KEY est obligatoire — voir .env.example}"
       # Limite de temps pour pandoc / weasyprint / qpdf / pdftoppm
       PDF_PROCESS_TIMEOUT_SECS: "${PDF_PROCESS_TIMEOUT_SECS:-60}"
+      # Limite de temps d'un rendu complet, passes correctives comprises. Les
+      # limites par processus ne s'additionnent pas : sans ce plafond une requête
+      # peut survivre au ProxyTimeout en gardant sa place dans la file.
+      PDF_RENDER_DEADLINE_SECS: "${PDF_RENDER_DEADLINE_SECS:-120}"
       RUST_LOG: "${RUST_LOG:-info}"
+
+      # File d'attente de rendu et cache adressé par contenu
+      PDF_MAX_CONCURRENCY: "${PDF_MAX_CONCURRENCY:-}"
+      PDF_QUEUE_TIMEOUT_SECS: "${PDF_QUEUE_TIMEOUT_SECS:-30}"
+      PDF_CACHE_ENABLED: "${PDF_CACHE_ENABLED:-true}"
+      PDF_CACHE_MAX_MB: "${PDF_CACHE_MAX_MB:-512}"
+      PDF_CACHE_TTL_SECS: "${PDF_CACHE_TTL_SECS:-604800}"
+      PDF_LAYOUT_MAX_PASSES: "${PDF_LAYOUT_MAX_PASSES:-1}"
+      PDF_PREVIEW_MAX_PAGES: "${PDF_PREVIEW_MAX_PAGES:-20}"
+
+      # Anti-SSRF. Une liste d'hôtes vide vaut « tout hôte public » ; les
+      # adresses privées et les endpoints de métadonnées restent refusés.
+      PDF_ALLOWED_URL_HOSTS: "${PDF_ALLOWED_URL_HOSTS:-}"
+      PDF_URL_STRICT_HOSTS: "${PDF_URL_STRICT_HOSTS:-false}"
+      PDF_ALLOW_LOCAL_ASSETS: "${PDF_ALLOW_LOCAL_ASSETS:-true}"
+      PDF_URLGUARD_TIMEOUT_SECS: "${PDF_URLGUARD_TIMEOUT_SECS:-10}"
+      PDF_URLGUARD_MAX_BYTES: "${PDF_URLGUARD_MAX_BYTES:-10485760}"
+      PDF_URLGUARD_MAX_REDIRECTS: "${PDF_URLGUARD_MAX_REDIRECTS:-3}"
+      PDF_URLGUARD_ALLOW_FILES: "${PDF_URLGUARD_ALLOW_FILES:-}"
+      PDF_URLGUARD_LOG: "${PDF_URLGUARD_LOG:-}"
+      PDF_URL_GUARD: "${PDF_URL_GUARD:-}"
+      # Moteurs offerts à POST / (sans clé). Vide = weasyprint seul, le seul qui
+      # rende derrière le récupérateur gardé.
+      PDF_UNAUTHENTICATED_ENGINES: "${PDF_UNAUTHENTICATED_ENGINES:-}"
+
+      # Diagrammes. Le conteneur doit joindre ce service en sortie ; une URL
+      # explicitement vide désactive proprement les blocs ```mermaid.
+      MERMAID_API_URL: "${MERMAID_API_URL:-https://mermaid.aismarttalk.tech/api/v1}"
+      MERMAID_API_KEY: "${MERMAID_API_KEY:-}"
+      MERMAID_TIMEOUT_SECS: "${MERMAID_TIMEOUT_SECS:-15}"
+
+      # Observabilité. Sans LOG420_INGEST_TOKEN rien ne part vers log420.
+      LOG420_URL: "${LOG420_URL:-https://log420.aist-core.fr}"
+      LOG420_INGEST_TOKEN: "${LOG420_INGEST_TOKEN:-}"
+      LOG420_REGION: "${LOG420_REGION:-eu}"
+      SERVICE_NAME: "${SERVICE_NAME:-md-to-pdf}"
     volumes:
       # Les PDFs sauvegardés doivent survivre à un redéploiement, sinon chaque
       # download_url déjà distribué devient un 404.
       - pdf-storage:/home/rocket/public/pdf
+      # Le cache de rendu est adressé par contenu : sans volume il repart à zéro
+      # à chaque déploiement et le premier rendu de chaque document se repaie.
+      - pdf-cache:/home/rocket/public/cache
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
       interval: 30s
@@ -49,6 +92,7 @@ services:
 
 volumes:
   pdf-storage:
+  pdf-cache:
 
 networks:
   ai-toolkit-network:

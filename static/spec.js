@@ -7,6 +7,8 @@
 
 // ══════════════════════════════════════════════════════════ exemples
 
+// Vitrine : le document par défaut de la console exerce réellement les trois
+// nouveautés (graphique, diagramme, région censurée) plutôt que de les décrire.
 const SAMPLE_MD = `# Rapport d'analyse
 
 Un paragraphe en **markdown** avec une liste :
@@ -14,9 +16,31 @@ Un paragraphe en **markdown** avec une liste :
 - premier point
 - deuxième point
 
+## Chiffre d'affaires
+
+\`\`\`chart
+{
+  "type": "bar",
+  "title": "Chiffre d'affaires par trimestre",
+  "labels": ["Q1", "Q2", "Q3", "Q4"],
+  "series": [{"name": "2026", "data": [12000, 18000, 15000, 21000]}]
+}
+\`\`\`
+
+## Parcours d'une requête
+
+\`\`\`mermaid
+graph TD;
+  A[Requête] --> B[Rendu];
+  B --> C[PDF];
+\`\`\`
+
 ## Section premium
 
-{{CENSOR}}
+{{CENSOR:start,premium}}
+Le détail des marges par segment n'est pas public : ce texte est retiré du
+document avant que pandoc ne le voie.
+{{CENSOR:end}}
 
 ## Conclusion
 
@@ -73,6 +97,23 @@ const optionsBlock = () => ({
       { name: "options.toc_depth", type: "number", label: "toc_depth", value: "" },
     ]},
     { name: "options.watermark", type: "text", label: "watermark (filigrane CSS)", value: "" },
+    { type: "row", fields: [
+      { name: "options.theme", type: "select", label: "theme",
+        options: ["", "aismarttalk", "report", "minimal"], value: "" },
+      { name: "options.autolayout", type: "checkbox", label: "autolayout", value: false },
+    ]},
+    { name: "options.censor_label", type: "text", label: "censor_label",
+      hint: "libellé des blocs CENSOR sans niveau nommé", value: "" },
+    { name: "options.charts", type: "bool", label: "charts",
+      hint: "false coupe l'expansion des blocs chart et mermaid", value: "" },
+    { type: "row", fields: [
+      { name: "options.cover.title", type: "text", label: "cover.title", value: "" },
+      { name: "options.cover.subtitle", type: "text", label: "cover.subtitle", value: "" },
+    ]},
+    { type: "row", fields: [
+      { name: "options.cover.logo", type: "text", label: "cover.logo", placeholder: "https://…/logo.png", value: "" },
+      { name: "options.cover.date", type: "text", label: "cover.date", value: "" },
+    ]},
   ],
 });
 
@@ -101,7 +142,10 @@ const OPTIONS_PARAM = {
   name: "options", type: "object", desc:
     "Mise en page : <code>paper_size</code> (a4, a3, letter), <code>orientation</code>, " +
     "<code>margins</code> {top, right, bottom, left}, <code>page_numbers</code>, " +
-    "<code>page_number_format</code>, <code>toc</code>, <code>toc_depth</code>, <code>watermark</code>.",
+    "<code>page_number_format</code>, <code>toc</code>, <code>toc_depth</code>, <code>watermark</code>.\n" +
+    "Habillage : <code>theme</code> (\"nom\" ou \"nom@2\"), <code>cover</code> {title, subtitle, logo, date}, " +
+    "<code>censor_label</code>, <code>charts</code> (<code>false</code> coupe les blocs chart et mermaid), " +
+    "<code>autolayout</code> (analyse la sortie et la recorrige, rapport dans le champ <code>layout</code>).",
 };
 
 const SAVE_PARAMS = [
@@ -131,7 +175,9 @@ const ENDPOINTS = [
     title: "Markdown → PDF",
     icon: "M4 4h11l5 5v11H4z",
     card: "Conversion Markdown via pandoc, avec CSS, en-têtes, sommaire et remplacement des blocs CENSOR.",
-    desc: "Convertit du Markdown en PDF via pandoc.\nLes tags CENSOR ({{CENSOR}}, <CENSOR>, {{ CENSOR }}…) sont remplacés par le bloc d'image floutée « contenu premium ».",
+    desc: "Convertit du Markdown en PDF via pandoc.\n" +
+      "Les tags CENSOR ponctuels ({{CENSOR}}, <CENSOR>) et les régions ({{CENSOR:start}} … {{CENSOR:end}}) sont retirés du document avant pandoc : le texte caché n'atteint jamais le PDF.\n" +
+      "Les blocs ```chart et ```mermaid deviennent du SVG inline ; un bloc qui ne peut pas être rendu reste un bloc de code et la raison revient dans le champ « warnings ».",
     params: [
       { name: "markdown", type: "string", required: true, desc: "Le document source." },
       CSS_PARAM,
@@ -149,8 +195,11 @@ const ENDPOINTS = [
     ],
     example: {
       request: {
-        markdown: "# Rapport\n\nContenu en **markdown**.",
-        options: { paper_size: "a4", page_numbers: true },
+        markdown: "# Rapport\n\n```chart\n{\"type\": \"bar\", \"labels\": [\"Q1\", \"Q2\"], " +
+          "\"series\": [{\"name\": \"2026\", \"data\": [12000, 18000]}]}\n```\n\n" +
+          "```mermaid\ngraph TD; A[Requête] --> B[PDF];\n```\n\n" +
+          "{{CENSOR:start,premium}}\nRéservé aux abonnés.\n{{CENSOR:end}}\n",
+        options: { paper_size: "a4", page_numbers: true, theme: "report" },
         client_id: "demo-client", pdf_name: "rapport-2026",
       },
       response: { download_url: "/download/demo-client/rapport-2026.pdf" },
@@ -216,6 +265,11 @@ const ENDPOINTS = [
       CSS_PARAM,
       { name: "engine", type: "enum", desc: "Moteur utilisé en mode markdown." },
       OPTIONS_PARAM,
+      { name: "pages", type: "string", desc: "<code>\"3\"</code>, <code>\"2-5\"</code> ou <code>\"all\"</code>. Absent : la page 1 seule." },
+      { name: "dpi", type: "number", desc: "36 à 300. Défaut <code>150</code>." },
+      { name: "layout", type: "enum", desc:
+        "<code>png</code> (image brute), <code>images</code> (JSON, un PNG par page) ou <code>sheet</code> " +
+        "(planche contact en une image). Sans valeur : <code>png</code> pour une page, <code>images</code> au-delà." },
     ],
     fields: [
       { name: "__mode", type: "select", label: "mode", options: ["markdown", "template", "html"], value: "markdown" },
@@ -223,13 +277,19 @@ const ENDPOINTS = [
       { name: "template", type: "textarea", rows: 6, label: "template", value: SAMPLE_TEMPLATE, showFor: "template" },
       { name: "data", type: "json", rows: 5, label: "data", value: SAMPLE_DATA, showFor: "template" },
       { name: "html", type: "textarea", rows: 8, label: "html", value: SAMPLE_HTML, showFor: "html" },
-      cssField, engineField, optionsBlock(),
+      cssField, engineField,
+      { type: "row", fields: [
+        { name: "pages", type: "text", label: "pages", placeholder: "1, 2-5, all", value: "" },
+        { name: "dpi", type: "number", label: "dpi", hint: "36 → 300", value: "" },
+        { name: "layout", type: "select", label: "layout", options: ["", "png", "images", "sheet"], value: "" },
+      ]},
+      optionsBlock(),
     ],
     example: {
       request: { markdown: "# Aperçu" },
-      responseNote: "Corps binaire image/png",
+      responseNote: "Corps binaire image/png, ou JSON { pages: [{ page, png, width, height }], pages_total }",
     },
-    statuses: [["200", "image/png"], ["400", "Aucun mode fourni"], ["401", "Token absent ou refusé"], ["500", "Échec pdftoppm"], ["504", "Timeout"]],
+    statuses: [["200", "image/png ou JSON"], ["400", "Aucun mode fourni / plage hors document"], ["401", "Token absent ou refusé"], ["500", "Échec pdftoppm"], ["504", "Timeout"]],
   },
 
   {
@@ -304,6 +364,136 @@ const ENDPOINTS = [
       response: { download_url: "/download/demo-client/rapport-protege.pdf" },
     },
     statuses: [["200", "PDF ou download_url"], ["400", "Mot de passe vide"], ["401", "Token absent ou refusé"], ["404", "PDF introuvable"], ["500", "Échec qpdf"], ["504", "Timeout"]],
+  },
+
+  {
+    key: "redact", method: "POST", path: "/api/redact", json: true, group: "process",
+    title: "Caviardage",
+    icon: "M4 7h16v4H4zM4 14h10v4H4z",
+    card: "Noircit des chaînes et des entités (e-mail, IBAN, téléphone, SIRET, carte) puis reconstruit les pages en image.",
+    desc: "Localise le texte à masquer, pose des rectangles noirs, puis RECONSTRUIT chaque page à partir de pixels.\nLe texte caviardé disparaît du fichier — comme la couche texte, les signets, les annotations et les métadonnées de la source. Le résultat n'est ni sélectionnable ni cherchable, et il est plus lourd.",
+    params: [
+      { name: "pdf", type: "string", required: true, desc: "Chemin <code>/download/…</code> du PDF source." },
+      { name: "patterns", type: "string[]", desc:
+        "Chaînes LITTÉRALES (pas des expressions régulières), comparées sans casse et à blancs normalisés. " +
+        "Un motif qui ressemble à une regex (<code>\\d{4}</code>, <code>[A-Z]+</code>, <code>.*</code>) est refusé en 400." },
+      { name: "entities", type: "string[]", desc:
+        "<code>email</code>, <code>iban</code>, <code>phone</code>, <code>siret</code>, <code>credit_card</code>. " +
+        "Chacune est validée par sa clé de contrôle." },
+      { name: "dpi", type: "number", desc: "72 à 400. Défaut <code>200</code>." },
+      ...SAVE_PARAMS,
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      { name: "patterns", type: "list", rows: 3, label: "patterns",
+        hint: "une chaîne littérale par ligne — pas une expression régulière", value: "" },
+      { name: "entities", type: "list", rows: 2, label: "entities",
+        hint: "une par ligne : email, iban, phone, siret, credit_card", value: "email" },
+      { name: "dpi", type: "number", label: "dpi", hint: "72 → 400", value: "" },
+      saveBlock(),
+    ],
+    example: {
+      request: { pdf: "/download/demo-client/contrat.pdf", patterns: ["Jean Dupont"], entities: ["email", "iban"], client_id: "demo-client", pdf_name: "contrat-caviarde" },
+      response: { download_url: "/download/demo-client/contrat-caviarde.pdf", redactions: [{ page: 1, count: 3 }], pages: 2, mode: "flatten" },
+    },
+    statuses: [["200", "PDF ou JSON { download_url, redactions, pages, mode, notice }"], ["400", "Ni patterns ni entities / motif regex / entité inconnue / dpi hors bornes"], ["401", "Token absent ou refusé"], ["404", "PDF introuvable"], ["500", "Sortie non conforme (texte résiduel)"], ["504", "Timeout"]],
+  },
+
+  {
+    key: "layout", method: "POST", path: "/api/layout", json: true, group: "process",
+    title: "Audit de mise en page",
+    icon: "M4 4h16v16H4zM4 9h16M9 9v11",
+    card: "Analyse un PDF existant : débordements, pages blanches, titres orphelins, tableaux coupés.",
+    desc: "Même analyse que options.autolayout, appliquée à un PDF déjà produit — y compris fabriqué ailleurs.\nNe modifie rien : elle rend un rapport et un score sur 100.",
+    params: [
+      { name: "pdf", type: "string", required: true, desc: "Chemin <code>/download/…</code> du PDF à auditer." },
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+    ],
+    example: {
+      request: { pdf: "/download/demo-client/rapport.pdf" },
+      response: { pages: 4, score: 88, issues: [{ kind: "orphan_heading", severity: "warn", page: 2 }] },
+    },
+    statuses: [["200", "LayoutReport"], ["400", "Chemin invalide"], ["401", "Token absent ou refusé"], ["404", "PDF introuvable"], ["500", "Échec poppler"], ["504", "Timeout"]],
+  },
+
+  {
+    key: "diff", method: "POST", path: "/api/diff", json: true, group: "process",
+    title: "Comparaison visuelle",
+    icon: "M9 4H5v16h4zM15 4h4v16h-4zM12 4v16",
+    card: "Compare deux PDFs pixel à pixel et dit quelles pages ont bougé. Fait pour l'intégration continue.",
+    desc: "Rastérise les deux documents et compare les pixels page par page.\nLe seuil vaut 0 par défaut : toute page qui bouge visiblement rend le verdict « changed ». C'est ce qu'attend une CI ; un défaut tolérant annoncerait « identical » sur un titre renommé.",
+    params: [
+      { name: "before", type: "string", required: true, desc: "Chemin <code>/download/…</code> de la version de référence." },
+      { name: "after", type: "string", required: true, desc: "Chemin <code>/download/…</code> de la version à contrôler." },
+      { name: "dpi", type: "number", desc: "36 à 300. Défaut <code>100</code>." },
+      { name: "threshold", type: "number", desc: "Part de pixels changés tolérée. Défaut <code>0</code>." },
+      { name: "images", type: "boolean", desc: "Renvoie une image de surlignage par page changée." },
+    ],
+    fields: [
+      { name: "before", type: "pdfpick", label: "before", required: true, value: "" },
+      { name: "after", type: "pdfpick", label: "after", required: true, value: "" },
+      { type: "row", fields: [
+        { name: "dpi", type: "number", label: "dpi", hint: "36 → 300", value: "" },
+        { name: "threshold", type: "number", step: "0.001", label: "threshold", hint: "0 = aucune tolérance", value: "" },
+      ]},
+      { name: "images", type: "checkbox", label: "images (surlignage des zones changées)", value: false },
+    ],
+    example: {
+      request: { before: "/download/demo-client/v1.pdf", after: "/download/demo-client/v2.pdf" },
+      response: { pages_total: 6, pages_changed: [4], changed_ratio: 0.00032, verdict: "changed", threshold: 0, dpi: 100 },
+    },
+    statuses: [["200", "DiffResponse"], ["400", "Chemin invalide / dpi hors bornes"], ["401", "Token absent ou refusé"], ["404", "PDF introuvable"], ["500", "Échec poppler"], ["504", "Timeout"]],
+  },
+
+  {
+    key: "themes", method: "GET", path: "/api/themes", group: "service",
+    title: "Thèmes disponibles",
+    icon: "M12 3a9 9 0 100 18h2a3 3 0 003-3 3 3 0 013-3h1a2 2 0 002-2 9 9 0 00-11-10z",
+    card: "Les kits de marque livrés avec le service, avec leurs polices, leurs jetons de couleur et l'URL de leur aperçu.",
+    desc: "Liste les thèmes que options.theme accepte.\nUn thème est immuable : toute évolution visuelle donne une nouvelle version, sinon le cache resservirait les PDF de l'ancienne.",
+    params: [],
+    fields: [],
+    example: {
+      response: { themes: [{ name: "report", version: 1, label: "Rapport corporate", latest: true, cover: true, preview_url: "/api/themes/report/1/preview.png" }] },
+    },
+    statuses: [["200", "Liste des thèmes"], ["401", "Token absent ou refusé"]],
+  },
+
+  {
+    key: "theme-preview", method: "GET", path: "/api/themes/{name}/{version}/preview.png", group: "service",
+    title: "Aperçu d'un thème",
+    icon: "M4 5h16v14H4zM4 15l4-4 3 3 3-3 6 6",
+    card: "La première page du document d'exemple rendue avec un thème. ?cover=true montre la page de couverture.",
+    desc: "Rend le document d'exemple avec le thème demandé et renvoie la première page en PNG.\nversion accepte « latest ». L'image est mise en cache : le premier appel coûte environ une seconde, les suivants quelques millisecondes.",
+    params: [
+      { name: "name", type: "path", required: true, desc: "Nom du thème." },
+      { name: "version", type: "path", required: true, desc: "Numéro de version, ou <code>latest</code>." },
+      { name: "cover", type: "boolean", desc: "<code>true</code> pour rendre la couverture au lieu du corps." },
+    ],
+    fields: [
+      { type: "row", fields: [
+        { name: "name", type: "select", label: "name", options: ["aismarttalk", "report", "minimal"], value: "report" },
+        { name: "version", type: "text", label: "version", value: "latest" },
+      ]},
+      { name: "cover", type: "checkbox", label: "cover", value: false },
+    ],
+    buildPath: (v) => `/api/themes/${encodeURIComponent(v.name || "")}/${encodeURIComponent(v.version || "latest")}/preview.png` + (v.cover ? "?cover=true" : ""),
+    example: { responseNote: "Corps binaire image/png" },
+    statuses: [["200", "image/png"], ["401", "Token absent ou refusé"], ["404", "Thème ou version inconnus"], ["504", "Timeout"]],
+  },
+
+  {
+    key: "metrics", method: "GET", path: "/api/metrics", group: "service",
+    title: "Métriques Prometheus",
+    icon: "M4 19h16M7 16V9M12 16V5M17 16v-6",
+    card: "Exposition Prometheus : compteurs de requêtes et histogrammes de latence, étiquetés par route et par code.",
+    desc: "Renvoie du text/plain; version=0.0.4.\nLes étiquettes se limitent au motif de route Rocket et au code de statut : jamais de client_id ni de nom de fichier.",
+    params: [],
+    fields: [],
+    example: { responseNote: "Corps text/plain au format d'exposition Prometheus" },
+    statuses: [["200", "text/plain"], ["401", "Token absent ou refusé"]],
   },
 
   {

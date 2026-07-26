@@ -69,15 +69,16 @@ const Console = (() => {
     wrap.appendChild(label);
 
     let input;
-    if (field.type === "textarea" || field.type === "json" || field.type === "pdflist") {
+    if (field.type === "textarea" || field.type === "json" || field.type === "pdflist"
+        || field.type === "list") {
       input = document.createElement("textarea");
       input.rows = field.rows || 4;
       input.spellcheck = false;
       input.value = field.value || "";
       if (field.type === "pdflist") input.placeholder = "/download/demo-client/doc1.pdf";
-    } else if (field.type === "select") {
+    } else if (field.type === "select" || field.type === "bool") {
       input = document.createElement("select");
-      field.options.forEach((opt) => {
+      (field.options || ["", "true", "false"]).forEach((opt) => {
         const o = document.createElement("option");
         o.value = opt;
         o.textContent = opt === "" ? "(défaut)" : opt;
@@ -223,8 +224,14 @@ const Console = (() => {
       } else if (kind === "number") {
         value = Number(raw);
         if (Number.isNaN(value)) throw new Error(`Champ « ${name} » : nombre invalide`);
-      } else if (kind === "pdflist") {
+      } else if (kind === "pdflist" || kind === "list") {
         value = String(raw).split("\n").map((s) => s.trim()).filter(Boolean);
+        if (!value.length) return;
+      } else if (kind === "bool") {
+        // Une case à cocher ne sait pas envoyer `false` : buildPayload ignore les
+        // valeurs vides. Un drapeau qui n'a de sens qu'à false a donc besoin de trois
+        // états — défaut, true, false.
+        value = raw === "true";
       }
 
       setDeep(name, value);

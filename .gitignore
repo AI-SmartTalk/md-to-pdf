@@ -25,3 +25,7 @@ docker-compose.override.yml
 
 # Generated PDFs served by /download
 /public/pdf/
+
+# Cache de rendu adressé par contenu. La règle *.pdf couvre les entrées, pas les
+# sidecars <hash>.json qui portent le rapport de mise en page.
+/public/cache/
