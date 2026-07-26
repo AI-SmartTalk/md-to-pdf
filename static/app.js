@@ -8,20 +8,21 @@
 
 // ══════════════════════════════════════════════════════════ routage
 
-const VIEWS = ["home", "api", "console", "deploy"];
+const VIEWS = ["home", "api", "console", "acces"];
 
 // Anciens ancrages de la page unique — les liens partagés continuent de tomber
-// sur la bonne vue.
+// sur la bonne vue. #deploy n'existe plus : la configuration serveur ne concerne
+// que le dépôt, pas les intégrateurs.
 const LEGACY = {
   "": "#/", "#top": "#/", "#features": "#/", "#quickstart": "#/",
-  "#doc": "#/api", "#playground": "#/console", "#deploy": "#/deploy",
+  "#doc": "#/api", "#playground": "#/console", "#deploy": "#/", "#/deploy": "#/",
 };
 
 const TITLES = {
   home: "md-to-pdf — Moteur de documents PDF",
   api: "Référence API — md-to-pdf",
   console: "Console — md-to-pdf",
-  deploy: "Déploiement — md-to-pdf",
+  acces: "Accès — md-to-pdf",
 };
 
 function parseHash() {
@@ -55,43 +56,126 @@ function route() {
   }
 }
 
-// ══════════════════════════════════════════════════════════ réglages
+// ══════════════════════════════════════════════════════════ accès / token
 
-function initSettings() {
-  const panel = $("#settingsPanel");
-  const toggle = $("#settingsToggle");
+// Le service est réservé aux intégrations AI SmartTalk : sans token, tout
+// /api/* répond 401. L'état de la clé est donc visible en permanence — pastille
+// dans la barre, bandeau dans la console — et saisissable depuis deux endroits.
+const Access = (() => {
+  const MAIL = "contact+mdtopdf@aismarttalk.tech";
 
-  const close = () => {
-    panel.hidden = true;
-    toggle.setAttribute("aria-expanded", "false");
-  };
-  const open = () => {
-    panel.hidden = false;
-    toggle.setAttribute("aria-expanded", "true");
-    $("#baseUrl").focus();
-  };
+  function setStatus(kind, message) {
+    ["#keyState", "#acquireState"].forEach((sel) => {
+      const el = $(sel);
+      el.className = "key-state" + (kind ? " " + kind : "");
+      el.textContent = message;
+    });
+  }
 
-  toggle.onclick = (e) => {
-    e.stopPropagation();
-    panel.hidden ? open() : close();
-  };
-  panel.onclick = (e) => e.stopPropagation();
-  document.addEventListener("click", () => { if (!panel.hidden) close(); });
+  function refresh() {
+    const has = !!state.apiKey.trim();
+    $("#keyAlert").hidden = has;
+    $("#keyBanner").hidden = has;
+    $("#apiKey").value = state.apiKey;
+    $("#acquireKey").value = state.apiKey;
+    if (!has) setStatus("", "aucun token enregistré");
+    else if (!$("#keyState").classList.contains("ok")) setStatus("", "token enregistré — non vérifié");
+  }
 
-  $("#baseUrl").value = state.baseUrl;
-  $("#apiKey").value = state.apiKey;
-
-  $("#baseUrl").oninput = (e) => {
-    state.baseUrl = e.target.value;
+  function setKey(value, quiet) {
+    state.apiKey = value;
     persist();
-    Docs.renderQuickstart(Docs.currentLang());
-    Console.renderSaved();
-  };
-  $("#apiKey").oninput = (e) => { state.apiKey = e.target.value; persist(); };
-  $("#pingBtn").onclick = (e) => { e.preventDefault(); ping(); };
+    refresh();
+    if (!quiet && value.trim()) toast("Token enregistré dans ce navigateur");
+  }
 
-  return { close };
-}
+  // Aucun endpoint « ping authentifié » n'existe : on génère le plus petit PDF
+  // possible et on lit le statut. 401 = clé refusée, 200 = clé acceptée.
+  async function verify() {
+    const key = state.apiKey.trim();
+    if (!key) { setStatus("err", "renseignez d'abord un token"); return; }
+
+    setStatus("", "vérification…");
+    $("#verifyKeyBtn").disabled = true;
+    try {
+      const res = await fetch(apiBase() + "/api/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": key },
+        body: JSON.stringify({ markdown: "# ping" }),
+      });
+      if (res.status === 401) setStatus("err", "401 — token refusé par le service");
+      else if (res.ok) setStatus("ok", "✓ token valide");
+      else setStatus("err", res.status + " — le service a répondu une erreur");
+    } catch (e) {
+      setStatus("err", "service injoignable : " + e.message);
+    } finally {
+      $("#verifyKeyBtn").disabled = false;
+    }
+  }
+
+  // Appelé par la console quand une requête revient en 401.
+  function flag401() {
+    setStatus("err", "401 — token absent ou refusé");
+    $("#keyAlert").hidden = false;
+    toast("401 — token absent ou refusé. Demandez-en un sur la page Accès.", "err");
+  }
+
+  function initPopover() {
+    const panel = $("#settingsPanel");
+    const toggle = $("#settingsToggle");
+
+    const close = () => { panel.hidden = true; toggle.setAttribute("aria-expanded", "false"); };
+    const open = () => {
+      panel.hidden = false;
+      toggle.setAttribute("aria-expanded", "true");
+      $("#apiKey").focus();
+    };
+
+    toggle.onclick = (e) => { e.stopPropagation(); panel.hidden ? open() : close(); };
+    panel.onclick = (e) => e.stopPropagation();
+    document.addEventListener("click", () => { if (!panel.hidden) close(); });
+
+    return { open, close };
+  }
+
+  function init() {
+    const popover = initPopover();
+
+    $("#baseUrl").value = state.baseUrl;
+    $("#baseUrl").oninput = (e) => {
+      state.baseUrl = e.target.value;
+      persist();
+      Docs.renderQuickstart(Docs.currentLang());
+      Console.renderSaved();
+    };
+    $("#pingBtn").onclick = (e) => { e.preventDefault(); ping(); };
+
+    $("#apiKey").oninput = (e) => setKey(e.target.value, true);
+    $("#acquireKey").onkeydown = (e) => { if (e.key === "Enter") $("#acquireSave").click(); };
+    $("#acquireSave").onclick = () => {
+      setKey($("#acquireKey").value.trim());
+      if (state.apiKey) verify();
+    };
+
+    $("#pasteKeyBtn").onclick = async () => {
+      try {
+        setKey((await navigator.clipboard.readText()).trim());
+      } catch (e) {
+        setStatus("err", "presse-papier inaccessible — collez à la main");
+      }
+    };
+    $("#verifyKeyBtn").onclick = (e) => { e.preventDefault(); verify(); };
+    $("#clearKeyBtn").onclick = () => { setKey("", true); setStatus("", "token effacé"); };
+
+    $("#bannerKeyBtn").onclick = (e) => { e.stopPropagation(); popover.open(); };
+    $("#copyMailBtn").onclick = () => copyText(MAIL, "Adresse copiée");
+
+    refresh();
+    return popover;
+  }
+
+  return { init, refresh, verify, flag401 };
+})();
 
 // ══════════════════════════════════════════════════════════ santé
 
@@ -131,7 +215,7 @@ const Palette = (() => {
     { name: "Accueil", hint: "vue", hash: "#/" },
     { name: "Référence API", hint: "vue", hash: "#/api" },
     { name: "Console de test", hint: "vue", hash: "#/console" },
-    { name: "Déploiement", hint: "vue", hash: "#/deploy" },
+    { name: "Demander un accès", hint: "vue", hash: "#/acces" },
     { name: "Éditeur markdown", hint: "page", href: "/static/editor.html" },
     { name: "swagger.yaml", hint: "fichier", href: "/static/swagger.yaml" },
   ];
@@ -224,7 +308,7 @@ function init() {
   Docs.init();
   Console.init();
 
-  const settings = initSettings();
+  const settings = Access.init();
   Palette.init();
 
   $("#statEndpoints").textContent = ENDPOINTS.length;

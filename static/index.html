@@ -29,7 +29,7 @@
     <a href="#/" data-route="home">Accueil</a>
     <a href="#/api" data-route="api">Référence API</a>
     <a href="#/console" data-route="console">Console</a>
-    <a href="#/deploy" data-route="deploy">Déploiement</a>
+    <a href="#/acces" data-route="acces">Accès</a>
   </nav>
 
   <div class="topbar-right">
@@ -44,11 +44,12 @@
       <span id="healthText">connexion…</span>
     </button>
 
-    <button id="settingsToggle" class="icon-btn" aria-label="Réglages de connexion" aria-expanded="false" title="Base URL et clé d'API">
-      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.56V21a2 2 0 11-4 0v-.09A1.7 1.7 0 008 19.4a1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.7 1.7 0 003.6 15a1.7 1.7 0 00-1.56-1H2a2 2 0 110-4h.09A1.7 1.7 0 003.6 9a1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06A1.7 1.7 0 008 4.6a1.7 1.7 0 001-1.56V3a2 2 0 114 0v.09A1.7 1.7 0 0016 4.6a1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06A1.7 1.7 0 0020.4 9c.16.63.7 1.08 1.35 1.1H22a2 2 0 110 4h-.09a1.7 1.7 0 00-1.51 1z"/>
+    <button id="settingsToggle" class="icon-btn key-btn" aria-label="Clé d'API et base URL" aria-expanded="false" title="Clé d'API et base URL">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="8" cy="12" r="4"/>
+        <path d="M12 12h9M18 12v3.5M15 12v2.5"/>
       </svg>
+      <span class="need-key" id="keyAlert" hidden></span>
     </button>
 
     <button id="themeToggle" class="icon-btn" aria-label="Basculer le thème clair / sombre" title="Thème clair / sombre">
@@ -57,22 +58,36 @@
   </div>
 </header>
 
-<!-- réglages de connexion, communs à toutes les vues -->
+<!-- clé d'API et base URL, communes à toutes les vues -->
 <div class="popover" id="settingsPanel" hidden>
-  <h3>Connexion</h3>
+  <h3>Clé d'API</h3>
   <div class="field">
-    <label for="baseUrl">base URL</label>
-    <input id="baseUrl" type="text" spellcheck="false" autocomplete="off">
-  </div>
-  <div class="field">
-    <label for="apiKey">API_KEY</label>
-    <input id="apiKey" type="password" placeholder="vide si non configurée" autocomplete="off">
+    <label for="apiKey">token</label>
+    <div class="row">
+      <input id="apiKey" type="password" placeholder="collez votre token" autocomplete="off">
+      <button class="btn sm" id="pasteKeyBtn" title="Coller depuis le presse-papier">Coller</button>
+    </div>
   </div>
   <div class="row">
-    <button class="btn sm" id="pingBtn">Tester la connexion</button>
-    <span class="meta" id="settingsStatus"></span>
+    <button class="btn sm primary" id="verifyKeyBtn">Vérifier la clé</button>
+    <button class="btn sm ghost" id="clearKeyBtn">Effacer</button>
   </div>
-  <p class="note">Ces réglages restent dans le navigateur (<code>localStorage</code>) et alimentent la console comme les exemples de code.</p>
+  <p class="key-state" id="keyState"></p>
+
+  <details class="adv">
+    <summary>base URL</summary>
+    <input id="baseUrl" type="text" spellcheck="false" autocomplete="off">
+    <div class="row" style="margin-top:8px">
+      <button class="btn sm" id="pingBtn">Tester le service</button>
+      <span class="meta" id="settingsStatus"></span>
+    </div>
+  </details>
+
+  <p class="note">
+    Token et base URL restent dans ce navigateur (<code>localStorage</code>) et ne sont
+    jamais recopiés dans les exemples de code. Pas de token ?
+    <a href="#/acces">Demandez-en un</a>.
+  </p>
 </div>
 
 <main id="app" tabindex="-1">
@@ -83,11 +98,15 @@
     <div class="hero-glow" aria-hidden="true"></div>
     <div class="wrap">
       <div>
-        <p class="eyebrow">Rust · Rocket · pandoc · WeasyPrint</p>
-        <h1>Un moteur de documents<br><span class="grad">prêt pour la production</span></h1>
+        <p class="eyebrow">Service interne AI SmartTalk · Rust · pandoc · WeasyPrint</p>
+        <h1>Un moteur de documents<br><span class="grad">pour nos produits</span></h1>
         <p class="lede">
           Markdown, HTML ou templates Tera en entrée. PDF paginé, preview PNG, fusion,
           filigrane et chiffrement AES-256 en sortie. Une seule API JSON, un seul conteneur.
+        </p>
+        <p class="lede small">
+          L'API est réservée aux équipes et projets AI SmartTalk : chaque appel demande un
+          token. <a href="#/acces">Demander un accès</a>.
         </p>
 
         <div class="hero-cta">
@@ -152,7 +171,7 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
     <div class="wrap">
       <header class="section-head">
         <h2>Démarrage en trente secondes</h2>
-        <p>Le service écoute sur <code>:8000</code>. Aucun SDK : de l'HTTP et du JSON.</p>
+        <p>Aucun SDK : de l'HTTP et du JSON, plus votre token dans l'en-tête <code>X-API-Key</code>.</p>
       </header>
 
       <div class="quick">
@@ -161,7 +180,7 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
             <button role="tab" class="active" data-lang="curl" aria-selected="true">curl</button>
             <button role="tab" data-lang="js" aria-selected="false">JavaScript</button>
             <button role="tab" data-lang="python" aria-selected="false">Python</button>
-            <button role="tab" data-lang="docker" aria-selected="false">Docker</button>
+            <button role="tab" data-lang="health" aria-selected="false">Sans token</button>
           </div>
           <div class="code-wrap scroll">
             <button class="copy-btn" data-copy="#quickCode">copier</button>
@@ -179,8 +198,8 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
             <p>Avec les deux champs, la réponse devient <code>{"download_url": …}</code> et le fichier reste servi par le service.</p>
           </div>
           <div class="quick-note">
-            <h4>Authentification optionnelle</h4>
-            <p>Si <code>API_KEY</code> est définie, <code>/api/*</code> exige <code>X-API-Key</code>. <code>/api/health</code>, <code>/download</code> et l'endpoint historique restent ouverts.</p>
+            <h4>Token obligatoire</h4>
+            <p>Tous les <code>/api/*</code> exigent <code>X-API-Key</code> (ou <code>Authorization: Bearer</code>). Seuls <code>/api/health</code> et <code>/download</code> restent ouverts. <a href="#/acces">Obtenir un token</a>.</p>
           </div>
         </div>
       </div>
@@ -196,6 +215,7 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
         <a href="https://github.com/Spawnia/md-to-pdf" target="_blank" rel="noopener">Spawnia</a>.
       </div>
       <div class="links">
+        <a href="#/acces">demander un accès</a>
         <a href="/static/editor.html">éditeur markdown</a>
         <a href="/static/swagger.yaml" download>swagger.yaml</a>
         <a href="https://github.com/AI-SmartTalk/md-to-pdf" target="_blank" rel="noopener">GitHub</a>
@@ -261,6 +281,16 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
         </button>
       </div>
       <div class="pane-body">
+        <div class="banner" id="keyBanner" hidden>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3.5M15 12v2.5"/>
+          </svg>
+          <div>
+            <strong>Aucun token enregistré.</strong> Les endpoints <code>/api/*</code> répondront 401.
+          </div>
+          <button class="btn sm" id="bannerKeyBtn">Saisir le token</button>
+          <a class="btn sm ghost" href="#/acces">En demander un</a>
+        </div>
         <p class="req-desc" id="reqDesc"></p>
         <form id="form" autocomplete="off"></form>
       </div>
@@ -298,58 +328,58 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
   </div>
 </section>
 
-<!-- ═══════════════════════════ déploiement ═══════════════════════════ -->
-<section class="view scrolls" id="view-deploy" aria-label="Déploiement">
-  <div class="deploy-inner">
+<!-- ═══════════════════════════ accès ═══════════════════════════ -->
+<section class="view scrolls" id="view-acces" aria-label="Accès">
+  <div class="acces-inner">
     <header class="section-head">
-      <h2>Déploiement</h2>
-      <p>Une image, un volume, un healthcheck.</p>
+      <p class="eyebrow">Service interne</p>
+      <h2>Obtenir un accès</h2>
+      <p>
+        md-to-pdf tourne pour les produits et les équipes AI SmartTalk. Il n'est pas ouvert
+        en libre-service : chaque intégration reçoit son propre token.
+      </p>
     </header>
 
-    <div class="deploy-grid">
-      <div class="deploy-col">
-        <h3>docker-compose.prod.yml</h3>
-        <div class="code-wrap">
-          <button class="copy-btn" data-copy="#deployCode">copier</button>
-          <pre id="deployCode"></pre>
-        </div>
+    <div class="acces-grid">
+      <div class="acces-card">
+        <span class="step">1</span>
+        <h3>Demandez un token</h3>
+        <p>Un mail avec le projet concerné et le volume attendu. Réponse sous un jour ouvré.</p>
+        <a class="btn primary" id="mailtoBtn" href="mailto:contact+mdtopdf@aismarttalk.tech?subject=Acc%C3%A8s%20md-to-pdf&amp;body=Bonjour%2C%0A%0AProjet%20%3A%20%0AUsage%20pr%C3%A9vu%20%3A%20%0AVolume%20estim%C3%A9%20%3A%20%0A%0AMerci%20%21">contact+mdtopdf@aismarttalk.tech</a>
+        <button class="btn sm ghost" id="copyMailBtn">Copier l'adresse</button>
       </div>
 
-      <div class="deploy-col">
-        <h3>Configuration</h3>
-        <div class="table-wrap">
-          <table class="grid">
-            <thead><tr><th>Variable</th><th>Défaut</th><th>Rôle</th></tr></thead>
-            <tbody>
-              <tr>
-                <td><code>API_KEY</code></td><td><em>non définie</em></td>
-                <td class="desc">Si définie, <code>/api/*</code> exige <code>X-API-Key</code> ou <code>Authorization: Bearer</code>. Non définie, l'API reste ouverte.</td>
-              </tr>
-              <tr>
-                <td><code>PDF_PROCESS_TIMEOUT_SECS</code></td><td><code>60</code></td>
-                <td class="desc">Limite de temps pour pandoc, WeasyPrint, qpdf et pdftoppm.</td>
-              </tr>
-              <tr><td><code>RUST_LOG</code></td><td><code>info</code></td><td class="desc">Niveau de log.</td></tr>
-              <tr><td><code>ROCKET_PORT</code></td><td><code>8000</code></td><td class="desc">Port d'écoute.</td></tr>
-            </tbody>
-          </table>
+      <div class="acces-card">
+        <span class="step">2</span>
+        <h3>Enregistrez-le ici</h3>
+        <p>Le token reste dans ce navigateur et sert à toutes les requêtes de la console.</p>
+        <div class="key-inline">
+          <input id="acquireKey" type="password" placeholder="collez votre token" autocomplete="off">
+          <button class="btn primary" id="acquireSave">Enregistrer</button>
         </div>
+        <p class="key-state" id="acquireState"></p>
+      </div>
 
-        <div>
-          <div class="callout warn">
-            <strong>À savoir avant d'exposer publiquement.</strong>
-            <code>/api/html-to-pdf</code> et <code>/api/render</code> rendent du HTML arbitraire :
-            WeasyPrint ira chercher les URL que le document référence. Gardez le service sur un
-            réseau privé ou définissez <code>API_KEY</code>.
-          </div>
+      <div class="acces-card">
+        <span class="step">3</span>
+        <h3>Testez, puis intégrez</h3>
+        <p>La console envoie de vraies requêtes avec votre token et vous rend le <code>curl</code> équivalent.</p>
+        <a class="btn" href="#/console">Ouvrir la console</a>
+        <a class="btn ghost sm" href="#/api">Voir la référence</a>
+      </div>
+    </div>
 
-          <div class="callout">
-            <strong>Persistance.</strong> Les PDFs sauvegardés vivent dans
-            <code>public/pdf/</code>. Le compose de production monte le volume
-            <code>pdf-storage</code> à cet emplacement pour que les <code>download_url</code>
-            survivent à un redéploiement.
-          </div>
-        </div>
+    <div class="acces-notes">
+      <div class="callout">
+        <strong>Où passe le token.</strong> En-tête <code>X-API-Key</code> ou
+        <code>Authorization: Bearer</code> sur tous les <code>/api/*</code>. Seuls
+        <code>/api/health</code> et <code>/download/&lt;client_id&gt;/&lt;pdf_name&gt;</code>
+        répondent sans authentification.
+      </div>
+      <div class="callout warn">
+        <strong>Un token par intégration.</strong> Ne le committez pas et ne le mettez pas
+        dans du code front : il donne un accès complet au moteur. En cas de fuite, écrivez à
+        la même adresse, on le remplace.
       </div>
     </div>
   </div>

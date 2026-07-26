@@ -25,30 +25,34 @@ const Docs = (() => {
 
   // ───────────────────────────── accueil : quickstart ─────────────────────
 
+  // Le token n'est jamais interpolé ici : les exemples restent copiables et
+  // partageables sans fuiter la clé de celui qui les copie.
   const QUICKSTART = {
-    curl: () => `# Markdown → PDF, réponse binaire
+    curl: () => `# Le token vous est fourni par l'équipe — jamais en dur dans le code
+export MDTOPDF_KEY='votre-token'
+
+# Markdown → PDF, réponse binaire
 curl -X POST '${apiBase()}/api/convert' \\
+  -H "X-API-Key: $MDTOPDF_KEY" \\
   -H 'Content-Type: application/json' \\
   -d '{"markdown": "# Bonjour\\n\\nUn **document**.", "options": {"page_numbers": true}}' \\
   --output document.pdf
 
 # Sauvegarde côté serveur : la réponse devient une URL de téléchargement
 curl -X POST '${apiBase()}/api/convert' \\
+  -H "X-API-Key: $MDTOPDF_KEY" \\
   -H 'Content-Type: application/json' \\
   -d '{"markdown": "# Bonjour", "client_id": "demo", "pdf_name": "hello"}'
 # {"download_url":"/download/demo/hello.pdf"}
 
-# Avec authentification, si API_KEY est configurée côté serveur
-curl -X POST '${apiBase()}/api/convert' \\
-  -H 'X-API-Key: $API_KEY' \\
-  -H 'Content-Type: application/json' \\
-  -d '{"markdown": "# Bonjour"}' --output document.pdf`,
+# Sans token : 401
+# {"error":"unauthorized","details":"missing or invalid API key"}`,
 
     js: () => `const res = await fetch("${apiBase()}/api/convert", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
-    // "X-API-Key": process.env.API_KEY,   // si API_KEY est configurée
+    "X-API-Key": process.env.MDTOPDF_KEY,   // côté serveur uniquement
   },
   body: JSON.stringify({
     markdown: "# Rapport\\n\\nContenu en **markdown**.",
@@ -56,6 +60,7 @@ curl -X POST '${apiBase()}/api/convert' \\
   }),
 });
 
+if (res.status === 401) throw new Error("token md-to-pdf absent ou refusé");
 if (!res.ok) {
   const { error, details } = await res.json();
   throw new Error(\`\${error}: \${details}\`);
@@ -63,7 +68,8 @@ if (!res.ok) {
 
 const pdf = await res.arrayBuffer();   // corps binaire application/pdf`,
 
-    python: () => `import requests
+    python: () => `import os
+import requests
 
 res = requests.post(
     "${apiBase()}/api/convert",
@@ -73,22 +79,19 @@ res = requests.post(
         "client_id": "demo",
         "pdf_name": "rapport",
     },
-    # headers={"X-API-Key": os.environ["API_KEY"]},
+    headers={"X-API-Key": os.environ["MDTOPDF_KEY"]},
     timeout=90,
 )
 res.raise_for_status()
 
 print(res.json()["download_url"])   # /download/demo/rapport.pdf`,
 
-    docker: () => `# Lancer le service
-docker compose -f docker-compose.prod.yml up -d
-
-# Vérifier
+    health: () => `# Le statut du service ne demande pas de token
 curl -s ${apiBase()}/api/health
+# {"status":"ok","version":"0.2.0","engines":["weasyprint","wkhtmltopdf","pdflatex"]}
 
-# Fermer l'API derrière une clé
-export API_KEY='une-cle-longue-et-aleatoire'
-docker compose -f docker-compose.prod.yml up -d`,
+# Un PDF déjà sauvegardé se récupère sans token non plus
+curl -s ${apiBase()}/download/demo/hello.pdf --output hello.pdf`,
   };
 
   function currentLang() {
@@ -98,7 +101,7 @@ docker compose -f docker-compose.prod.yml up -d`,
 
   function renderQuickstart(lang) {
     const code = QUICKSTART[lang]();
-    const shell = lang === "curl" || lang === "docker";
+    const shell = lang === "curl" || lang === "health";
     $("#quickCode").innerHTML = highlightCode(code, shell ? "shell" : "text");
     $("#quickCode").dataset.raw = code;
   }
@@ -116,29 +119,6 @@ docker compose -f docker-compose.prod.yml up -d`,
         renderQuickstart(btn.dataset.lang);
       };
     });
-  }
-
-  // ───────────────────────────── déploiement ──────────────────────────────
-
-  function renderDeploy() {
-    const code = `services:
-  md-to-pdf:
-    build: { context: ., dockerfile: Dockerfile }
-    ports: ["8000:8000"]
-    restart: unless-stopped
-    environment:
-      API_KEY: "\${API_KEY:-}"
-      PDF_PROCESS_TIMEOUT_SECS: "60"
-    volumes:
-      - pdf-storage:/home/rocket/public/pdf
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
-      interval: 30s
-
-volumes:
-  pdf-storage:`;
-    $("#deployCode").innerHTML = highlightCode(code, "shell");
-    $("#deployCode").dataset.raw = code;
   }
 
   // ───────────────────────────── référence : sidebar ──────────────────────
@@ -235,7 +215,7 @@ volumes:
     if (!ep) return;
     state.docKey = key;
 
-    const auth = ep.auth === false ? "🔓 jamais authentifié" : "🔐 X-API-Key si API_KEY est configurée";
+    const auth = ep.auth === false ? "🔓 sans token" : "🔐 token requis · X-API-Key";
     const ctype = ep.json ? "application/json" : ep.form ? "multipart/form-data" : null;
     const { prev, next } = neighbours(key);
 
@@ -305,7 +285,6 @@ volumes:
   function init() {
     renderFeatureCards();
     initQuickstart();
-    renderDeploy();
     renderNav();
     initSearch();
   }

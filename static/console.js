@@ -323,6 +323,9 @@ const Console = (() => {
 
     $("#statusBadge").textContent = res.status + " " + res.statusText;
     $("#statusBadge").className = "badge " + (res.ok ? "ok" : "err");
+    // Access est déclaré dans app.js, chargé après ce fichier : la garde porte
+    // sur la liaison lexicale, pas sur window.
+    if (res.status === 401 && typeof Access !== "undefined") Access.flag401();
     $("#timing").textContent = elapsed + " ms";
     $("#size").textContent = formatBytes(blob.size);
     $("#ctype").textContent = ctype;

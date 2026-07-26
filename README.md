@@ -156,16 +156,26 @@ into one endless page:
   Generated PDFs stay in a side list to feed `merge`, `watermark` and `protect`. Each
   request can be copied as a ready-to-run `curl` command (the API key is never copied in
   clear — it comes out as `$API_KEY`).
-- **`#/deploy` Deployment** — compose file and environment variables
+- **`#/acces` Access** — the service runs for AI SmartTalk teams and products, not as a
+  public SaaS: this view explains how to request a token
+  (`contact+mdtopdf@aismarttalk.tech`), stores it in the browser and verifies it against
+  the running service
 
-`⌘K` opens a search palette over every endpoint and view (`⇧⏎` jumps straight to the
-console), `⌘⏎` sends the current request.
+The token state is visible everywhere: a marker on the key button in the top bar and a
+banner in the console whenever no token is stored, plus an explicit toast when a request
+comes back `401`. `⌘K` opens a search palette over every endpoint and view (`⇧⏎` jumps
+straight to the console), `⌘⏎` sends the current request.
 
 Front-end files, all under `static/`: `spec.js` (the single API spec), `ui.js` (shared
-helpers, theme, toasts), `docs.js` (landing, reference, deployment), `console.js` (test
-console), `app.js` (router, palette, health) and `app.css`. Reference and console are
+helpers, theme, toasts), `docs.js` (landing, reference), `console.js` (test console),
+`app.js` (router, palette, token, health) and `app.css`. Reference and console are
 generated from the same spec, so the documented payload is exactly the one the console
 sends.
+
+> Deployment and configuration are documented in this README only — the web app targets
+> integrators, not operators. Set `API_KEY` in the environment: without it the service
+> starts with `/api/*` open to anyone who can reach it, which contradicts what the app
+> tells its users.
 
 The original CodeMirror markdown editor is still available at `/static/editor.html`.
 

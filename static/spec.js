@@ -118,7 +118,7 @@ const ENDPOINTS = [
     key: "health", method: "GET", path: "/api/health", auth: false, group: "service",
     title: "Santé du service",
     icon: "M12 21s-7-4.4-7-10a7 7 0 0114 0c0 5.6-7 10-7 10z",
-    card: "Statut, version et moteurs PDF réellement installés dans l'image. Jamais authentifié : c'est la sonde du healthcheck.",
+    card: "Statut, version et moteurs PDF réellement installés dans l'image. Sans token : c'est la sonde du healthcheck.",
     desc: "Retourne le statut du service, sa version et la liste des moteurs PDF réellement présents dans l'image.\n« status » vaut « degraded » si pandoc ou WeasyPrint manquent.",
     params: [],
     fields: [],
@@ -155,7 +155,7 @@ const ENDPOINTS = [
       },
       response: { download_url: "/download/demo-client/rapport-2026.pdf" },
     },
-    statuses: [["200", "PDF ou download_url"], ["400", "Requête invalide"], ["401", "Clé d'API"], ["404", "Template introuvable"], ["500", "Échec pandoc"], ["504", "Timeout"]],
+    statuses: [["200", "PDF ou download_url"], ["400", "Requête invalide"], ["401", "Token absent ou refusé"], ["404", "Template introuvable"], ["500", "Échec pandoc"], ["504", "Timeout"]],
   },
 
   {
@@ -178,7 +178,7 @@ const ENDPOINTS = [
       request: { template: "<h1>{{ title }}</h1>", data: { title: "Facture #123" } },
       response: { download_url: "/download/demo-client/facture-123.pdf" },
     },
-    statuses: [["200", "PDF ou download_url"], ["400", "Template ou data invalide"], ["401", "Clé d'API"], ["500", "Échec WeasyPrint"], ["504", "Timeout"]],
+    statuses: [["200", "PDF ou download_url"], ["400", "Template ou data invalide"], ["401", "Token absent ou refusé"], ["500", "Échec WeasyPrint"], ["504", "Timeout"]],
   },
 
   {
@@ -199,7 +199,7 @@ const ENDPOINTS = [
       request: { html: "<h1>Facture</h1>", options: { paper_size: "a4" } },
       response: { download_url: "/download/demo-client/facture.pdf" },
     },
-    statuses: [["200", "PDF ou download_url"], ["400", "Requête invalide"], ["401", "Clé d'API"], ["500", "Échec WeasyPrint"], ["504", "Timeout"]],
+    statuses: [["200", "PDF ou download_url"], ["400", "Requête invalide"], ["401", "Token absent ou refusé"], ["500", "Échec WeasyPrint"], ["504", "Timeout"]],
   },
 
   {
@@ -229,7 +229,7 @@ const ENDPOINTS = [
       request: { markdown: "# Aperçu" },
       responseNote: "Corps binaire image/png",
     },
-    statuses: [["200", "image/png"], ["400", "Aucun mode fourni"], ["401", "Clé d'API"], ["500", "Échec pdftoppm"], ["504", "Timeout"]],
+    statuses: [["200", "image/png"], ["400", "Aucun mode fourni"], ["401", "Token absent ou refusé"], ["500", "Échec pdftoppm"], ["504", "Timeout"]],
   },
 
   {
@@ -251,7 +251,7 @@ const ENDPOINTS = [
       request: { pdfs: ["/download/demo-client/a.pdf", "/download/demo-client/b.pdf"], client_id: "demo-client", pdf_name: "dossier-complet" },
       response: { download_url: "/download/demo-client/dossier-complet.pdf" },
     },
-    statuses: [["200", "PDF ou download_url"], ["400", "Moins de 2 PDFs / chemin invalide"], ["401", "Clé d'API"], ["404", "PDF introuvable"], ["500", "Échec pdfunite"], ["504", "Timeout"]],
+    statuses: [["200", "PDF ou download_url"], ["400", "Moins de 2 PDFs / chemin invalide"], ["401", "Token absent ou refusé"], ["404", "PDF introuvable"], ["500", "Échec pdfunite"], ["504", "Timeout"]],
   },
 
   {
@@ -280,7 +280,7 @@ const ENDPOINTS = [
       request: { pdf: "/download/demo-client/rapport.pdf", text: "CONFIDENTIEL", opacity: 0.08 },
       response: { download_url: "/download/demo-client/rapport-filigrane.pdf" },
     },
-    statuses: [["200", "PDF ou download_url"], ["400", "opacity / angle hors bornes"], ["401", "Clé d'API"], ["404", "PDF introuvable"], ["500", "Échec qpdf"], ["504", "Timeout"]],
+    statuses: [["200", "PDF ou download_url"], ["400", "opacity / angle hors bornes"], ["401", "Token absent ou refusé"], ["404", "PDF introuvable"], ["500", "Échec qpdf"], ["504", "Timeout"]],
   },
 
   {
@@ -303,7 +303,7 @@ const ENDPOINTS = [
       request: { pdf: "/download/demo-client/rapport.pdf", password: "s3cr3t" },
       response: { download_url: "/download/demo-client/rapport-protege.pdf" },
     },
-    statuses: [["200", "PDF ou download_url"], ["400", "Mot de passe vide"], ["401", "Clé d'API"], ["404", "PDF introuvable"], ["500", "Échec qpdf"], ["504", "Timeout"]],
+    statuses: [["200", "PDF ou download_url"], ["400", "Mot de passe vide"], ["401", "Token absent ou refusé"], ["404", "PDF introuvable"], ["500", "Échec qpdf"], ["504", "Timeout"]],
   },
 
   {
@@ -332,7 +332,7 @@ const ENDPOINTS = [
     title: "Endpoint historique (FormData)",
     icon: "M4 7h16M4 12h16M4 17h10",
     card: "L'API d'origine, préservée à l'identique : FormData en entrée, erreurs en texte brut.",
-    desc: "Endpoint d'origine conservé pour la rétro-compatibilité. Corps en multipart/form-data, erreurs renvoyées en texte brut.\nJamais soumis à API_KEY.",
+    desc: "Endpoint d'origine conservé pour la rétro-compatibilité. Corps en multipart/form-data, erreurs renvoyées en texte brut.\nN'exige pas de token, contrairement aux routes /api/*.",
     params: [
       { name: "markdown", type: "field", required: true, desc: "Document source." },
       { name: "css", type: "field", desc: "CSS additionnel." },
