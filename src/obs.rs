@@ -504,11 +504,15 @@ impl Fairing for Observer {
         // Support tickets quote this header; it is the only way back to the request's events
         res.set_header(Header::new("X-Request-Id", trace_id.clone()));
 
+        // Field names follow what the other AI SmartTalk services already send, because
+        // log420 reads them out of the payload by name: `path`, `statusCode` and `method`
+        // back its filters, and a record naming them otherwise is ingested but stays
+        // invisible to every path or status query.
         let mut fields = vec![
-            ("route", json!(route)),
+            ("path", json!(route)),
             ("method", json!(req.method().as_str())),
-            ("status", json!(status)),
-            ("duration_ms", json!(elapsed.as_millis())),
+            ("statusCode", json!(status)),
+            ("duration", json!(elapsed.as_millis())),
             ("trace_id", json!(trace_id)),
             ("bytes", json!(bytes)),
         ];

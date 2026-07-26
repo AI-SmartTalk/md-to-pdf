@@ -495,6 +495,13 @@ latency histograms labelled by Rocket route pattern and status code only — nev
 `client_id` or a file name. With `LOG420_INGEST_TOKEN` set, structured events are also
 shipped to log420 in NDJSON batches, each carrying the `X-Request-Id` of its request.
 
+One event per request (`msg: "request"`) uses the field names the other AI SmartTalk
+services already send — `method`, `path`, `statusCode`, `duration` — because log420 backs
+its path and status filters on exactly those names; a record naming them otherwise is
+stored but stays invisible to every such query. Render events (`msg: "render"`) carry
+their own `duration_ms`, `engine`, `source` and `cache`, and share the request's
+`trace_id`, so a slow response can be traced to the conversion that caused it.
+
 ## 🌐 Web Interface
 
 The service root (`http://localhost:8000`) serves a self-contained app — no CDN, works
