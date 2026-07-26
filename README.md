@@ -144,18 +144,28 @@ make check        # cargo check + clippy
 
 ## 🌐 Web Interface
 
-The service root (`http://localhost:8000`) serves a self-contained page — no CDN, works
-offline — with three things:
+The service root (`http://localhost:8000`) serves a self-contained app — no CDN, works
+offline — split into four hash-routed views, each filling the window instead of stacking
+into one endless page:
 
-- **Landing** — what the engine does, live status and installed engines pulled from `/api/health`
-- **API reference** — every endpoint with its parameters, request/response examples and status codes
-- **Console** — a real client for all ten endpoints: fill the form, send, and see the PDF, the
-  PNG preview or the JSON inline. Generated PDFs stay in a side list to feed `merge`,
-  `watermark` and `protect`. Each request can be copied as a ready-to-run `curl` command
-  (the API key is never copied in clear — it comes out as `$API_KEY`).
+- **`#/` Landing** — what the engine does, live status and installed engines pulled from `/api/health`
+- **`#/api` API reference** — searchable sidebar, one endpoint at a time: parameters,
+  request/response examples and status codes
+- **`#/console` Console** — a real client for all ten endpoints, in three independently
+  scrolling panes (endpoints, request, response) with a draggable request/response split.
+  Generated PDFs stay in a side list to feed `merge`, `watermark` and `protect`. Each
+  request can be copied as a ready-to-run `curl` command (the API key is never copied in
+  clear — it comes out as `$API_KEY`).
+- **`#/deploy` Deployment** — compose file and environment variables
 
-Reference and console are generated from a single spec in `static/console.js`, so the
-documented payload is exactly the one the console sends.
+`⌘K` opens a search palette over every endpoint and view (`⇧⏎` jumps straight to the
+console), `⌘⏎` sends the current request.
+
+Front-end files, all under `static/`: `spec.js` (the single API spec), `ui.js` (shared
+helpers, theme, toasts), `docs.js` (landing, reference, deployment), `console.js` (test
+console), `app.js` (router, palette, health) and `app.css`. Reference and console are
+generated from the same spec, so the documented payload is exactly the one the console
+sends.
 
 The original CodeMirror markdown editor is still available at `/static/editor.html`.
 

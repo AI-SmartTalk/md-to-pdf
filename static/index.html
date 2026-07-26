@@ -7,69 +7,105 @@
 <meta name="description" content="Service de génération PDF : Markdown, HTML et templates Tera vers PDF, preview PNG, fusion, filigrane et protection par mot de passe. Documentation et console de test intégrées.">
 <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
 <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
-<link rel="stylesheet" href="/static/console.css">
+<link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
 
-<a class="skip-link" href="#doc">Aller à la documentation</a>
+<a class="skip-link" href="#app">Aller au contenu</a>
 
+<!-- ═══════════════════════════ topbar ═══════════════════════════ -->
 <header class="topbar">
-  <a class="brand" href="#top">
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+  <a class="brand" href="#/">
+    <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true">
       <path d="M6 2h8l5 5v15H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
       <path d="M14 2v5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
       <path d="M9 13h6M9 17h6M9 9h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
     </svg>
     <span>md-to-pdf</span>
+    <span class="ver" id="brandVersion">—</span>
   </a>
 
-  <nav class="topnav" aria-label="Navigation principale">
-    <a href="#features">Fonctionnalités</a>
-    <a href="#quickstart">Démarrage</a>
-    <a href="#doc">API</a>
-    <a href="#playground">Console</a>
-    <a href="#deploy">Déploiement</a>
+  <nav class="topnav" id="topnav" aria-label="Navigation principale">
+    <a href="#/" data-route="home">Accueil</a>
+    <a href="#/api" data-route="api">Référence API</a>
+    <a href="#/console" data-route="console">Console</a>
+    <a href="#/deploy" data-route="deploy">Déploiement</a>
   </nav>
 
   <div class="topbar-right">
-    <a class="health" id="healthPill" href="#playground" title="Statut du service">
+    <button class="cmdk-hint" id="cmdkBtn" aria-label="Rechercher un endpoint">
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Rechercher
+      <kbd>⌘K</kbd>
+    </button>
+
+    <button class="health" id="healthPill" title="Statut du service — cliquer pour retester">
       <span class="dot" id="healthDot"></span>
       <span id="healthText">connexion…</span>
-    </a>
+    </button>
+
+    <button id="settingsToggle" class="icon-btn" aria-label="Réglages de connexion" aria-expanded="false" title="Base URL et clé d'API">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.56V21a2 2 0 11-4 0v-.09A1.7 1.7 0 008 19.4a1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.7 1.7 0 003.6 15a1.7 1.7 0 00-1.56-1H2a2 2 0 110-4h.09A1.7 1.7 0 003.6 9a1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06A1.7 1.7 0 008 4.6a1.7 1.7 0 001-1.56V3a2 2 0 114 0v.09A1.7 1.7 0 0016 4.6a1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06A1.7 1.7 0 0020.4 9c.16.63.7 1.08 1.35 1.1H22a2 2 0 110 4h-.09a1.7 1.7 0 00-1.51 1z"/>
+      </svg>
+    </button>
+
     <button id="themeToggle" class="icon-btn" aria-label="Basculer le thème clair / sombre" title="Thème clair / sombre">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path id="themeIcon" fill="currentColor" d="M12 3a9 9 0 109 9 7 7 0 01-9-9z"/></svg>
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path id="themeIcon" fill="currentColor" d="M12 3a9 9 0 109 9 7 7 0 01-9-9z"/></svg>
     </button>
   </div>
 </header>
 
-<!-- ───────────────────────────── hero ───────────────────────────── -->
-<main id="top">
-<section class="hero">
-  <div class="hero-glow" aria-hidden="true"></div>
-  <div class="hero-inner">
-    <p class="eyebrow">Rust · Rocket · pandoc · WeasyPrint</p>
-    <h1>Un moteur de documents<br><span class="grad">prêt pour la production</span></h1>
-    <p class="lede">
-      Markdown, HTML ou templates Tera en entrée. PDF paginé, preview PNG, fusion,
-      filigrane et chiffrement AES-256 en sortie. Une seule API JSON, un seul conteneur.
-    </p>
-
-    <div class="hero-cta">
-      <a class="btn primary" href="#playground">Ouvrir la console</a>
-      <a class="btn" href="#doc">Lire la doc API</a>
-    </div>
-
-    <div class="hero-stats" id="heroStats">
-      <div class="stat"><span class="stat-value" id="statVersion">—</span><span class="stat-label">version</span></div>
-      <div class="stat"><span class="stat-value" id="statEndpoints">—</span><span class="stat-label">endpoints</span></div>
-      <div class="stat"><span class="stat-value" id="statEngines">—</span><span class="stat-label">moteurs PDF</span></div>
-      <div class="stat"><span class="stat-value" id="statStatus">—</span><span class="stat-label">statut</span></div>
-    </div>
+<!-- réglages de connexion, communs à toutes les vues -->
+<div class="popover" id="settingsPanel" hidden>
+  <h3>Connexion</h3>
+  <div class="field">
+    <label for="baseUrl">base URL</label>
+    <input id="baseUrl" type="text" spellcheck="false" autocomplete="off">
   </div>
+  <div class="field">
+    <label for="apiKey">API_KEY</label>
+    <input id="apiKey" type="password" placeholder="vide si non configurée" autocomplete="off">
+  </div>
+  <div class="row">
+    <button class="btn sm" id="pingBtn">Tester la connexion</button>
+    <span class="meta" id="settingsStatus"></span>
+  </div>
+  <p class="note">Ces réglages restent dans le navigateur (<code>localStorage</code>) et alimentent la console comme les exemples de code.</p>
+</div>
 
-  <div class="pipeline" aria-hidden="true">
-    <div class="pipe-card in">
-      <div class="pipe-head"><span class="chip">entrée</span> document.md</div>
+<main id="app" tabindex="-1">
+
+<!-- ═══════════════════════════ accueil ═══════════════════════════ -->
+<section class="view scrolls" id="view-home" aria-label="Accueil">
+  <div class="hero">
+    <div class="hero-glow" aria-hidden="true"></div>
+    <div class="wrap">
+      <div>
+        <p class="eyebrow">Rust · Rocket · pandoc · WeasyPrint</p>
+        <h1>Un moteur de documents<br><span class="grad">prêt pour la production</span></h1>
+        <p class="lede">
+          Markdown, HTML ou templates Tera en entrée. PDF paginé, preview PNG, fusion,
+          filigrane et chiffrement AES-256 en sortie. Une seule API JSON, un seul conteneur.
+        </p>
+
+        <div class="hero-cta">
+          <a class="btn primary lg" href="#/console">Ouvrir la console</a>
+          <a class="btn lg" href="#/api">Lire la référence API</a>
+        </div>
+
+        <div class="hero-stats">
+          <div class="stat"><span class="stat-value" id="statVersion">—</span><span class="stat-label">version</span></div>
+          <div class="stat"><span class="stat-value" id="statEndpoints">—</span><span class="stat-label">endpoints</span></div>
+          <div class="stat"><span class="stat-value" id="statEngines">—</span><span class="stat-label">moteurs PDF</span></div>
+          <div class="stat"><span class="stat-value" id="statStatus">—</span><span class="stat-label">statut</span></div>
+        </div>
+      </div>
+
+      <div class="pipeline" aria-hidden="true">
+        <div class="pipe-card in">
+          <div class="pipe-head"><span class="chip">entrée</span> document.md</div>
 <pre class="pipe-body"><span class="tok-h"># Rapport 2026</span>
 
 Chiffre d'affaires en <span class="tok-b">hausse</span>.
@@ -79,207 +115,271 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
 | Trimestre | CA   |
 |-----------|------|
 | T1        | 1.2M |</pre>
-    </div>
-
-    <div class="pipe-arrow">
-      <span class="pipe-engine">pandoc + weasyprint</span>
-      <svg viewBox="0 0 120 24" width="120" height="24"><path d="M2 12h108m0 0l-8-6m8 6l-8 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </div>
-
-    <div class="pipe-card out">
-      <div class="pipe-head"><span class="chip">sortie</span> document.pdf</div>
-      <div class="page">
-        <div class="page-h"></div>
-        <div class="page-l"></div>
-        <div class="page-l short"></div>
-        <div class="page-blur">contenu premium</div>
-        <div class="page-l"></div>
-        <div class="page-l short"></div>
-        <div class="page-num">1 / 4</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ─────────────────────────── features ─────────────────────────── -->
-<section id="features" class="section">
-  <header class="section-head">
-    <h2>Ce que le service sait faire</h2>
-    <p><span id="endpointCount">—</span> endpoints, un contrat unique : PDF binaire par défaut, URL de téléchargement si vous demandez la sauvegarde.</p>
-  </header>
-
-  <div class="cards" id="featureCards"></div>
-</section>
-
-<!-- ─────────────────────────── quickstart ───────────────────────── -->
-<section id="quickstart" class="section alt">
-  <header class="section-head">
-    <h2>Démarrage en trente secondes</h2>
-    <p>Le service écoute sur <code>:8000</code>. Aucun SDK : de l'HTTP et du JSON.</p>
-  </header>
-
-  <div class="quickstart">
-    <div class="tabs" role="tablist" aria-label="Exemples de code">
-      <button role="tab" class="active" data-lang="curl">curl</button>
-      <button role="tab" data-lang="js">JavaScript</button>
-      <button role="tab" data-lang="python">Python</button>
-      <button role="tab" data-lang="docker">Docker</button>
-    </div>
-    <div class="code-wrap">
-      <button class="copy-btn" data-copy="#quickCode">copier</button>
-      <pre id="quickCode"></pre>
-    </div>
-  </div>
-</section>
-
-<!-- ─────────────────────────── API doc ──────────────────────────── -->
-<section id="doc" class="section">
-  <header class="section-head">
-    <h2>Référence de l'API</h2>
-    <p>
-      Générée depuis la même source que la console ci-dessous — la doc ne peut pas
-      diverger de ce que la console envoie réellement.
-      <a href="/static/swagger.yaml" download>swagger.yaml</a>
-    </p>
-  </header>
-
-  <div class="doc-layout">
-    <aside class="doc-nav" aria-label="Endpoints">
-      <div class="doc-nav-inner" id="docNav"></div>
-    </aside>
-    <div class="doc-body" id="docBody"></div>
-  </div>
-</section>
-
-<!-- ─────────────────────────── playground ───────────────────────── -->
-<section id="playground" class="section alt">
-  <header class="section-head">
-    <h2>Console de test</h2>
-    <p>Tous les endpoints, en vrai, depuis le navigateur. Les PDFs générés restent à portée de main pour alimenter <code>merge</code>, <code>watermark</code> et <code>protect</code>.</p>
-  </header>
-
-  <div class="console">
-    <div class="console-bar">
-      <div class="field inline">
-        <label for="baseUrl">base URL</label>
-        <input id="baseUrl" type="text" spellcheck="false">
-      </div>
-      <div class="field inline">
-        <label for="apiKey">API_KEY</label>
-        <input id="apiKey" type="password" placeholder="vide si non configurée" autocomplete="off">
-      </div>
-      <div class="grow"></div>
-      <button id="pingBtn" class="btn small">tester la connexion</button>
-    </div>
-
-    <div class="console-grid">
-      <nav class="console-nav" aria-label="Endpoints de la console">
-        <div id="endpointList"></div>
-        <div class="saved">
-          <h3>PDFs générés</h3>
-          <ul id="savedList"></ul>
         </div>
-      </nav>
 
-      <section class="console-req">
-        <div class="req-head">
+        <div class="pipe-arrow">
+          <span class="pipe-engine">pandoc + weasyprint</span>
+          <svg viewBox="0 0 120 24" width="110" height="22"><path d="M2 12h100m0 0l-8-6m8 6l-8 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+
+        <div class="pipe-card out">
+          <div class="pipe-head"><span class="chip">sortie</span> document.pdf</div>
+          <div class="page">
+            <div class="page-h"></div>
+            <div class="page-l"></div>
+            <div class="page-l short"></div>
+            <div class="page-blur">contenu premium</div>
+            <div class="page-l"></div>
+            <div class="page-l short"></div>
+            <div class="page-num">1 / 4</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="home-section">
+    <div class="wrap">
+      <header class="section-head">
+        <h2>Ce que le service sait faire</h2>
+        <p><span id="endpointCount">—</span> endpoints, un contrat unique : PDF binaire par défaut, URL de téléchargement si vous demandez la sauvegarde.</p>
+      </header>
+      <div class="card-grid" id="featureCards"></div>
+    </div>
+  </div>
+
+  <div class="home-section tinted">
+    <div class="wrap">
+      <header class="section-head">
+        <h2>Démarrage en trente secondes</h2>
+        <p>Le service écoute sur <code>:8000</code>. Aucun SDK : de l'HTTP et du JSON.</p>
+      </header>
+
+      <div class="quick">
+        <div>
+          <div class="tabs" id="quickTabs" role="tablist" aria-label="Exemples de code">
+            <button role="tab" class="active" data-lang="curl" aria-selected="true">curl</button>
+            <button role="tab" data-lang="js" aria-selected="false">JavaScript</button>
+            <button role="tab" data-lang="python" aria-selected="false">Python</button>
+            <button role="tab" data-lang="docker" aria-selected="false">Docker</button>
+          </div>
+          <div class="code-wrap scroll">
+            <button class="copy-btn" data-copy="#quickCode">copier</button>
+            <pre id="quickCode"></pre>
+          </div>
+        </div>
+
+        <div class="quick-notes">
+          <div class="quick-note">
+            <h4>Réponse binaire par défaut</h4>
+            <p>Sans <code>client_id</code>/<code>pdf_name</code>, le corps de la réponse est le PDF lui-même.</p>
+          </div>
+          <div class="quick-note">
+            <h4>Sauvegarde serveur</h4>
+            <p>Avec les deux champs, la réponse devient <code>{"download_url": …}</code> et le fichier reste servi par le service.</p>
+          </div>
+          <div class="quick-note">
+            <h4>Authentification optionnelle</h4>
+            <p>Si <code>API_KEY</code> est définie, <code>/api/*</code> exige <code>X-API-Key</code>. <code>/api/health</code>, <code>/download</code> et l'endpoint historique restent ouverts.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="home-foot">
+      <div>
+        <strong>md-to-pdf</strong> — fork maintenu par
+        <a href="https://aismarttalk.tech" target="_blank" rel="noopener">AI SmartTalk</a>,
+        d'après le projet original de
+        <a href="https://github.com/Spawnia/md-to-pdf" target="_blank" rel="noopener">Spawnia</a>.
+      </div>
+      <div class="links">
+        <a href="/static/editor.html">éditeur markdown</a>
+        <a href="/static/swagger.yaml" download>swagger.yaml</a>
+        <a href="https://github.com/AI-SmartTalk/md-to-pdf" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ référence API ═══════════════════════════ -->
+<section class="view" id="view-api" aria-label="Référence de l'API">
+  <div class="split" id="apiSplit" data-mobile="list">
+    <aside class="sidebar" aria-label="Liste des endpoints">
+      <div class="sidebar-head">
+        <div class="search">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input id="docSearch" type="search" placeholder="Filtrer les endpoints…" aria-label="Filtrer les endpoints" spellcheck="false">
+        </div>
+      </div>
+      <div class="sidebar-body" id="docNav"></div>
+    </aside>
+
+    <div class="doc-pane" id="docPane">
+      <div class="doc-inner" id="docBody"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ console ═══════════════════════════ -->
+<section class="view" id="view-console" aria-label="Console de test">
+  <div class="console-head">
+    <span class="title">Console</span>
+    <span class="sub">requêtes réelles depuis le navigateur</span>
+    <span class="spacer"></span>
+    <div class="segmented console-switch" id="consoleSwitch" role="tablist" aria-label="Panneau affiché">
+      <button class="seg-nav" data-pane="nav" role="tab">Endpoints</button>
+      <button data-pane="req" class="active" role="tab" aria-selected="true">Requête</button>
+      <button data-pane="res" role="tab" aria-selected="false">Réponse</button>
+    </div>
+  </div>
+
+  <div class="console-split" id="consoleSplit" data-pane="req">
+    <nav class="pane console-nav" aria-label="Endpoints de la console">
+      <div class="pane-head"><h3>Endpoints</h3></div>
+      <div class="pane-body">
+        <div id="endpointList"></div>
+        <div class="saved-head">
+          <h4>PDFs générés</h4>
+          <span class="count" id="savedCount"></span>
+        </div>
+        <ul class="saved-list" id="savedList"></ul>
+      </div>
+    </nav>
+
+    <section class="pane console-req" aria-label="Requête">
+      <div class="pane-head">
+        <div class="req-path">
           <span class="method" id="reqMethod">POST</span>
           <code id="reqPath">/api/convert</code>
         </div>
+        <span class="spacer"></span>
+        <button class="icon-btn" id="resetBtn" title="Réinitialiser le formulaire" aria-label="Réinitialiser le formulaire">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 11a8 8 0 10-2.3 6M20 5v6h-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="pane-body">
         <p class="req-desc" id="reqDesc"></p>
         <form id="form" autocomplete="off"></form>
-        <div class="actions">
-          <button class="btn primary" id="sendBtn">Envoyer <kbd>⌘⏎</kbd></button>
-          <button class="btn" id="resetBtn">Réinitialiser</button>
-          <button class="btn" id="curlBtn">Copier le curl</button>
-        </div>
-      </section>
+      </div>
+      <div class="pane-foot">
+        <button class="btn primary" id="sendBtn">Envoyer <kbd>⌘⏎</kbd></button>
+        <button class="btn sm" id="curlBtn">Copier le curl</button>
+        <span class="spacer"></span>
+        <a class="btn sm ghost" id="docLink" href="#/api">Voir la doc ↗</a>
+      </div>
+    </section>
 
-      <section class="console-res">
+    <button class="gutter" id="gutter" aria-label="Redimensionner les panneaux" tabindex="-1"></button>
+
+    <section class="pane console-res" aria-label="Réponse">
+      <div class="pane-head">
         <div class="res-status">
           <span id="statusBadge" class="badge idle">en attente</span>
           <span class="meta" id="timing"></span>
           <span class="meta" id="size"></span>
           <span class="meta" id="ctype"></span>
         </div>
-        <div class="tabs small" role="tablist">
-          <button role="tab" class="active" data-tab="preview">Aperçu</button>
-          <button role="tab" data-tab="raw">Brut</button>
-          <button role="tab" data-tab="curl">curl</button>
+        <span class="spacer"></span>
+        <div class="segmented" id="resTabs" role="tablist" aria-label="Format de la réponse">
+          <button data-tab="preview" class="active" role="tab" aria-selected="true">Aperçu</button>
+          <button data-tab="raw" role="tab" aria-selected="false">Brut</button>
+          <button data-tab="curl" role="tab" aria-selected="false">curl</button>
         </div>
+      </div>
+      <div class="pane-body">
         <div id="tabPreview" class="res-pane"></div>
         <pre id="tabRaw" class="res-pane" hidden></pre>
         <pre id="tabCurl" class="res-pane" hidden></pre>
-      </section>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ déploiement ═══════════════════════════ -->
+<section class="view scrolls" id="view-deploy" aria-label="Déploiement">
+  <div class="deploy-inner">
+    <header class="section-head">
+      <h2>Déploiement</h2>
+      <p>Une image, un volume, un healthcheck.</p>
+    </header>
+
+    <div class="deploy-grid">
+      <div class="deploy-col">
+        <h3>docker-compose.prod.yml</h3>
+        <div class="code-wrap">
+          <button class="copy-btn" data-copy="#deployCode">copier</button>
+          <pre id="deployCode"></pre>
+        </div>
+      </div>
+
+      <div class="deploy-col">
+        <h3>Configuration</h3>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead><tr><th>Variable</th><th>Défaut</th><th>Rôle</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>API_KEY</code></td><td><em>non définie</em></td>
+                <td class="desc">Si définie, <code>/api/*</code> exige <code>X-API-Key</code> ou <code>Authorization: Bearer</code>. Non définie, l'API reste ouverte.</td>
+              </tr>
+              <tr>
+                <td><code>PDF_PROCESS_TIMEOUT_SECS</code></td><td><code>60</code></td>
+                <td class="desc">Limite de temps pour pandoc, WeasyPrint, qpdf et pdftoppm.</td>
+              </tr>
+              <tr><td><code>RUST_LOG</code></td><td><code>info</code></td><td class="desc">Niveau de log.</td></tr>
+              <tr><td><code>ROCKET_PORT</code></td><td><code>8000</code></td><td class="desc">Port d'écoute.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <div class="callout warn">
+            <strong>À savoir avant d'exposer publiquement.</strong>
+            <code>/api/html-to-pdf</code> et <code>/api/render</code> rendent du HTML arbitraire :
+            WeasyPrint ira chercher les URL que le document référence. Gardez le service sur un
+            réseau privé ou définissez <code>API_KEY</code>.
+          </div>
+
+          <div class="callout">
+            <strong>Persistance.</strong> Les PDFs sauvegardés vivent dans
+            <code>public/pdf/</code>. Le compose de production monte le volume
+            <code>pdf-storage</code> à cet emplacement pour que les <code>download_url</code>
+            survivent à un redéploiement.
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- ─────────────────────────── deploy ───────────────────────────── -->
-<section id="deploy" class="section">
-  <header class="section-head">
-    <h2>Déploiement</h2>
-    <p>Une image, un volume, un healthcheck.</p>
-  </header>
-
-  <div class="deploy-grid">
-    <div class="code-wrap">
-      <button class="copy-btn" data-copy="#deployCode">copier</button>
-      <pre id="deployCode"></pre>
-    </div>
-
-    <div class="conf">
-      <h3>Configuration</h3>
-      <div class="table-wrap">
-      <table class="conf-table">
-        <thead><tr><th>Variable</th><th>Défaut</th><th>Rôle</th></tr></thead>
-        <tbody>
-          <tr>
-            <td><code>API_KEY</code></td><td><em>non définie</em></td>
-            <td>Si définie, <code>/api/*</code> exige <code>X-API-Key</code> ou <code>Authorization: Bearer</code>. Non définie, l'API reste ouverte.</td>
-          </tr>
-          <tr>
-            <td><code>PDF_PROCESS_TIMEOUT_SECS</code></td><td><code>60</code></td>
-            <td>Limite de temps pour pandoc, WeasyPrint, qpdf et pdftoppm.</td>
-          </tr>
-          <tr><td><code>RUST_LOG</code></td><td><code>info</code></td><td>Niveau de log.</td></tr>
-          <tr><td><code>ROCKET_PORT</code></td><td><code>8000</code></td><td>Port d'écoute.</td></tr>
-        </tbody>
-      </table>
-      </div>
-
-      <div class="callout warn">
-        <strong>À savoir avant d'exposer publiquement.</strong>
-        <code>/api/html-to-pdf</code> et <code>/api/render</code> rendent du HTML arbitraire :
-        WeasyPrint ira chercher les URL que le document référence. Gardez le service sur un
-        réseau privé ou définissez <code>API_KEY</code>.
-      </div>
-
-      <div class="callout">
-        <strong>Persistance.</strong> Les PDFs sauvegardés vivent dans
-        <code>public/pdf/</code>. Le compose de production monte le volume
-        <code>pdf-storage</code> à cet emplacement pour que les <code>download_url</code>
-        survivent à un redéploiement.
-      </div>
-    </div>
-  </div>
-</section>
 </main>
 
-<footer class="footer">
-  <div>
-    <strong>md-to-pdf</strong> — fork maintenu par
-    <a href="https://aismarttalk.tech" target="_blank" rel="noopener">AI SmartTalk</a>,
-    d'après le projet original de
-    <a href="https://github.com/Spawnia/md-to-pdf" target="_blank" rel="noopener">Spawnia</a>.
+<!-- ═══════════════════════════ palette ⌘K ═══════════════════════════ -->
+<div class="overlay" id="paletteOverlay" hidden>
+  <div class="palette" role="dialog" aria-modal="true" aria-label="Recherche rapide">
+    <div class="palette-head">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <input id="paletteInput" type="text" placeholder="Aller à un endpoint ou une vue…" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="palette-list" id="paletteList" role="listbox" aria-label="Résultats"></div>
+    <div class="palette-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> naviguer</span>
+      <span><kbd>⏎</kbd> ouvrir</span>
+      <span><kbd>⇧⏎</kbd> tester dans la console</span>
+      <span><kbd>esc</kbd> fermer</span>
+    </div>
   </div>
-  <div class="footer-links">
-    <a href="/static/editor.html">éditeur markdown</a>
-    <a href="/api/health">/api/health</a>
-    <a href="https://github.com/AI-SmartTalk/md-to-pdf" target="_blank" rel="noopener">GitHub</a>
-  </div>
-</footer>
+</div>
 
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="/static/spec.js"></script>
+<script src="/static/ui.js"></script>
+<script src="/static/docs.js"></script>
 <script src="/static/console.js"></script>
+<script src="/static/app.js"></script>
 </body>
 </html>
