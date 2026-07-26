@@ -12,9 +12,21 @@ help: ## Displays this list of targets with descriptions
 dev: dc-build up target/debug serve ## Build, compile and serve in dev mode (hot reload)
 
 .PHONY: prod
-prod: ## Build and run the production image
+prod: .env ## Build and run the production image
 	docker compose -f docker-compose.prod.yml build --pull
 	docker compose -f docker-compose.prod.yml up -d
+
+# Le compose de production refuse de démarrer sans API_KEY : autant expliquer
+# pourquoi ici plutôt que de laisser une erreur de substitution de variable.
+.env:
+	@echo "Aucun .env : copiez .env.example puis renseignez API_KEY."
+	@echo "  cp .env.example .env && sed -i '' \"s|^API_KEY=.*|API_KEY=\$$(openssl rand -hex 32)|\" .env"
+	@exit 1
+
+.PHONY: watchdog-status
+watchdog-status: ## Show the health watchdog state (production host)
+	systemctl status md-to-pdf-watchdog.timer --no-pager || true
+	journalctl -u md-to-pdf-watchdog.service --since today --no-pager | tail -20 || true
 
 .PHONY: prod-down
 prod-down: ## Stop the production container

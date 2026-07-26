@@ -1,0 +1,38 @@
+# Le contexte de build est envoyé au démon Docker à chaque `docker build`.
+# Sans ce fichier il pesait 1,8 Go (target/), et surtout il embarquait les
+# fichiers d'environnement du répertoire de travail.
+
+# Artefacts de compilation — le builder recompile dans l'image
+/target
+/md-to-pdf
+
+# Secrets et environnement : ne doivent jamais entrer dans une image
+.env
+.env.*
+!.env.example
+/credentials
+
+# Git et CI
+.git
+.github
+.gitignore
+.gitattributes
+
+# PDFs générés : ils vivent dans le volume, pas dans l'image
+/public/pdf
+*.pdf
+
+# Développement
+docker-compose.override.yml
+/.idea
+.DS_Store
+**/*.rs.bk
+.bash_history
+/logs
+
+# Documentation et scripts non nécessaires à l'exécution
+Deps.md
+test.sh
+test-blur.sh
+test_api.sh
+install.sh

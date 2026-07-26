@@ -23,7 +23,9 @@ services:
       - ./:/workdir
     tty: true
     ports:
-      - 8000:8000
+      # Boucle locale uniquement, comme en production : un poste de dev sur un
+      # réseau partagé n'a pas à exposer le service.
+      - "127.0.0.1:8000:8000"
     logging:
       driver: "json-file"
       options:

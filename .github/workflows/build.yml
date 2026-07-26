@@ -1,3 +1,5 @@
+name: build
+
 on:
   push:
     branches:
@@ -6,20 +8,82 @@ on:
     branches:
       - master
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  build:
-
+  # Compilation et lint sur le lockfile committé. L'ancienne version lançait
+  # `cargo update` avant de compiler : la CI validait donc des dépendances que
+  # l'image de production n'utilisait pas.
+  check:
+    name: Compilation et lint
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up rust nightly
-      run: |
-        rustup update
-        cargo update
-        rustup override set nightly
+      - name: Installer la toolchain nightly
+        run: |
+          rustup toolchain install nightly --profile minimal --component clippy,rustfmt
+          rustup override set nightly
 
-    - name: Compile
-      run: cargo build --verbose
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Compilation
+        run: cargo build --locked --verbose
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+  # Le test qui compte vraiment : l'image de production démarre, répond, et passe
+  # la suite d'intégration. Un binaire qui compile mais dont l'image n'embarque
+  # ni pandoc ni weasyprint est un déploiement cassé que `cargo build` valide.
+  integration:
+    name: Image de production et suite d'API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construire l'image de production
+        run: docker build -t md-to-pdf:ci .
+
+      - name: Démarrer le service
+        run: |
+          docker run -d --name md-to-pdf-ci \
+            -p 8000:8000 \
+            -e API_KEY=ci-test-key \
+            -e RUST_LOG=info \
+            md-to-pdf:ci
+
+      - name: Attendre la disponibilité
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8000/api/health > /dev/null 2>&1; then
+              curl -s http://127.0.0.1:8000/api/health
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Le service n'est jamais devenu joignable"
+          docker logs md-to-pdf-ci
+          exit 1
+
+      - name: Suite d'intégration
+        env:
+          API_KEY: ci-test-key
+        run: ./test_api.sh http://127.0.0.1:8000
+
+      - name: Logs du service en cas d'échec
+        if: failure()
+        run: docker logs md-to-pdf-ci

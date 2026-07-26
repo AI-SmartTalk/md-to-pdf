@@ -14,6 +14,11 @@
 # Individual
 docker-compose.override.yml
 
+# Environnement : contient API_KEY, généré par install.sh
+.env
+.env.*
+!.env.example
+
 # Generated
 *.pdf
 .bash_history

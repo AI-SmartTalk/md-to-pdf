@@ -1,0 +1,13 @@
+[Unit]
+Description=Déclenche la sonde de santé md-to-pdf toutes les minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+# Évite que plusieurs hôtes sondent en même temps après un redémarrage groupé
+RandomizedDelaySec=10
+AccuracySec=10s
+Unit=md-to-pdf-watchdog.service
+
+[Install]
+WantedBy=timers.target

@@ -110,37 +110,78 @@ curl -X POST http://localhost:8000/api/convert \
 
 ## 🔧 Deployment
 
-Production stack (build, volume for saved PDFs, healthcheck, log rotation):
+### Fresh host
 
 ```bash
-make prod         # docker compose -f docker-compose.prod.yml up -d --build
-make logs-prod    # follow the logs
-make prod-down    # stop
+git clone git@github.com:AI-SmartTalk/md-to-pdf.git /opt/md-to-pdf
+cd /opt/md-to-pdf
+./install.sh
 ```
 
-`./install.sh` provisions a fresh Debian/Ubuntu host end to end (Docker, NGINX, network,
-build, health check).
+`install.sh` is idempotent and does the whole job: Docker Engine + Compose (enabled at
+boot), the `ai-toolkit-network` network, a `.env` with a freshly generated `API_KEY`, the
+production stack, a systemd watchdog and a nightly PDF purge. It prints the generated key
+once — write it down, it is what clients authenticate with.
+
+It deliberately does **not** install a reverse proxy: the host usually already runs one.
+Ready-made vhosts sit in `deploy/` — `nginx-md-to-pdf.conf` and `apache-md-to-pdf.conf`,
+both with body-size and timeout limits aligned on the service.
+
+### Day to day
+
+```bash
+make prod         # build and start
+make logs-prod    # follow the logs
+make prod-down    # stop
+make check        # cargo check + clippy
+make dev          # dev containers with hot reload
+```
+
+### Staying up
+
+| Failure                          | What catches it                                                      |
+|----------------------------------|----------------------------------------------------------------------|
+| Process crashes                  | `restart: unless-stopped` — Docker restarts it immediately           |
+| Host reboots                     | `systemctl enable docker` + the same restart policy                  |
+| Service hangs but does not exit  | `md-to-pdf-watchdog.timer` — probes `/api/health` every minute, restarts after 3 consecutive failures |
+| Disk fills with generated PDFs   | `md-to-pdf-purge.timer` — nightly, drops PDFs older than `PDF_RETENTION_DAYS` |
+| A document eats all the RAM      | `mem_limit`, `cpus` and `pids_limit` on the container                |
+
+The watchdog exists because Docker Compose does nothing with a failing healthcheck: a
+frozen container stays `up (unhealthy)` and keeps taking traffic forever. It runs on the
+host rather than in a container, so the Docker socket is never exposed.
+
+```bash
+systemctl status md-to-pdf-watchdog.timer
+journalctl -u md-to-pdf-watchdog.service --since today
+```
 
 ### Configuration
 
-| Variable                   | Default | Description                                                          |
-|----------------------------|---------|----------------------------------------------------------------------|
-| `API_KEY`                  | *unset* | When set, `/api/*` requires `X-API-Key` or `Authorization: Bearer`. Unset keeps the API open. |
-| `PDF_PROCESS_TIMEOUT_SECS` | `60`    | Wall-clock limit for pandoc / weasyprint / qpdf / pdftoppm            |
-| `RUST_LOG`                 | `info`  | Log level                                                            |
+Copy `.env.example` to `.env` (or let `install.sh` generate it).
+
+| Variable                   | Default   | Description                                                          |
+|----------------------------|-----------|----------------------------------------------------------------------|
+| `API_KEY`                  | *required* | Closes `/api/*`: clients send `X-API-Key` or `Authorization: Bearer`. The production compose file **refuses to start** without it. |
+| `PDF_PROCESS_TIMEOUT_SECS` | `60`      | Wall-clock limit for pandoc / weasyprint / qpdf / pdftoppm            |
+| `RUST_LOG`                 | `info`    | Log level                                                            |
+| `MEM_LIMIT` / `CPUS`       | `1g` / `2.0` | Container resource ceiling                                        |
+| `PDF_RETENTION_DAYS`       | `180`     | Age past which the purge deletes saved PDFs                          |
+
+> ⚠️ The legacy `POST /` endpoint is **not** covered by `API_KEY` — it never was, by design,
+> so existing FormData integrations keep working. Anyone who can reach the service can
+> still generate a PDF through it. Migrate callers to `POST /api/convert` with a key, or
+> block `POST /` at the reverse proxy, if that matters to you.
 
 > ⚠️ `/api/html-to-pdf` and `/api/render` render arbitrary HTML: WeasyPrint will fetch any
-> URL the document references. Keep the service on a private network or set `API_KEY`.
+> URL the document references.
 
-Saved PDFs live in `public/pdf/` inside the container — the production compose file mounts
-the `pdf-storage` volume there so `download_url`s survive a redeploy.
+The container publishes on `127.0.0.1:8000` only — never on `0.0.0.0`, since Docker writes
+its own iptables rules and would bypass the host firewall along with the proxy's TLS.
 
-For local development:
-
-```bash
-make dev          # build, compile and serve with the dev containers
-make check        # cargo check + clippy
-```
+Saved PDFs live in `public/pdf/` inside the container; the `pdf-storage` volume is mounted
+there so `download_url`s survive a redeploy. The volume itself is not backed up — add it to
+the host's backup scope if those links must outlive the machine.
 
 ## 🌐 Web Interface
 

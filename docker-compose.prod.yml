@@ -3,26 +3,42 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: md-to-pdf:local
+    container_name: md-to-pdf
     ports:
-      - 8000:8000
+      # Écoute uniquement sur la boucle locale : le service est joignable par le
+      # reverse proxy de l'hôte, jamais directement depuis Internet. Sans ce
+      # préfixe, Docker publie sur toutes les interfaces et court-circuite le TLS
+      # du proxy — la règle de pare-feu de l'hôte n'y change rien, Docker écrit
+      # ses propres règles dans iptables.
+      - "127.0.0.1:8000:8000"
     restart: unless-stopped
     environment:
-      # Set API_KEY to close the /api endpoints (X-API-Key or Authorization: Bearer).
-      # Left empty, the API stays open — same behaviour as before.
-      API_KEY: "${API_KEY:-}"
-      # Wall-clock limit for pandoc / weasyprint / qpdf
+      # Obligatoire : sans clé, /api/* est ouvert à quiconque atteint le service.
+      # La forme `:?` fait échouer `docker compose up` plutôt que de démarrer une
+      # instance non protégée. install.sh en génère une si le .env est vide.
+      API_KEY: "${API_KEY:?API_KEY est obligatoire — voir .env.example}"
+      # Limite de temps pour pandoc / weasyprint / qpdf / pdftoppm
       PDF_PROCESS_TIMEOUT_SECS: "${PDF_PROCESS_TIMEOUT_SECS:-60}"
       RUST_LOG: "${RUST_LOG:-info}"
     volumes:
-      # Saved PDFs must survive a redeploy, otherwise every download_url already handed
-      # out turns into a 404.
+      # Les PDFs sauvegardés doivent survivre à un redéploiement, sinon chaque
+      # download_url déjà distribué devient un 404.
       - pdf-storage:/home/rocket/public/pdf
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
       interval: 30s
       timeout: 5s
-      start_period: 10s
+      # La première conversion charge pandoc et les polices : laisser le temps
+      # au conteneur de se poser avant de le déclarer malade.
+      start_period: 20s
       retries: 3
+    # Un document pathologique ne doit pas emporter la machine avec lui :
+    # WeasyPrint et pdflatex peuvent consommer beaucoup sur un gros document.
+    mem_limit: "${MEM_LIMIT:-1g}"
+    cpus: ${CPUS:-2.0}
+    pids_limit: 256
+    stop_grace_period: 30s
     logging:
       driver: "json-file"
       options:
