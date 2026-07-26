@@ -1,0 +1,18 @@
+{
+  "label": "Minimal",
+  "description": "Sobre et très lisible : une seule famille sans-serif, aucun aplat de couleur, aucun cadre, hiérarchie portée par la taille et le blanc.",
+  "author": "AI SmartTalk",
+  "fonts": [
+    "TeX Gyre Heros",
+    "DejaVu Sans Mono"
+  ],
+  "colors": {
+    "ink": "#121212",
+    "ink-dim": "#3a3a3a",
+    "ink-faint": "#6a6a6a",
+    "line": "#c4c4c4",
+    "line-soft": "#dcdcdc",
+    "surface": "#f7f7f7",
+    "surface-2": "#f2f2f2"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "label": "Rapport",
+  "description": "Rapport corporate dense : corps sérif, titres sans-serif numérotés automatiquement, tableaux à en-tête foncé tenu d'une page à l'autre, encadrés et notes de bas de page.",
+  "author": "AI SmartTalk",
+  "fonts": [
+    "TeX Gyre Pagella",
+    "TeX Gyre Heros",
+    "DejaVu Sans Mono"
+  ],
+  "colors": {
+    "accent": "#1f3b63",
+    "danger": "#9d2a27",
+    "ink": "#1a1f29",
+    "ink-dim": "#3c4757",
+    "ink-faint": "#5a6577",
+    "line": "#c9d2dd",
+    "line-soft": "#dde3ea",
+    "success": "#17694d",
+    "surface": "#f7f9fb",
+    "surface-2": "#f0f3f7",
+    "title": "#16243a",
+    "warning": "#8a5a00"
+  }
+}
