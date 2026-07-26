@@ -82,20 +82,24 @@ const Access = (() => {
     else if (!$("#keyState").classList.contains("ok")) setStatus("", "token enregistré — non vérifié");
   }
 
+  // Un token collé arrive souvent avec une espace ou un retour à la ligne. Il
+  // est nettoyé ici plutôt qu'à chaque usage : la vérification nettoyait sa
+  // copie, les requêtes de la console non — la clé passait le test puis
+  // échouait en 401 sur les vrais appels.
   function setKey(value, quiet) {
-    state.apiKey = value;
+    state.apiKey = String(value).trim();
     persist();
     refresh();
-    if (!quiet && value.trim()) toast("Token enregistré dans ce navigateur");
+    if (!quiet && state.apiKey) toast("Token enregistré dans ce navigateur");
   }
 
   // Aucun endpoint « ping authentifié » n'existe : on génère le plus petit PDF
   // possible et on lit le statut. 401 = clé refusée, 200 = clé acceptée.
   async function verify() {
-    const key = state.apiKey.trim();
+    const key = state.apiKey;
     if (!key) { setStatus("err", "renseignez d'abord un token"); return; }
 
-    setStatus("", "vérification…");
+    setStatus("", "vérification sur " + apiBase() + "…");
     $("#verifyKeyBtn").disabled = true;
     try {
       const res = await fetch(apiBase() + "/api/convert", {
@@ -103,9 +107,9 @@ const Access = (() => {
         headers: { "Content-Type": "application/json", "X-API-Key": key },
         body: JSON.stringify({ markdown: "# ping" }),
       });
-      if (res.status === 401) setStatus("err", "401 — token refusé par le service");
-      else if (res.ok) setStatus("ok", "✓ token valide");
-      else setStatus("err", res.status + " — le service a répondu une erreur");
+      if (res.status === 401) setStatus("err", "401 — token refusé par " + apiBase());
+      else if (res.ok) setStatus("ok", "✓ token valide sur " + apiBase());
+      else setStatus("err", res.status + " — erreur renvoyée par " + apiBase());
     } catch (e) {
       setStatus("err", "service injoignable : " + e.message);
     } finally {
@@ -115,9 +119,9 @@ const Access = (() => {
 
   // Appelé par la console quand une requête revient en 401.
   function flag401() {
-    setStatus("err", "401 — token absent ou refusé");
+    setStatus("err", "401 — token absent ou refusé par " + apiBase());
     $("#keyAlert").hidden = false;
-    toast("401 — token absent ou refusé. Demandez-en un sur la page Accès.", "err");
+    toast("401 sur " + apiBase() + " — token absent ou refusé.", "err");
   }
 
   function initPopover() {
