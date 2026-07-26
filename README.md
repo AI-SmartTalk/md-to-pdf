@@ -321,12 +321,19 @@ it from the private key with `ssh-keygen -y -f <keyfile>`, or read it from the
 workflow log: the *Vérifier l'accès SSH* step prints the loaded public key when the
 connection is refused, along with what to check.
 
-`PDF_ENV` is the source of truth for the **whole** production `.env`, not just the key: the
-workflow overwrites the file on every deployment. A variable you add by hand to `/opt/md-to-pdf/.env`
-on the VPS works until the next merge to `master`, then silently disappears — this has
-already cost a debugging session. Add it to the `PDF_ENV` secret, always. The workflow
-refuses to run if `PDF_ENV` does not contain a non-empty `API_KEY=`, since writing it as-is
-would take the service down.
+| Secret (optional)      | Purpose                                                    |
+|------------------------|------------------------------------------------------------|
+| `LOG420_INGEST_TOKEN`  | Appended to `.env` when the key is absent from `PDF_ENV`. Without it the service runs normally and observability stays local. |
+
+`PDF_ENV` is the source of truth for the keys it **carries**, and the workflow refuses to
+run if it does not contain a non-empty `API_KEY=`, since writing it as-is would take the
+service down. Keys it does not carry are read from the `.env` already on the VPS and
+carried over, so nothing set once is ever lost — the previous behaviour overwrote the file
+wholesale and a variable added by hand disappeared at the next merge to `master`, which
+already cost a debugging session.
+
+Deploying twice in a row therefore yields a byte-identical `.env`, and a fresh host with no
+`.env` at all works the same way. No manual step is required on any deployment.
 
 Every variable in `.env.example` has a default in `docker-compose.prod.yml` except
 `API_KEY`, so a `.env` written before this version keeps working untouched: nothing new is
