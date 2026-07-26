@@ -110,7 +110,43 @@ curl -X POST http://localhost:8000/api/convert \
 
 ## 🔧 Deployment
 
-### Fresh host
+### Continuous deployment
+
+Every merge to `master` deploys to production. The workflow SSHes into the VPS,
+syncs the repository to the merged commit, writes `.env` from a secret, then runs
+`deploy/bootstrap.sh` — which builds, switches over, waits for the health probe and
+**rolls back to the previous image if the new one does not answer**.
+
+Configure once, in *Settings → Secrets and variables → Actions*:
+
+| Secret          | Content                                                        |
+|-----------------|----------------------------------------------------------------|
+| `PDF_SSH_KEY`   | Private SSH key with access to the VPS                          |
+| `PDF_SSH_HOST`  | VPS host or IP                                                  |
+| `PDF_SSH_USER`  | SSH user                                                        |
+| `PDF_ENV`       | Full contents of the production `.env`, `API_KEY` included      |
+
+| Variable (optional) | Default          | Purpose                                    |
+|---------------------|------------------|--------------------------------------------|
+| `PDF_DEPLOY_PATH`   | `/opt/md-to-pdf` | Where the repository lives on the VPS      |
+| `PDF_PUBLIC_URL`    | *unset*          | Public URL — when set, the workflow checks `/api/health` through the proxy after deploying |
+
+`PDF_ENV` is the source of truth for the production key: it overwrites `.env` on
+every deployment. The workflow refuses to run if it does not contain a non-empty
+`API_KEY=`, since writing it as-is would take the service down.
+
+`deploy/bootstrap.sh` is idempotent and makes no assumption about the machine: it
+clones the repository if missing, creates the network if absent, reinstalls the
+systemd units, prunes dangling images. Running it by hand on the VPS is equivalent
+to a deployment:
+
+```bash
+cd /opt/md-to-pdf && ./deploy/bootstrap.sh
+```
+
+### First host
+
+Only needed once, on a machine that has never run the service:
 
 ```bash
 git clone git@github.com:AI-SmartTalk/md-to-pdf.git /opt/md-to-pdf

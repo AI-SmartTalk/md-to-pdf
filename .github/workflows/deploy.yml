@@ -1,0 +1,140 @@
+name: deploy
+
+# Tout merge sur master part en production. Le workflow est rejouable à
+# l'identique : `workflow_dispatch` permet de redéployer l'état courant de
+# master sans nouveau commit.
+#
+# Secrets attendus (Settings → Secrets and variables → Actions) :
+#   PDF_SSH_KEY   clé privée SSH ayant accès au VPS
+#   PDF_SSH_HOST  hôte ou IP du VPS
+#   PDF_SSH_USER  utilisateur SSH
+#   PDF_ENV       contenu intégral du .env de production, API_KEY comprise
+# Variable optionnelle :
+#   PDF_DEPLOY_PATH  chemin du dépôt sur le VPS (défaut : /opt/md-to-pdf)
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-md-to-pdf
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Déploiement en production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Un secret manquant doit arrêter le workflow avant qu'il ne touche au
+      # VPS, pas au milieu d'un déploiement à moitié appliqué.
+      - name: Vérifier les secrets
+        env:
+          PDF_SSH_KEY: ${{ secrets.PDF_SSH_KEY }}
+          PDF_SSH_HOST: ${{ secrets.PDF_SSH_HOST }}
+          PDF_SSH_USER: ${{ secrets.PDF_SSH_USER }}
+          PDF_ENV: ${{ secrets.PDF_ENV }}
+        run: |
+          missing=""
+          [ -n "$PDF_SSH_KEY" ]  || missing="$missing PDF_SSH_KEY"
+          [ -n "$PDF_SSH_HOST" ] || missing="$missing PDF_SSH_HOST"
+          [ -n "$PDF_SSH_USER" ] || missing="$missing PDF_SSH_USER"
+          [ -n "$PDF_ENV" ]      || missing="$missing PDF_ENV"
+          if [ -n "$missing" ]; then
+            echo "Secrets manquants :$missing"
+            exit 1
+          fi
+          # PDF_ENV écrase le .env du VPS : un contenu sans API_KEY couperait
+          # le service au redémarrage suivant. On refuse avant d'y toucher.
+          if ! printf '%s' "$PDF_ENV" | grep -qE '^API_KEY=.+'; then
+            echo "PDF_ENV ne contient pas de ligne API_KEY=<valeur non vide>."
+            echo "Écrire ce secret en l'état couperait la production."
+            exit 1
+          fi
+          echo "Secrets présents et cohérents."
+
+      - name: Préparer SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PDF_SSH_KEY }}
+
+      - name: Enregistrer la clé d'hôte
+        env:
+          HOST: ${{ secrets.PDF_SSH_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Le dépôt est cloné s'il est absent, mis à jour sinon : le même workflow
+      # sert pour un VPS vierge et pour celui qui tourne déjà.
+      - name: Synchroniser le dépôt sur le VPS
+        env:
+          HOST: ${{ secrets.PDF_SSH_HOST }}
+          USER: ${{ secrets.PDF_SSH_USER }}
+          DEPLOY_PATH: ${{ vars.PDF_DEPLOY_PATH || '/opt/md-to-pdf' }}
+          DEPLOY_REF: ${{ github.sha }}
+          REPO_URL: https://github.com/${{ github.repository }}.git
+        run: |
+          ssh -o StrictHostKeyChecking=no "$USER@$HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH' DEPLOY_REF='$DEPLOY_REF' REPO_URL='$REPO_URL' bash -s" << 'EOF'
+            set -euo pipefail
+
+            if [ ! -d "$DEPLOY_PATH/.git" ]; then
+              echo "Premier déploiement : clonage dans $DEPLOY_PATH"
+              sudo mkdir -p "$DEPLOY_PATH"
+              sudo chown "$(id -u):$(id -g)" "$DEPLOY_PATH"
+              git clone "$REPO_URL" "$DEPLOY_PATH"
+            fi
+
+            cd "$DEPLOY_PATH"
+            git fetch --tags --force origin
+            # --detach sur le SHA exact : l'état du VPS est celui du commit
+            # déployé, sans dépendre de la branche locale. Les fichiers non
+            # suivis (.env) ne sont pas touchés par un checkout.
+            git checkout --detach "$DEPLOY_REF"
+            echo "Dépôt synchronisé sur $DEPLOY_REF"
+          EOF
+
+      # Écrit APRÈS le checkout : le .env n'est pas suivi par git, un checkout
+      # ne l'écrase pas, mais l'ordre inverse resterait fragile.
+      - name: Écrire le .env depuis PDF_ENV
+        env:
+          HOST: ${{ secrets.PDF_SSH_HOST }}
+          USER: ${{ secrets.PDF_SSH_USER }}
+          DEPLOY_PATH: ${{ vars.PDF_DEPLOY_PATH || '/opt/md-to-pdf' }}
+          PDF_ENV: ${{ secrets.PDF_ENV }}
+        run: |
+          printf '%s' "$PDF_ENV" \
+            | ssh "$USER@$HOST" "umask 077 && cat > '$DEPLOY_PATH/.env'"
+          echo ".env écrit."
+
+      - name: Déployer
+        env:
+          HOST: ${{ secrets.PDF_SSH_HOST }}
+          USER: ${{ secrets.PDF_SSH_USER }}
+          DEPLOY_PATH: ${{ vars.PDF_DEPLOY_PATH || '/opt/md-to-pdf' }}
+        run: |
+          ssh -o StrictHostKeyChecking=no "$USER@$HOST" \
+            "cd '$DEPLOY_PATH' && chmod +x deploy/*.sh && ./deploy/bootstrap.sh"
+
+      # bootstrap.sh vérifie déjà la santé et revient en arrière en cas d'échec.
+      # Cette étape confirme depuis l'extérieur du VPS, à travers le proxy, ce
+      # que les clients verront réellement.
+      - name: Vérifier le service publiquement
+        if: ${{ vars.PDF_PUBLIC_URL != '' }}
+        env:
+          PUBLIC_URL: ${{ vars.PDF_PUBLIC_URL }}
+        run: |
+          for _ in $(seq 1 10); do
+            if curl -fsS -m 10 "$PUBLIC_URL/api/health"; then
+              echo
+              echo "Service joignable publiquement."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Le service ne répond pas sur $PUBLIC_URL — vérifier le reverse proxy."
+          exit 1

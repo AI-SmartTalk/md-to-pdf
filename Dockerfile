@@ -1,9 +1,22 @@
-FROM rustlang/rust:nightly-bookworm-slim as builder
+FROM rustlang/rust:nightly-bookworm-slim AS builder
 
 WORKDIR /usr/src/md-to-pdf
-COPY . .
 
-RUN cargo install --path . --locked
+# Les dépendances sont compilées dans leur propre couche, avant que le code du
+# projet n'entre dans l'image. Sans cette séparation, `COPY . .` invalidait tout
+# dès qu'un fichier changeait — modifier une ligne de CSS recompilait Rocket et
+# ses 300 crates, soit ~8 minutes à chaque déploiement.
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src \
+ && echo 'fn main() {}' > src/main.rs \
+ && cargo build --release --locked \
+ && rm -rf src
+
+COPY src ./src
+# cargo ne recompile que ce dont l'empreinte a changé : toucher le binaire
+# du projet force sa recompilation sans repartir des dépendances.
+RUN touch src/main.rs \
+ && cargo install --path . --locked
 
 FROM debian:12-slim
 
