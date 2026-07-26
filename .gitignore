@@ -1,6 +1,9 @@
 # IDE
 /.idea
 
+# OS
+.DS_Store
+
 # Compiled
 /target
 /md-to-pdf
@@ -11,7 +14,14 @@
 # Individual
 docker-compose.override.yml
 
+# Environnement : contient API_KEY, généré par install.sh
+.env
+.env.*
+!.env.example
+
 # Generated
 *.pdf
 .bash_history
-/templates/*.html
+
+# Generated PDFs served by /download
+/public/pdf/

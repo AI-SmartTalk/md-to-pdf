@@ -1,0 +1,9 @@
+[Unit]
+Description=Purge des PDFs md-to-pdf au-delà de la rétention
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/opt/md-to-pdf/.env
+ExecStart=/opt/md-to-pdf/deploy/pdf-purge.sh

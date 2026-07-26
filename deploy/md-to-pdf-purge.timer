@@ -1,0 +1,11 @@
+[Unit]
+Description=Déclenche la purge des PDFs md-to-pdf chaque nuit
+
+[Timer]
+OnCalendar=*-*-* 04:17:00
+Persistent=true
+RandomizedDelaySec=15min
+Unit=md-to-pdf-purge.service
+
+[Install]
+WantedBy=timers.target

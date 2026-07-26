@@ -3,4 +3,8 @@ address = "0.0.0.0"
 
 # https://rocket.rs/guide/v0.5/configuration/#limits
 [default.limits]
-forms = "128KiB"
+# Aligned with the JSON limit: the legacy FormData endpoint accepts the same document sizes
+# as /api/convert.
+forms = "10MiB"
+data-form = "10MiB"
+json = "10MiB"

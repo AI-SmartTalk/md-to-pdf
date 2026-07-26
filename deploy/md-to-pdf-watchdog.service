@@ -1,0 +1,11 @@
+[Unit]
+Description=Sonde de santé md-to-pdf et redémarrage si le service est figé
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/opt/md-to-pdf/.env
+Environment=COMPOSE_FILE=/opt/md-to-pdf/docker-compose.prod.yml
+Environment=HEALTH_URL=http://127.0.0.1:8000/api/health
+ExecStart=/opt/md-to-pdf/deploy/md-to-pdf-watchdog.sh

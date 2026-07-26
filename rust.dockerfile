@@ -1,3 +1,3 @@
-FROM rustlang/rust:nightly-slim
+FROM rustlang/rust:nightly-bookworm-slim
 
-RUN rustup component add rustfmt
+RUN rustup component add rustfmt clippy
