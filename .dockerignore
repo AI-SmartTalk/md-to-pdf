@@ -20,7 +20,11 @@
 
 # PDFs générés : ils vivent dans le volume, pas dans l'image
 /public/pdf
+/public/cache
 *.pdf
+
+# Banc d'essai du Layout Doctor : se lance depuis le dépôt, pas depuis l'image
+/tests
 
 # Développement
 docker-compose.override.yml
