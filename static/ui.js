@@ -15,9 +15,9 @@ const escapeHtml = (s) =>
 const pretty = (obj) => JSON.stringify(obj, null, 2);
 
 function formatBytes(n) {
-  if (n < 1024) return n + " o";
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " Ko";
-  return (n / (1024 * 1024)).toFixed(1) + " Mo";
+  if (n < 1024) return n + " " + k("bytes.b");
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " " + k("bytes.kb");
+  return (n / (1024 * 1024)).toFixed(1) + " " + k("bytes.mb");
 }
 
 // ══════════════════════════════════════════════════════════ état persistant
@@ -89,8 +89,8 @@ function toast(message, kind) {
 
 function copyText(text, okMessage) {
   return navigator.clipboard.writeText(text).then(
-    () => toast(okMessage || "Copié dans le presse-papier"),
-    () => toast("Copie impossible — le presse-papier est bloqué", "err")
+    () => toast(okMessage || k("copy.ok")),
+    () => toast(k("copy.fail"), "err")
   );
 }
 
@@ -137,7 +137,7 @@ function initCopyButtons() {
     if (!target) return;
     copyText(target.dataset.raw || target.textContent).then(() => {
       const old = btn.textContent;
-      btn.textContent = "copié ✓";
+      btn.textContent = k("guides.copied");
       setTimeout(() => (btn.textContent = old), 1400);
     });
   });

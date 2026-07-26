@@ -1,17 +1,17 @@
 <!DOCTYPE html>
-<html lang="fr" data-theme="dark">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>md-to-pdf — Moteur de documents PDF</title>
-<meta name="description" content="Service de génération PDF : Markdown, HTML et templates Tera vers PDF, preview PNG, fusion, filigrane et protection par mot de passe. Documentation et console de test intégrées.">
+<title>md-to-pdf — PDF document engine</title>
+<meta name="description" content="PDF generation service: Markdown, HTML and Tera templates to PDF, PNG preview, merge, watermark and password protection. Guides, API reference and test console included.">
 <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
 <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
 
-<a class="skip-link" href="#app">Aller au contenu</a>
+<a class="skip-link" href="#app" data-i18n="chrome.skip">Skip to content</a>
 
 <!-- ═══════════════════════════ topbar ═══════════════════════════ -->
 <header class="topbar">
@@ -25,26 +25,32 @@
     <span class="ver" id="brandVersion">—</span>
   </a>
 
-  <nav class="topnav" id="topnav" aria-label="Navigation principale">
-    <a href="#/" data-route="home">Accueil</a>
-    <a href="#/api" data-route="api">Référence API</a>
-    <a href="#/console" data-route="console">Console</a>
-    <a href="#/acces" data-route="acces">Accès</a>
+  <nav class="topnav" id="topnav" aria-label="Main navigation">
+    <a href="#/" data-route="home" data-i18n="nav.home">Home</a>
+    <a href="#/guides" data-route="guides" data-i18n="nav.guides">Guides</a>
+    <a href="#/api" data-route="api" data-i18n="nav.api">API reference</a>
+    <a href="#/console" data-route="console" data-i18n="nav.console">Console</a>
+    <a href="#/acces" data-route="acces" data-i18n="nav.acces">Access</a>
   </nav>
 
   <div class="topbar-right">
-    <button class="cmdk-hint" id="cmdkBtn" aria-label="Rechercher un endpoint">
+    <button class="cmdk-hint" id="cmdkBtn" data-i18n-aria="chrome.search.aria" aria-label="Search an endpoint or a guide">
       <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      Rechercher
+      <span data-i18n="chrome.search">Search</span>
       <kbd>⌘K</kbd>
     </button>
 
-    <button class="health" id="healthPill" title="Statut du service — cliquer pour retester">
+    <div class="segmented lang-switch" id="langSwitch" role="group" data-i18n-aria="chrome.lang.aria" aria-label="Language">
+      <button data-lang="en" type="button">EN</button>
+      <button data-lang="fr" type="button">FR</button>
+    </div>
+
+    <button class="health" id="healthPill" data-i18n-title="chrome.health.title" title="Service status — click to test again">
       <span class="dot" id="healthDot"></span>
-      <span id="healthText">connexion…</span>
+      <span id="healthText" data-i18n="chrome.health.connecting">connecting…</span>
     </button>
 
-    <button id="settingsToggle" class="icon-btn key-btn" aria-label="Clé d'API et base URL" aria-expanded="false" title="Clé d'API et base URL">
+    <button id="settingsToggle" class="icon-btn key-btn" data-i18n-aria="chrome.key.aria" data-i18n-title="chrome.key.aria" aria-expanded="false" aria-label="API key and base URL" title="API key and base URL">
       <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="8" cy="12" r="4"/>
         <path d="M12 12h9M18 12v3.5M15 12v2.5"/>
@@ -52,88 +58,87 @@
       <span class="need-key" id="keyAlert" hidden></span>
     </button>
 
-    <button id="themeToggle" class="icon-btn" aria-label="Basculer le thème clair / sombre" title="Thème clair / sombre">
+    <button id="themeToggle" class="icon-btn" data-i18n-aria="chrome.theme.aria" data-i18n-title="chrome.theme.aria" aria-label="Toggle light / dark theme" title="Toggle light / dark theme">
       <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path id="themeIcon" fill="currentColor" d="M12 3a9 9 0 109 9 7 7 0 01-9-9z"/></svg>
     </button>
   </div>
 </header>
 
-<!-- clé d'API et base URL, communes à toutes les vues -->
+<!-- API key and base URL, shared by every view -->
 <div class="popover" id="settingsPanel" hidden>
-  <h3>Clé d'API</h3>
+  <h3 data-i18n="settings.title">API key</h3>
   <div class="field">
-    <label for="apiKey">token</label>
+    <label for="apiKey" data-i18n="settings.token">token</label>
     <div class="row">
-      <input id="apiKey" type="password" placeholder="collez votre token" autocomplete="off">
-      <button class="btn sm" id="pasteKeyBtn" title="Coller depuis le presse-papier">Coller</button>
+      <input id="apiKey" type="password" data-i18n-placeholder="settings.token.ph" placeholder="paste your token" autocomplete="off">
+      <button class="btn sm" id="pasteKeyBtn" data-i18n-title="settings.paste.title" data-i18n="settings.paste" title="Paste from the clipboard">Paste</button>
     </div>
   </div>
   <div class="row">
-    <button class="btn sm primary" id="verifyKeyBtn">Vérifier la clé</button>
-    <button class="btn sm ghost" id="clearKeyBtn">Effacer</button>
+    <button class="btn sm primary" id="verifyKeyBtn" data-i18n="settings.verify">Verify the key</button>
+    <button class="btn sm ghost" id="clearKeyBtn" data-i18n="settings.clear">Clear</button>
   </div>
   <p class="key-state" id="keyState"></p>
 
   <details class="adv">
-    <summary>base URL</summary>
+    <summary data-i18n="settings.baseurl">base URL</summary>
     <input id="baseUrl" type="text" spellcheck="false" autocomplete="off">
     <div class="row" style="margin-top:8px">
-      <button class="btn sm" id="pingBtn">Tester le service</button>
+      <button class="btn sm" id="pingBtn" data-i18n="settings.ping">Test the service</button>
       <span class="meta" id="settingsStatus"></span>
     </div>
   </details>
 
-  <p class="note">
-    Token et base URL restent dans ce navigateur (<code>localStorage</code>) et ne sont
-    jamais recopiés dans les exemples de code. Pas de token ?
-    <a href="#/acces">Demandez-en un</a>.
+  <p class="note" data-i18n="settings.note">
+    Token and base URL stay in this browser (<code>localStorage</code>) and are never
+    copied into the code examples. No token? <a href="#/acces">Ask for one</a>.
   </p>
 </div>
 
 <main id="app" tabindex="-1">
 
-<!-- ═══════════════════════════ accueil ═══════════════════════════ -->
-<section class="view scrolls" id="view-home" aria-label="Accueil">
+<!-- ═══════════════════════════ home ═══════════════════════════ -->
+<section class="view scrolls" id="view-home" data-i18n-aria="nav.home" aria-label="Home">
   <div class="hero">
     <div class="hero-glow" aria-hidden="true"></div>
     <div class="wrap">
       <div>
-        <p class="eyebrow">Service interne AI SmartTalk · Rust · pandoc · WeasyPrint</p>
-        <h1>Un moteur de documents<br><span class="grad">pour nos produits</span></h1>
-        <p class="lede">
-          Markdown, HTML ou templates Tera en entrée. PDF paginé, preview PNG, fusion,
-          filigrane et chiffrement AES-256 en sortie. Une seule API JSON, un seul conteneur.
+        <p class="eyebrow" data-i18n="home.eyebrow">AI SmartTalk internal service · Rust · pandoc · WeasyPrint</p>
+        <h1 data-i18n="home.title">A document engine<br><span class="grad">for our products</span></h1>
+        <p class="lede" data-i18n="home.lede">
+          Markdown, HTML or Tera templates in. Paginated PDF, PNG preview, merge,
+          watermark and AES-256 encryption out. One JSON API, one container.
         </p>
-        <p class="lede small">
-          L'API est réservée aux équipes et projets AI SmartTalk : chaque appel demande un
-          token. <a href="#/acces">Demander un accès</a>.
+        <p class="lede small" data-i18n="home.lede.small">
+          The API serves AI SmartTalk teams and products: every call needs a token.
+          <a href="#/acces">Request access</a>.
         </p>
 
         <div class="hero-cta">
-          <a class="btn primary lg" href="#/console">Ouvrir la console</a>
-          <a class="btn lg" href="#/api">Lire la référence API</a>
+          <a class="btn primary lg" href="#/console" data-i18n="home.cta.console">Open the console</a>
+          <a class="btn lg" href="#/guides" data-i18n="home.cta.guides">Read the guides</a>
         </div>
 
         <div class="hero-stats">
-          <div class="stat"><span class="stat-value" id="statVersion">—</span><span class="stat-label">version</span></div>
-          <div class="stat"><span class="stat-value" id="statEndpoints">—</span><span class="stat-label">endpoints</span></div>
-          <div class="stat"><span class="stat-value" id="statEngines">—</span><span class="stat-label">moteurs PDF</span></div>
-          <div class="stat"><span class="stat-value" id="statStatus">—</span><span class="stat-label">statut</span></div>
+          <div class="stat"><span class="stat-value" id="statVersion">—</span><span class="stat-label" data-i18n="home.stat.version">version</span></div>
+          <div class="stat"><span class="stat-value" id="statEndpoints">—</span><span class="stat-label" data-i18n="home.stat.endpoints">endpoints</span></div>
+          <div class="stat"><span class="stat-value" id="statEngines">—</span><span class="stat-label" data-i18n="home.stat.engines">PDF engines</span></div>
+          <div class="stat"><span class="stat-value" id="statStatus">—</span><span class="stat-label" data-i18n="home.stat.status">status</span></div>
         </div>
       </div>
 
       <div class="pipeline" aria-hidden="true">
         <div class="pipe-card in">
-          <div class="pipe-head"><span class="chip">entrée</span> document.md</div>
-<pre class="pipe-body"><span class="tok-h"># Rapport 2026</span>
+          <div class="pipe-head"><span class="chip" data-i18n="home.pipe.in">input</span> document.md</div>
+<pre class="pipe-body"><span class="tok-h"># Report 2026</span>
 
-Chiffre d'affaires en <span class="tok-b">hausse</span>.
+Revenue is <span class="tok-b">up</span>.
 
 <span class="tok-c">{{CENSOR}}</span>
 
-| Trimestre | CA   |
-|-----------|------|
-| T1        | 1.2M |</pre>
+| Quarter | Rev. |
+|---------|------|
+| Q1      | 1.2M |</pre>
         </div>
 
         <div class="pipe-arrow">
@@ -142,12 +147,12 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
         </div>
 
         <div class="pipe-card out">
-          <div class="pipe-head"><span class="chip">sortie</span> document.pdf</div>
+          <div class="pipe-head"><span class="chip" data-i18n="home.pipe.out">output</span> document.pdf</div>
           <div class="page">
             <div class="page-h"></div>
             <div class="page-l"></div>
             <div class="page-l short"></div>
-            <div class="page-blur">contenu premium</div>
+            <div class="page-blur" data-i18n="home.pipe.premium">premium content</div>
             <div class="page-l"></div>
             <div class="page-l short"></div>
             <div class="page-num">1 / 4</div>
@@ -160,8 +165,8 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
   <div class="home-section">
     <div class="wrap">
       <header class="section-head">
-        <h2>Ce que le service sait faire</h2>
-        <p><span id="endpointCount">—</span> endpoints, un contrat unique : PDF binaire par défaut, URL de téléchargement si vous demandez la sauvegarde.</p>
+        <h2 data-i18n="home.features.title">What the service can do</h2>
+        <p data-i18n="home.features.lede"><span id="endpointCount">—</span> endpoints, one contract: binary PDF by default, a download URL when you ask for the file to be saved.</p>
       </header>
       <div class="card-grid" id="featureCards"></div>
     </div>
@@ -170,36 +175,36 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
   <div class="home-section tinted">
     <div class="wrap">
       <header class="section-head">
-        <h2>Démarrage en trente secondes</h2>
-        <p>Aucun SDK : de l'HTTP et du JSON, plus votre token dans l'en-tête <code>X-API-Key</code>.</p>
+        <h2 data-i18n="home.quick.title">Thirty seconds to the first PDF</h2>
+        <p data-i18n="home.quick.lede">No SDK: HTTP and JSON, plus your token in the <code>X-API-Key</code> header.</p>
       </header>
 
       <div class="quick">
         <div>
-          <div class="tabs" id="quickTabs" role="tablist" aria-label="Exemples de code">
+          <div class="tabs" id="quickTabs" role="tablist" data-i18n-aria="home.quick.tabs.aria" aria-label="Code examples">
             <button role="tab" class="active" data-lang="curl" aria-selected="true">curl</button>
             <button role="tab" data-lang="js" aria-selected="false">JavaScript</button>
             <button role="tab" data-lang="python" aria-selected="false">Python</button>
-            <button role="tab" data-lang="health" aria-selected="false">Sans token</button>
+            <button role="tab" data-lang="health" aria-selected="false" data-i18n="home.quick.notoken">No token</button>
           </div>
           <div class="code-wrap scroll">
-            <button class="copy-btn" data-copy="#quickCode">copier</button>
+            <button class="copy-btn" data-copy="#quickCode" data-i18n="guides.copy">copy</button>
             <pre id="quickCode"></pre>
           </div>
         </div>
 
         <div class="quick-notes">
           <div class="quick-note">
-            <h4>Réponse binaire par défaut</h4>
-            <p>Sans <code>client_id</code>/<code>pdf_name</code>, le corps de la réponse est le PDF lui-même.</p>
+            <h4 data-i18n="home.quick.n1.title">Binary response by default</h4>
+            <p data-i18n="home.quick.n1.body">Without <code>client_id</code>/<code>pdf_name</code>, the response body is the PDF itself.</p>
           </div>
           <div class="quick-note">
-            <h4>Sauvegarde serveur</h4>
-            <p>Avec les deux champs, la réponse devient <code>{"download_url": …}</code> et le fichier reste servi par le service.</p>
+            <h4 data-i18n="home.quick.n2.title">Server-side save</h4>
+            <p data-i18n="home.quick.n2.body">With both fields, the response becomes <code>{"download_url": …}</code> and the file stays served by the service.</p>
           </div>
           <div class="quick-note">
-            <h4>Token obligatoire</h4>
-            <p>Tous les <code>/api/*</code> exigent <code>X-API-Key</code> (ou <code>Authorization: Bearer</code>). Seuls <code>/api/health</code> et <code>/download</code> restent ouverts. <a href="#/acces">Obtenir un token</a>.</p>
+            <h4 data-i18n="home.quick.n3.title">Token required</h4>
+            <p data-i18n="home.quick.n3.body">Every <code>/api/*</code> needs <code>X-API-Key</code>. Only <code>/api/health</code> and <code>/download</code> stay open. <a href="#/acces">Get a token</a>.</p>
           </div>
         </div>
       </div>
@@ -208,15 +213,16 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
 
   <div class="wrap">
     <div class="home-foot">
-      <div>
-        <strong>md-to-pdf</strong> — fork maintenu par
+      <div data-i18n="home.foot">
+        <strong>md-to-pdf</strong> — fork maintained by
         <a href="https://aismarttalk.tech" target="_blank" rel="noopener">AI SmartTalk</a>,
-        d'après le projet original de
+        after the original project by
         <a href="https://github.com/Spawnia/md-to-pdf" target="_blank" rel="noopener">Spawnia</a>.
       </div>
       <div class="links">
-        <a href="#/acces">demander un accès</a>
-        <a href="/static/editor.html">éditeur markdown</a>
+        <a href="#/guides" data-i18n="nav.guides">Guides</a>
+        <a href="#/acces" data-i18n="home.foot.acces">request access</a>
+        <a href="/static/editor.html" data-i18n="home.foot.editor">markdown editor</a>
         <a href="/static/swagger.yaml" download>swagger.yaml</a>
         <a href="https://github.com/AI-SmartTalk/md-to-pdf" target="_blank" rel="noopener">GitHub</a>
       </div>
@@ -224,14 +230,33 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
   </div>
 </section>
 
-<!-- ═══════════════════════════ référence API ═══════════════════════════ -->
-<section class="view" id="view-api" aria-label="Référence de l'API">
-  <div class="split" id="apiSplit" data-mobile="list">
-    <aside class="sidebar" aria-label="Liste des endpoints">
+<!-- ═══════════════════════════ guides ═══════════════════════════ -->
+<section class="view" id="view-guides" data-i18n-aria="guides.aria" aria-label="Guides">
+  <div class="split" id="guideSplit" data-mobile="list">
+    <aside class="sidebar" data-i18n-aria="guides.list.aria" aria-label="Guide list">
       <div class="sidebar-head">
         <div class="search">
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <input id="docSearch" type="search" placeholder="Filtrer les endpoints…" aria-label="Filtrer les endpoints" spellcheck="false">
+          <input id="guideSearch" type="search" data-i18n-placeholder="guides.filter" data-i18n-aria="guides.filter" placeholder="Filter guides…" aria-label="Filter guides" spellcheck="false">
+        </div>
+      </div>
+      <div class="sidebar-body" id="guideNav"></div>
+    </aside>
+
+    <div class="doc-pane" id="guidePane">
+      <div class="doc-inner" id="guideBody"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ API reference ═══════════════════════════ -->
+<section class="view" id="view-api" data-i18n-aria="api.aria" aria-label="API reference">
+  <div class="split" id="apiSplit" data-mobile="list">
+    <aside class="sidebar" data-i18n-aria="api.list.aria" aria-label="Endpoint list">
+      <div class="sidebar-head">
+        <div class="search">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input id="docSearch" type="search" data-i18n-placeholder="api.filter" data-i18n-aria="api.filter" placeholder="Filter endpoints…" aria-label="Filter endpoints" spellcheck="false">
         </div>
       </div>
       <div class="sidebar-body" id="docNav"></div>
@@ -244,39 +269,39 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
 </section>
 
 <!-- ═══════════════════════════ console ═══════════════════════════ -->
-<section class="view" id="view-console" aria-label="Console de test">
+<section class="view" id="view-console" data-i18n-aria="console.aria" aria-label="Test console">
   <div class="console-head">
-    <span class="title">Console</span>
-    <span class="sub">requêtes réelles depuis le navigateur</span>
+    <span class="title" data-i18n="nav.console">Console</span>
+    <span class="sub" data-i18n="console.sub">real requests from the browser</span>
     <span class="spacer"></span>
-    <div class="segmented console-switch" id="consoleSwitch" role="tablist" aria-label="Panneau affiché">
-      <button class="seg-nav" data-pane="nav" role="tab">Endpoints</button>
-      <button data-pane="req" class="active" role="tab" aria-selected="true">Requête</button>
-      <button data-pane="res" role="tab" aria-selected="false">Réponse</button>
+    <div class="segmented console-switch" id="consoleSwitch" role="tablist" data-i18n-aria="console.panes.aria" aria-label="Displayed panel">
+      <button class="seg-nav" data-pane="nav" role="tab" data-i18n="console.endpoints">Endpoints</button>
+      <button data-pane="req" class="active" role="tab" aria-selected="true" data-i18n="api.request">Request</button>
+      <button data-pane="res" role="tab" aria-selected="false" data-i18n="api.response">Response</button>
     </div>
   </div>
 
   <div class="console-split" id="consoleSplit" data-pane="req">
-    <nav class="pane console-nav" aria-label="Endpoints de la console">
-      <div class="pane-head"><h3>Endpoints</h3></div>
+    <nav class="pane console-nav" data-i18n-aria="console.endpoints" aria-label="Endpoints">
+      <div class="pane-head"><h3 data-i18n="console.endpoints">Endpoints</h3></div>
       <div class="pane-body">
         <div id="endpointList"></div>
         <div class="saved-head">
-          <h4>PDFs générés</h4>
+          <h4 data-i18n="console.saved">Generated PDFs</h4>
           <span class="count" id="savedCount"></span>
         </div>
         <ul class="saved-list" id="savedList"></ul>
       </div>
     </nav>
 
-    <section class="pane console-req" aria-label="Requête">
+    <section class="pane console-req" data-i18n-aria="api.request" aria-label="Request">
       <div class="pane-head">
         <div class="req-path">
           <span class="method" id="reqMethod">POST</span>
           <code id="reqPath">/api/convert</code>
         </div>
         <span class="spacer"></span>
-        <button class="icon-btn" id="resetBtn" title="Réinitialiser le formulaire" aria-label="Réinitialiser le formulaire">
+        <button class="icon-btn" id="resetBtn" data-i18n-title="console.reset" data-i18n-aria="console.reset" title="Reset the form" aria-label="Reset the form">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 11a8 8 0 10-2.3 6M20 5v6h-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
@@ -285,37 +310,37 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
             <circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3.5M15 12v2.5"/>
           </svg>
-          <div>
-            <strong>Aucun token enregistré.</strong> Les endpoints <code>/api/*</code> répondront 401.
+          <div data-i18n="console.banner">
+            <strong>No token stored.</strong> The <code>/api/*</code> endpoints will answer 401.
           </div>
-          <button class="btn sm" id="bannerKeyBtn">Saisir le token</button>
-          <a class="btn sm ghost" href="#/acces">En demander un</a>
+          <button class="btn sm" id="bannerKeyBtn" data-i18n="console.banner.enter">Enter the token</button>
+          <a class="btn sm ghost" href="#/acces" data-i18n="console.banner.ask">Ask for one</a>
         </div>
         <p class="req-desc" id="reqDesc"></p>
         <form id="form" autocomplete="off"></form>
       </div>
       <div class="pane-foot">
-        <button class="btn primary" id="sendBtn">Envoyer <kbd>⌘⏎</kbd></button>
-        <button class="btn sm" id="curlBtn">Copier le curl</button>
+        <button class="btn primary" id="sendBtn"><span data-i18n="console.send">Send</span> <kbd>⌘⏎</kbd></button>
+        <button class="btn sm" id="curlBtn" data-i18n="console.curl">Copy the curl</button>
         <span class="spacer"></span>
-        <a class="btn sm ghost" id="docLink" href="#/api">Voir la doc ↗</a>
+        <a class="btn sm ghost" id="docLink" href="#/api" data-i18n="console.doclink">See the docs ↗</a>
       </div>
     </section>
 
-    <button class="gutter" id="gutter" aria-label="Redimensionner les panneaux" tabindex="-1"></button>
+    <button class="gutter" id="gutter" aria-label="Resize the panels" tabindex="-1"></button>
 
-    <section class="pane console-res" aria-label="Réponse">
+    <section class="pane console-res" data-i18n-aria="api.response" aria-label="Response">
       <div class="pane-head">
         <div class="res-status">
-          <span id="statusBadge" class="badge idle">en attente</span>
+          <span id="statusBadge" class="badge idle" data-i18n="console.idle">idle</span>
           <span class="meta" id="timing"></span>
           <span class="meta" id="size"></span>
           <span class="meta" id="ctype"></span>
         </div>
         <span class="spacer"></span>
-        <div class="segmented" id="resTabs" role="tablist" aria-label="Format de la réponse">
-          <button data-tab="preview" class="active" role="tab" aria-selected="true">Aperçu</button>
-          <button data-tab="raw" role="tab" aria-selected="false">Brut</button>
+        <div class="segmented" id="resTabs" role="tablist" aria-label="Response format">
+          <button data-tab="preview" class="active" role="tab" aria-selected="true" data-i18n="console.tab.preview">Preview</button>
+          <button data-tab="raw" role="tab" aria-selected="false" data-i18n="console.tab.raw">Raw</button>
           <button data-tab="curl" role="tab" aria-selected="false">curl</button>
         </div>
       </div>
@@ -328,58 +353,58 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
   </div>
 </section>
 
-<!-- ═══════════════════════════ accès ═══════════════════════════ -->
-<section class="view scrolls" id="view-acces" aria-label="Accès">
+<!-- ═══════════════════════════ access ═══════════════════════════ -->
+<section class="view scrolls" id="view-acces" data-i18n-aria="nav.acces" aria-label="Access">
   <div class="acces-inner">
     <header class="section-head">
-      <p class="eyebrow">Service interne</p>
-      <h2>Obtenir un accès</h2>
-      <p>
-        md-to-pdf tourne pour les produits et les équipes AI SmartTalk. Il n'est pas ouvert
-        en libre-service : chaque intégration reçoit son propre token.
+      <p class="eyebrow" data-i18n="acces.eyebrow">Internal service</p>
+      <h2 data-i18n="acces.title">Getting access</h2>
+      <p data-i18n="acces.lede">
+        md-to-pdf runs for AI SmartTalk products and teams. It is not open self-service:
+        every integration gets its own token.
       </p>
     </header>
 
     <div class="acces-grid">
       <div class="acces-card">
         <span class="step">1</span>
-        <h3>Demandez un token</h3>
-        <p>Un mail avec le projet concerné et le volume attendu. Réponse sous un jour ouvré.</p>
-        <a class="btn primary" id="mailtoBtn" href="mailto:contact+mdtopdf@aismarttalk.tech?subject=Acc%C3%A8s%20md-to-pdf&amp;body=Bonjour%2C%0A%0AProjet%20%3A%20%0AUsage%20pr%C3%A9vu%20%3A%20%0AVolume%20estim%C3%A9%20%3A%20%0A%0AMerci%20%21">contact+mdtopdf@aismarttalk.tech</a>
-        <button class="btn sm ghost" id="copyMailBtn">Copier l'adresse</button>
+        <h3 data-i18n="acces.s1.title">Ask for a token</h3>
+        <p data-i18n="acces.s1.body">One mail with the project and the expected volume. Answer within one working day.</p>
+        <a class="btn primary" id="mailtoBtn" href="mailto:contact+mdtopdf@aismarttalk.tech?subject=md-to-pdf%20access&amp;body=Hello%2C%0A%0AProject%3A%20%0AIntended%20use%3A%20%0AEstimated%20volume%3A%20%0A%0AThanks%21">contact+mdtopdf@aismarttalk.tech</a>
+        <button class="btn sm ghost" id="copyMailBtn" data-i18n="acces.s1.copy">Copy the address</button>
       </div>
 
       <div class="acces-card">
         <span class="step">2</span>
-        <h3>Enregistrez-le ici</h3>
-        <p>Le token reste dans ce navigateur et sert à toutes les requêtes de la console.</p>
+        <h3 data-i18n="acces.s2.title">Store it here</h3>
+        <p data-i18n="acces.s2.body">The token stays in this browser and is used by every console request.</p>
         <div class="key-inline">
-          <input id="acquireKey" type="password" placeholder="collez votre token" autocomplete="off">
-          <button class="btn primary" id="acquireSave">Enregistrer</button>
+          <input id="acquireKey" type="password" data-i18n-placeholder="settings.token.ph" placeholder="paste your token" autocomplete="off">
+          <button class="btn primary" id="acquireSave" data-i18n="acces.s2.save">Save</button>
         </div>
         <p class="key-state" id="acquireState"></p>
       </div>
 
       <div class="acces-card">
         <span class="step">3</span>
-        <h3>Testez, puis intégrez</h3>
-        <p>La console envoie de vraies requêtes avec votre token et vous rend le <code>curl</code> équivalent.</p>
-        <a class="btn" href="#/console">Ouvrir la console</a>
-        <a class="btn ghost sm" href="#/api">Voir la référence</a>
+        <h3 data-i18n="acces.s3.title">Test, then integrate</h3>
+        <p data-i18n="acces.s3.body">The console sends real requests with your token and hands you back the equivalent <code>curl</code>.</p>
+        <a class="btn" href="#/console" data-i18n="home.cta.console">Open the console</a>
+        <a class="btn ghost sm" href="#/api" data-i18n="acces.s3.ref">See the reference</a>
       </div>
     </div>
 
     <div class="acces-notes">
-      <div class="callout">
-        <strong>Où passe le token.</strong> En-tête <code>X-API-Key</code> ou
-        <code>Authorization: Bearer</code> sur tous les <code>/api/*</code>. Seuls
-        <code>/api/health</code> et <code>/download/&lt;client_id&gt;/&lt;pdf_name&gt;</code>
-        répondent sans authentification.
+      <div class="callout" data-i18n="acces.note1">
+        <strong>Where the token goes.</strong> <code>X-API-Key</code> header or
+        <code>Authorization: Bearer</code> on every <code>/api/*</code>. Only
+        <code>/api/health</code> and <code>/download/&lt;client_id&gt;/&lt;pdf_name&gt;</code>
+        answer without authentication.
       </div>
-      <div class="callout warn">
-        <strong>Un token par intégration.</strong> Ne le committez pas et ne le mettez pas
-        dans du code front : il donne un accès complet au moteur. En cas de fuite, écrivez à
-        la même adresse, on le remplace.
+      <div class="callout warn" data-i18n="acces.note2">
+        <strong>One token per integration.</strong> Do not commit it and do not put it in
+        front-end code: it grants full access to the engine. If it leaks, write to the same
+        address and we replace it.
       </div>
     </div>
   </div>
@@ -389,25 +414,27 @@ Chiffre d'affaires en <span class="tok-b">hausse</span>.
 
 <!-- ═══════════════════════════ palette ⌘K ═══════════════════════════ -->
 <div class="overlay" id="paletteOverlay" hidden>
-  <div class="palette" role="dialog" aria-modal="true" aria-label="Recherche rapide">
+  <div class="palette" role="dialog" aria-modal="true" data-i18n-aria="palette.aria" aria-label="Quick search">
     <div class="palette-head">
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      <input id="paletteInput" type="text" placeholder="Aller à un endpoint ou une vue…" spellcheck="false" autocomplete="off">
+      <input id="paletteInput" type="text" data-i18n-placeholder="palette.ph" placeholder="Go to an endpoint, a guide or a view…" spellcheck="false" autocomplete="off">
     </div>
-    <div class="palette-list" id="paletteList" role="listbox" aria-label="Résultats"></div>
+    <div class="palette-list" id="paletteList" role="listbox" data-i18n-aria="palette.results" aria-label="Results"></div>
     <div class="palette-foot">
-      <span><kbd>↑</kbd><kbd>↓</kbd> naviguer</span>
-      <span><kbd>⏎</kbd> ouvrir</span>
-      <span><kbd>⇧⏎</kbd> tester dans la console</span>
-      <span><kbd>esc</kbd> fermer</span>
+      <span><kbd>↑</kbd><kbd>↓</kbd> <span data-i18n="palette.navigate">navigate</span></span>
+      <span><kbd>⏎</kbd> <span data-i18n="palette.open">open</span></span>
+      <span><kbd>⇧⏎</kbd> <span data-i18n="palette.try">try in the console</span></span>
+      <span><kbd>esc</kbd> <span data-i18n="palette.close">close</span></span>
     </div>
   </div>
 </div>
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
+<script src="/static/i18n.js"></script>
 <script src="/static/spec.js"></script>
 <script src="/static/ui.js"></script>
+<script src="/static/guides.js"></script>
 <script src="/static/docs.js"></script>
 <script src="/static/console.js"></script>
 <script src="/static/app.js"></script>
