@@ -1,0 +1,4 @@
+/* La feuille par defaut du service protege deja les tableaux (page-break-inside: avoid).
+   Ce fichier represente le cas reel ou le CSS du client leve cette protection : c'est
+   exactement la situation ou le Layout Doctor a quelque chose a apporter. */
+table { page-break-inside: auto; break-inside: auto; }

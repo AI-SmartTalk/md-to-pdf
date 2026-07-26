@@ -1,0 +1,3 @@
+/* Meme raison : la feuille par defaut pose page-break-after: avoid sur les titres. Un CSS
+   client qui la remplace ramene le titre orphelin. */
+h1, h2, h3, h4, h5, h6 { page-break-after: auto; break-after: auto; }
