@@ -1,11 +1,12 @@
 use crate::auth::ApiKey;
+use crate::exec;
 use crate::helpers;
 use crate::types::*;
 use rocket::fs::NamedFile;
 use rocket::serde::json::Json;
 use rocket::Either;
 use std::process::Command;
-use tempfile::Builder;
+use tempfile::{Builder, TempPath};
 
 #[post("/merge", format = "json", data = "<req>")]
 pub async fn merge(
@@ -20,13 +21,29 @@ pub async fn merge(
         ));
     }
 
-    // Resolve all PDF paths
+    let MergeRequest {
+        pdfs,
+        client_id,
+        pdf_name,
+    } = req;
+
+    // pdfunite is as blocking as pandoc is: run it on a render slot, or a handful of merges
+    // pins every tokio worker and `/api/health` stops answering.
+    let (pdf, download_url) = exec::offload(move || unite(&pdfs, client_id, pdf_name)).await?;
+
+    helpers::deliver(pdf, download_url).await
+}
+
+fn unite(
+    pdfs: &[String],
+    client_id: Option<String>,
+    pdf_name: Option<String>,
+) -> Result<(TempPath, Option<String>), AppError> {
     let mut resolved_paths = Vec::new();
-    for pdf_url in &req.pdfs {
+    for pdf_url in pdfs {
         resolved_paths.push(helpers::resolve_pdf_path(pdf_url)?);
     }
 
-    // Use pdfunite to merge
     let output_temp = Builder::new().suffix(".pdf").tempfile()?;
     let output_path = helpers::path_to_str(output_temp.path())?.to_string();
 
@@ -38,16 +55,10 @@ pub async fn merge(
 
     helpers::run_tool(&mut cmd, "pdfunite", "PDF merge failed")?;
 
-    if let (Some(client_id), Some(pdf_name)) = (req.client_id, req.pdf_name) {
-        let download_url = helpers::save_pdf(output_temp.path(), &client_id, &pdf_name)?;
-        Ok(Either::Right(Json(ConvertResponse { download_url })))
-    } else {
-        // No destination given: stream the merged file back instead of leaving an
-        // orphan copy behind in public/pdf.
-        Ok(Either::Left(
-            NamedFile::open(output_temp.path())
-                .await
-                .map_err(AppError::Io)?,
-        ))
-    }
+    // No destination given: the merged file is streamed back instead of leaving an orphan
+    // copy behind in public/pdf.
+    let output = output_temp.into_temp_path();
+    let download_url = helpers::save_if_requested(&output, client_id, pdf_name)?;
+
+    Ok((output, download_url))
 }

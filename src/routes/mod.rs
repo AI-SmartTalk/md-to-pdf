@@ -1,10 +1,15 @@
 pub mod convert;
+pub mod diff;
 pub mod download;
 pub mod health;
 pub mod html_to_pdf;
+pub mod layout;
 pub mod legacy;
 pub mod merge;
+pub mod metrics;
 pub mod preview;
 pub mod protect;
+pub mod redact;
 pub mod render;
+pub mod themes;
 pub mod watermark;

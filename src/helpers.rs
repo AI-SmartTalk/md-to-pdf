@@ -1,5 +1,6 @@
 use crate::types::*;
 use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -8,27 +9,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tempfile::Builder;
 
-/// The censor replacement HTML block used to replace CENSOR tags in markdown
-const CENSOR_REPLACEMENT: &str = "<div style=\"width:100% !important; max-width:100% !important; margin-top:0 !important; margin-bottom:0 !important; margin-left:0 !important; margin-right:0 !important; padding:0 !important; overflow:hidden !important; position:relative !important; left:0 !important; right:auto !important; box-sizing:border-box !important; text-align:left !important;\"><img src=\"static/blured.png\" alt=\"CONTENU PREMIUM - Achetez le rapport complet\" style=\"width:100% !important; height:auto !important; display:block !important; margin:0 !important; padding:0 !important; float:none !important;\"></div>";
-
-/// Default wall-clock limit for every external process (pandoc, weasyprint, qpdf, ...).
-/// Overridable with PDF_PROCESS_TIMEOUT_SECS.
-const DEFAULT_PROCESS_TIMEOUT_SECS: u64 = 60;
-
 /// Maximum length of a client_id / pdf_name path component
 const MAX_PATH_COMPONENT_LEN: usize = 128;
-
-/// Process CENSOR tags, replacing them with the blurred image block.
-/// Applies to markdown as well as raw HTML input.
-pub fn process_censor(input: &str) -> String {
-    let mut result = input.to_string();
-    result = result.replace("{{CENSOR}}", CENSOR_REPLACEMENT);
-    result = result.replace("<CENSOR>", CENSOR_REPLACEMENT);
-    result = result.replace("{{ CENSOR }}", CENSOR_REPLACEMENT);
-    result = result.replace("{{CENSOR }}", CENSOR_REPLACEMENT);
-    result = result.replace("{{ CENSOR}}", CENSOR_REPLACEMENT);
-    result
-}
 
 // ------------ Input sanitizing ------------
 
@@ -140,13 +122,50 @@ fn validate_css_length(value: &str, field: &str) -> Result<(), AppError> {
 
 // ------------ Process execution ------------
 
-fn process_timeout() -> Duration {
-    let secs = env::var("PDF_PROCESS_TIMEOUT_SECS")
-        .ok()
-        .and_then(|v| v.parse::<u64>().ok())
-        .filter(|v| *v > 0)
-        .unwrap_or(DEFAULT_PROCESS_TIMEOUT_SECS);
-    Duration::from_secs(secs)
+thread_local! {
+    /// Deadline of the job running on this thread, if it declared one
+    static JOB_DEADLINE: std::cell::Cell<Option<Instant>> = const { std::cell::Cell::new(None) };
+}
+
+/// Bound a whole job — every process it spawns, however many passes it makes — by one
+/// wall-clock deadline.
+///
+/// Per-process timeouts do not compose: a render that runs pandoc, then weasyprint, then
+/// pdftotext and pdfinfo once per corrective pass can outlive the proxy timeout while each
+/// individual process stayed inside its own limit. The proxy then answers 503 and the
+/// render keeps holding its slot. The deadline is a thread-local because a job owns its
+/// blocking thread from end to end (see `exec::offload`).
+pub struct Budget;
+
+impl Budget {
+    pub fn start(total: Duration) -> Budget {
+        JOB_DEADLINE.set(Some(Instant::now() + total));
+        Budget
+    }
+
+    /// What is left of the deadline, or `None` when no job declared one
+    pub fn remaining() -> Option<Duration> {
+        JOB_DEADLINE.get().map(|deadline| {
+            deadline
+                .checked_duration_since(Instant::now())
+                .unwrap_or_default()
+        })
+    }
+}
+
+impl Drop for Budget {
+    fn drop(&mut self) {
+        JOB_DEADLINE.set(None);
+    }
+}
+
+/// The single wall-clock limit every external process runs under
+pub fn process_timeout() -> Duration {
+    let configured = crate::config::config().process_timeout;
+    match Budget::remaining() {
+        Some(remaining) => configured.min(remaining),
+        None => configured,
+    }
 }
 
 /// Wait for a child process, draining stdout/stderr on dedicated threads (so a large
@@ -213,6 +232,21 @@ fn wait_with_timeout(
         .and_then(|h| h.join().ok())
         .unwrap_or_default();
 
+    // A successful run still has things to say: the urlguard wrapper refuses a remote asset
+    // and lets the render succeed without it, so this is the only place an operator can see
+    // that a document silently lost an image.
+    if status.success() && !stderr.is_empty() {
+        let text = String::from_utf8_lossy(&stderr);
+        let text = text.trim();
+        if !text.is_empty() {
+            warn!(
+                "{} succeeded but wrote to stderr: {}",
+                label,
+                text.chars().take(MAX_LOGGED_STDERR).collect::<String>()
+            );
+        }
+    }
+
     Ok(Output {
         status,
         stdout,
@@ -220,8 +254,78 @@ fn wait_with_timeout(
     })
 }
 
+/// A renderer can produce pages of warnings; the log only needs enough to act on
+const MAX_LOGGED_STDERR: usize = 2000;
+
+/// Hand the weasyprint urlguard wrapper the policy this process resolved, instead of
+/// letting it re-read the raw environment: a value the config validated or defaulted must
+/// not be understood differently by the two halves of the same guard.
+///
+/// `stylesheet` is the temporary file pandoc turns into a `<link href>`, which the wrapper
+/// then sees as a `file://` fetch.
+fn apply_urlguard_env(cmd: &mut Command, stylesheet: Option<&str>) {
+    let cfg = crate::config::config();
+
+    cmd.env("PDF_ALLOWED_URL_HOSTS", cfg.allowed_url_hosts.join(","))
+        .env(
+            "PDF_URL_STRICT_HOSTS",
+            if cfg.url_strict_hosts {
+                "true"
+            } else {
+                "false"
+            },
+        )
+        .env(
+            "PDF_ALLOW_LOCAL_ASSETS",
+            if cfg.allow_local_assets {
+                "true"
+            } else {
+                "false"
+            },
+        );
+
+    if let Some(path) = stylesheet {
+        let mut value = OsString::from(path);
+        if let Some(existing) = env::var_os("PDF_URLGUARD_ALLOW_FILES") {
+            if !existing.is_empty() {
+                value.push(":");
+                value.push(existing);
+            }
+        }
+        cmd.env("PDF_URLGUARD_ALLOW_FILES", value);
+    }
+}
+
+/// A job that has already spent its wall-clock budget must not start one more process
+fn budget_check(label: &str) -> Result<(), AppError> {
+    if Budget::remaining() == Some(Duration::ZERO) {
+        return Err(AppError::Timeout(format!(
+            "the job exceeded its {}s budget before {} could run",
+            crate::config::config().render_deadline.as_secs(),
+            label
+        )));
+    }
+    Ok(())
+}
+
+/// Shut the file-access primitives of TeX.
+///
+/// `\input{/etc/passwd}` is a perfectly ordinary LaTeX command, and the URL guard cannot
+/// see it: it scans for URLs, not for TeX. kpathsea reads these three variables from the
+/// environment, so paranoid mode is enforced on the engine itself rather than on a
+/// blocklist of commands that would always miss one (`\openin`, `\InputIfFileExists`,
+/// `\includegraphics`, ...).
+fn apply_latex_sandbox(cmd: &mut Command) {
+    cmd.env("openin_any", "p")
+        .env("openout_any", "p")
+        .env("shell_escape", "f")
+        .arg("--pdf-engine-opt=-no-shell-escape");
+}
+
 /// Spawn a command with piped stdio and wait for it under the global timeout
 fn run_command(cmd: &mut Command, label: &str) -> Result<Output, AppError> {
+    budget_check(label)?;
+
     let child = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -246,21 +350,35 @@ fn process_error(output: &Output, message: &str) -> AppError {
 
 /// Run a command that only needs its exit status checked (qpdf, pdfunite, ...)
 pub fn run_tool(cmd: &mut Command, label: &str, failure_message: &str) -> Result<(), AppError> {
+    run_capture(cmd, label, failure_message).map(|_| ())
+}
+
+/// Run a command and hand its output back (pdfinfo, pdftotext, ...), under the same
+/// timeout and the same error shape as every other external process
+pub fn run_capture(
+    cmd: &mut Command,
+    label: &str,
+    failure_message: &str,
+) -> Result<Output, AppError> {
     let output = run_command(cmd, label)?;
 
     if !output.status.success() {
         return Err(process_error(&output, failure_message));
     }
 
-    Ok(())
+    Ok(output)
 }
 
 // ------------ CSS ------------
 
-/// Build a combined CSS file from default.css + custom CSS + options-generated CSS
-pub fn build_css(
-    custom_css: Option<&str>,
+/// Assemble the stylesheet in cascade order. The order is the contract: the client CSS
+/// always outranks the theme and the options, and the corrective CSS the Layout Doctor
+/// produces comes last because it exists precisely to override what broke the layout.
+pub fn build_css_layers(
+    theme_css: Option<&str>,
     options: Option<&PdfOptions>,
+    custom_css: Option<&str>,
+    corrective_css: Option<&str>,
 ) -> Result<tempfile::TempPath, AppError> {
     let default_css = fs::read_to_string("templates/default.css").map_err(AppError::Io)?;
 
@@ -269,10 +387,20 @@ pub fn build_css(
         None => String::new(),
     };
 
-    let css_content = match custom_css {
-        Some(css) => format!("{}\n{}\n{}", default_css, options_css, css),
-        None => format!("{}\n{}", default_css, options_css),
-    };
+    let layers = [
+        Some(default_css.as_str()),
+        theme_css,
+        Some(options_css.as_str()),
+        custom_css,
+        corrective_css,
+    ];
+
+    let css_content = layers
+        .into_iter()
+        .flatten()
+        .filter(|layer| !layer.is_empty())
+        .collect::<Vec<&str>>()
+        .join("\n");
 
     let mut css_file = Builder::new().suffix(".css").tempfile()?;
     css_file.write_all(css_content.as_bytes())?;
@@ -370,17 +498,17 @@ pub fn options_to_css(opts: &PdfOptions) -> Result<String, AppError> {
     Ok(css)
 }
 
-/// Resolve header/footer: inline HTML takes priority over template file
-pub fn resolve_header_footer(
+/// Resolve header/footer: inline HTML takes priority over template file. The content is
+/// returned rather than a file, because the cache key must depend on what a header/footer
+/// contains and not on the name of the file it came from.
+pub fn resolve_header_footer_content(
     inline_html: Option<&str>,
     template_name: Option<&str>,
-) -> Result<Option<tempfile::TempPath>, AppError> {
+) -> Result<Option<String>, AppError> {
     // Inline HTML takes priority
     if let Some(html) = inline_html {
         if !html.is_empty() {
-            let mut file = Builder::new().suffix(".html").tempfile()?;
-            file.write_all(html.as_bytes())?;
-            return Ok(Some(file.into_temp_path()));
+            return Ok(Some(html.to_string()));
         }
     }
 
@@ -392,10 +520,7 @@ pub fn resolve_header_footer(
             let current_dir = env::current_dir()?;
             let path = current_dir.join("templates").join(&name);
             if path.exists() {
-                let content = fs::read_to_string(&path)?;
-                let mut file = Builder::new().suffix(".html").tempfile()?;
-                file.write_all(content.as_bytes())?;
-                return Ok(Some(file.into_temp_path()));
+                return Ok(Some(fs::read_to_string(&path)?));
             } else {
                 return Err(AppError::NotFound(format!(
                     "Template file not found: {}",
@@ -406,6 +531,13 @@ pub fn resolve_header_footer(
     }
 
     Ok(None)
+}
+
+/// Spill an HTML fragment into a temp file for a tool that only reads from disk
+pub fn write_temp_html(content: &str) -> Result<tempfile::TempPath, AppError> {
+    let mut file = Builder::new().suffix(".html").tempfile()?;
+    file.write_all(content.as_bytes())?;
+    Ok(file.into_temp_path())
 }
 
 // ------------ PDF generation ------------
@@ -436,8 +568,10 @@ pub fn run_pandoc(
 
     if html_pipeline {
         cmd.arg("--to=html5").arg(format!("--css={}", css_path));
+        apply_urlguard_env(&mut cmd, Some(css_path));
     } else {
         cmd.arg("--to=latex");
+        apply_latex_sandbox(&mut cmd);
     }
 
     // TOC support
@@ -465,6 +599,8 @@ pub fn run_pandoc(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
+    budget_check("pandoc")?;
+
     let child = cmd.spawn().map_err(|e| {
         error!("Failed to spawn pandoc: {}", e);
         AppError::Io(e)
@@ -481,10 +617,16 @@ pub fn run_pandoc(
 
 /// Run weasyprint to convert HTML to PDF directly (no pandoc)
 pub fn run_weasyprint(html: &str, css_path: &str) -> Result<tempfile::TempPath, AppError> {
-    // Write HTML to temp file
-    let mut html_file = Builder::new().suffix(".html").tempfile()?;
-    html_file.write_all(html.as_bytes())?;
-    let html_path = html_file.into_temp_path();
+    weasyprint(html, Some(css_path))
+}
+
+/// Same, for HTML that carries its own `<style>` and needs no stylesheet
+pub fn run_weasyprint_plain(html: &str) -> Result<tempfile::TempPath, AppError> {
+    weasyprint(html, None)
+}
+
+fn weasyprint(html: &str, css_path: Option<&str>) -> Result<tempfile::TempPath, AppError> {
+    let html_path = write_temp_html(html)?;
     let html_path_str = html_path.to_str().ok_or_else(non_utf8_path)?;
 
     let pdf_temp = Builder::new().suffix(".pdf").tempfile()?;
@@ -501,20 +643,15 @@ pub fn run_weasyprint(html: &str, css_path: &str) -> Result<tempfile::TempPath, 
         base_url.push('/');
     }
 
-    let output = run_command(
-        Command::new("weasyprint")
-            .arg(html_path_str)
-            .arg(&pdf_path)
-            .arg("--stylesheet")
-            .arg(css_path)
-            .arg("--base-url")
-            .arg(&base_url),
-        "weasyprint",
-    )?;
-
-    if !output.status.success() {
-        return Err(process_error(&output, "Weasyprint conversion failed"));
+    let mut cmd = Command::new("weasyprint");
+    cmd.arg(html_path_str).arg(&pdf_path);
+    if let Some(css_path) = css_path {
+        cmd.arg("--stylesheet").arg(css_path);
     }
+    cmd.arg("--base-url").arg(&base_url);
+    apply_urlguard_env(&mut cmd, css_path);
+
+    run_capture(&mut cmd, "weasyprint", "Weasyprint conversion failed")?;
 
     Ok(pdf_temp.into_temp_path())
 }
@@ -546,70 +683,42 @@ pub fn save_pdf(pdf_path: &Path, client_id: &str, pdf_name: &str) -> Result<Stri
     Ok(format!("/download/{}/{}", client_id, final_pdf_name))
 }
 
-/// Convert the first page of a PDF to a PNG using pdftoppm
-pub fn pdf_to_png(pdf_path: &Path) -> Result<Vec<u8>, AppError> {
-    let png_prefix = Builder::new().prefix("preview-").tempfile()?;
-    let prefix_path = png_prefix
-        .path()
-        .to_str()
-        .ok_or_else(non_utf8_path)?
-        .to_string();
-
-    // pdftoppm creates files like <prefix>-1.png; some versions pad the index
-    let candidates = [
-        format!("{}-1.png", prefix_path),
-        format!("{}-01.png", prefix_path),
-    ];
-
-    // Whatever happens below, never leave a stray PNG behind
-    let cleanup = || {
-        for candidate in &candidates {
-            let _ = fs::remove_file(candidate);
-        }
-    };
-
-    let output = run_command(
-        Command::new("pdftoppm")
-            .arg("-png")
-            .arg("-f")
-            .arg("1")
-            .arg("-l")
-            .arg("1")
-            .arg("-r")
-            .arg("150")
-            .arg(pdf_path.to_str().ok_or_else(non_utf8_path)?)
-            .arg(&prefix_path),
-        "pdftoppm",
-    );
-
-    let output = match output {
-        Ok(output) => output,
-        Err(e) => {
-            cleanup();
-            return Err(e);
-        }
-    };
-
-    if !output.status.success() {
-        cleanup();
-        return Err(process_error(&output, "pdftoppm failed"));
+/// Hand a produced PDF back the way every route does: the file itself, or the JSON
+/// `download_url` when the caller asked for it to be saved.
+pub async fn deliver(
+    pdf: tempfile::TempPath,
+    download_url: Option<String>,
+) -> Result<
+    rocket::Either<rocket::fs::NamedFile, rocket::serde::json::Json<ConvertResponse>>,
+    AppError,
+> {
+    match download_url {
+        Some(url) => Ok(rocket::Either::Right(rocket::serde::json::Json(
+            ConvertResponse::new(url),
+        ))),
+        None => Ok(rocket::Either::Left(
+            rocket::fs::NamedFile::open(&pdf)
+                .await
+                .map_err(AppError::Io)?,
+        )),
     }
-
-    let actual_path = match candidates.iter().find(|p| Path::new(p).exists()) {
-        Some(path) => path.clone(),
-        None => {
-            cleanup();
-            return Err(AppError::ProcessFailed {
-                message: "PNG file not found after pdftoppm".to_string(),
-                stderr: String::new(),
-            });
-        }
-    };
-
-    let png_data = fs::read(&actual_path);
-    cleanup();
-    Ok(png_data?)
 }
+
+/// Save the PDF when the caller named a destination. Filesystem work like the tool run it
+/// follows, so it belongs on the same blocking thread.
+pub fn save_if_requested(
+    pdf: &Path,
+    client_id: Option<String>,
+    pdf_name: Option<String>,
+) -> Result<Option<String>, AppError> {
+    match (client_id, pdf_name) {
+        (Some(client_id), Some(pdf_name)) => Ok(Some(save_pdf(pdf, &client_id, &pdf_name)?)),
+        _ => Ok(None),
+    }
+}
+
+/// Resolution the preview has always been rendered at
+pub const PREVIEW_DPI: u32 = 150;
 
 /// Resolve a /download/... path to the actual filesystem path with validation
 pub fn resolve_pdf_path(url: &str) -> Result<PathBuf, AppError> {
@@ -667,4 +776,68 @@ pub fn binary_available(name: &str) -> bool {
     env::var_os("PATH")
         .map(|paths| env::split_paths(&paths).any(|dir| dir.join(name).is_file()))
         .unwrap_or(false)
+}
+
+/// Base64 for `data:` URIs. A dedicated crate for twenty lines of table lookup would be
+/// one more dependency to audit in the production image.
+pub fn base64(data: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
+    for chunk in data.chunks(3) {
+        let bytes = [
+            chunk[0],
+            chunk.get(1).copied().unwrap_or(0),
+            chunk.get(2).copied().unwrap_or(0),
+        ];
+        let packed = (bytes[0] as u32) << 16 | (bytes[1] as u32) << 8 | (bytes[2] as u32);
+
+        out.push(ALPHABET[(packed >> 18 & 63) as usize] as char);
+        out.push(ALPHABET[(packed >> 12 & 63) as usize] as char);
+        out.push(if chunk.len() > 1 {
+            ALPHABET[(packed >> 6 & 63) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            ALPHABET[(packed & 63) as usize] as char
+        } else {
+            '='
+        });
+    }
+
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Without the job deadline a render could chain passes until the proxy gave up on it
+    #[test]
+    fn the_job_deadline_shortens_every_process_timeout() {
+        let configured = crate::config::config().process_timeout;
+        assert_eq!(process_timeout(), configured);
+
+        {
+            let _budget = Budget::start(Duration::from_millis(1));
+            assert!(process_timeout() < configured);
+            std::thread::sleep(Duration::from_millis(5));
+            assert_eq!(process_timeout(), Duration::ZERO);
+            assert!(budget_check("pandoc").is_err());
+        }
+
+        assert_eq!(process_timeout(), configured);
+        assert!(budget_check("pandoc").is_ok());
+    }
+
+    #[test]
+    fn encodes_base64_with_padding() {
+        assert_eq!(base64(b""), "");
+        assert_eq!(base64(b"f"), "Zg==");
+        assert_eq!(base64(b"fo"), "Zm8=");
+        assert_eq!(base64(b"foo"), "Zm9v");
+        assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+        assert_eq!(base64(&[0xff, 0xfe, 0xfd]), "//79");
+    }
 }
