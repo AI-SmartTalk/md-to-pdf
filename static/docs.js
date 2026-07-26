@@ -16,9 +16,9 @@ const Docs = (() => {
           <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
             <path d="${ep.icon}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          ${escapeHtml(ep.title)}
+          ${escapeHtml(t(ep.title))}
         </h3>
-        <p>${escapeHtml(ep.card)}</p>
+        <p>${escapeHtml(t(ep.card))}</p>
         <span class="route"><span class="method ${ep.method.toLowerCase()}">${ep.method}</span>${escapeHtml(ep.path)}</span>
       </a>`).join("");
   }
@@ -28,7 +28,27 @@ const Docs = (() => {
   // Le token n'est jamais interpolé ici : les exemples restent copiables et
   // partageables sans fuiter la clé de celui qui les copie.
   const QUICKSTART = {
-    curl: () => `# Le token vous est fourni par l'équipe — jamais en dur dans le code
+    curl: () => t({
+      en: `# The token is given to you by the team — never hard-coded
+export MDTOPDF_KEY='your-token'
+
+# Markdown → PDF, binary response
+curl -X POST '${apiBase()}/api/convert' \\
+  -H "X-API-Key: $MDTOPDF_KEY" \\
+  -H 'Content-Type: application/json' \\
+  -d '{"markdown": "# Hello\\n\\nA **document**.", "options": {"page_numbers": true}}' \\
+  --output document.pdf
+
+# Server-side save: the response becomes a download URL
+curl -X POST '${apiBase()}/api/convert' \\
+  -H "X-API-Key: $MDTOPDF_KEY" \\
+  -H 'Content-Type: application/json' \\
+  -d '{"markdown": "# Hello", "client_id": "demo", "pdf_name": "hello"}'
+# {"download_url":"/download/demo/hello.pdf"}
+
+# Without a token: 401
+# {"error":"unauthorized","details":"missing or invalid API key"}`,
+      fr: `# Le token vous est fourni par l'équipe — jamais en dur dans le code
 export MDTOPDF_KEY='votre-token'
 
 # Markdown → PDF, réponse binaire
@@ -47,8 +67,29 @@ curl -X POST '${apiBase()}/api/convert' \\
 
 # Sans token : 401
 # {"error":"unauthorized","details":"missing or invalid API key"}`,
+    }),
 
-    js: () => `const res = await fetch("${apiBase()}/api/convert", {
+    js: () => t({
+      en: `const res = await fetch("${apiBase()}/api/convert", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "X-API-Key": process.env.MDTOPDF_KEY,   // server side only
+  },
+  body: JSON.stringify({
+    markdown: "# Report\\n\\nContent in **markdown**.",
+    options: { paper_size: "a4", page_numbers: true },
+  }),
+});
+
+if (res.status === 401) throw new Error("md-to-pdf token missing or refused");
+if (!res.ok) {
+  const { error, details } = await res.json();
+  throw new Error(\`\${error}: \${details}\`);
+}
+
+const pdf = await res.arrayBuffer();   // binary application/pdf body`,
+      fr: `const res = await fetch("${apiBase()}/api/convert", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
@@ -67,8 +108,27 @@ if (!res.ok) {
 }
 
 const pdf = await res.arrayBuffer();   // corps binaire application/pdf`,
+    }),
 
-    python: () => `import os
+    python: () => t({
+      en: `import os
+import requests
+
+res = requests.post(
+    "${apiBase()}/api/convert",
+    json={
+        "markdown": "# Report\\n\\nContent in **markdown**.",
+        "options": {"paper_size": "a4", "page_numbers": True},
+        "client_id": "demo",
+        "pdf_name": "report",
+    },
+    headers={"X-API-Key": os.environ["MDTOPDF_KEY"]},
+    timeout=90,
+)
+res.raise_for_status()
+
+print(res.json()["download_url"])   # /download/demo/report.pdf`,
+      fr: `import os
 import requests
 
 res = requests.post(
@@ -85,13 +145,22 @@ res = requests.post(
 res.raise_for_status()
 
 print(res.json()["download_url"])   # /download/demo/rapport.pdf`,
+    }),
 
-    health: () => `# Le statut du service ne demande pas de token
+    health: () => t({
+      en: `# The service status needs no token
+curl -s ${apiBase()}/api/health
+# {"status":"ok","version":"0.2.0","engines":["weasyprint","wkhtmltopdf","pdflatex"]}
+
+# Fetching an already-saved PDF needs none either
+curl -s ${apiBase()}/download/demo/hello.pdf --output hello.pdf`,
+      fr: `# Le statut du service ne demande pas de token
 curl -s ${apiBase()}/api/health
 # {"status":"ok","version":"0.2.0","engines":["weasyprint","wkhtmltopdf","pdflatex"]}
 
 # Un PDF déjà sauvegardé se récupère sans token non plus
 curl -s ${apiBase()}/download/demo/hello.pdf --output hello.pdf`,
+    }),
   };
 
   function currentLang() {
@@ -128,7 +197,7 @@ curl -s ${apiBase()}/download/demo/hello.pdf --output hello.pdf`,
   function matches(ep) {
     if (!filter) return true;
     const q = filter.toLowerCase();
-    return (ep.key + " " + ep.path + " " + ep.title + " " + ep.method).toLowerCase().includes(q);
+    return (ep.key + " " + ep.path + " " + t(ep.title) + " " + ep.method).toLowerCase().includes(q);
   }
 
   function renderNav() {
@@ -137,13 +206,13 @@ curl -s ${apiBase()}/download/demo/hello.pdf --output hello.pdf`,
       .filter((g) => g.endpoints.length);
 
     if (!groups.length) {
-      $("#docNav").innerHTML = '<p class="nav-empty">Aucun endpoint ne correspond.</p>';
+      $("#docNav").innerHTML = `<p class="nav-empty">${escapeHtml(k("api.nomatch"))}</p>`;
       return;
     }
 
     $("#docNav").innerHTML = groups.map((g) => `
       <div class="nav-group">
-        <h4>${escapeHtml(g.title)}</h4>
+        <h4>${escapeHtml(t(g.title))}</h4>
         ${g.endpoints.map((ep) => `
           <button class="nav-item${ep.key === state.docKey ? " active" : ""}" data-key="${ep.key}" title="${escapeHtml(ep.method + " " + ep.path)}">
             <span class="m">${ep.method}</span>
@@ -159,43 +228,47 @@ curl -s ${apiBase()}/download/demo/hello.pdf --output hello.pdf`,
   // ───────────────────────────── référence : détail ───────────────────────
 
   function paramTable(ep) {
-    if (!ep.params.length) return '<p class="req-desc">Aucun paramètre.</p>';
+    if (!ep.params.length) return `<p class="req-desc">${escapeHtml(k("api.noparams"))}</p>`;
     return `
       <div class="table-wrap">
         <table class="grid">
-          <thead><tr><th>Paramètre</th><th>Type</th><th>Description</th></tr></thead>
+          <thead><tr><th>${escapeHtml(k("api.param"))}</th><th>${escapeHtml(k("api.type"))}</th><th>${escapeHtml(k("api.desc"))}</th></tr></thead>
           <tbody>
             ${ep.params.map((p) => `
               <tr>
                 <td>${escapeHtml(p.name)}${p.required ? ' <span class="req">*</span>' : ""}</td>
                 <td class="type">${escapeHtml(p.type)}</td>
-                <td class="desc">${p.desc}</td>
+                <td class="desc">${t(p.desc)}</td>
               </tr>`).join("")}
           </tbody>
         </table>
       </div>`;
   }
 
+  // Un exemple peut être un objet figé ou une fabrique, quand son contenu
+  // dépend de la langue affichée.
+  const resolve = (v) => (typeof v === "function" ? v() : v);
+
   function exampleCols(ep) {
     const req = ep.example && ep.example.request ? `
       <div>
-        <h3>Requête</h3>
+        <h3>${escapeHtml(k("api.request"))}</h3>
         <div class="code-wrap">
           <button class="copy-btn" data-copy="#docReq">copier</button>
-          <pre id="docReq" data-raw="${escapeHtml(pretty(ep.example.request))}">${highlightJson(pretty(ep.example.request))}</pre>
+          <pre id="docReq" data-raw="${escapeHtml(pretty(resolve(ep.example.request)))}">${highlightJson(pretty(resolve(ep.example.request)))}</pre>
         </div>
       </div>` : "";
 
     const resBody = ep.example && ep.example.response
-      ? `<pre id="docRes" data-raw="${escapeHtml(pretty(ep.example.response))}">${highlightJson(pretty(ep.example.response))}</pre>`
-      : `<pre id="docRes">${escapeHtml(ep.example && ep.example.responseNote ? ep.example.responseNote : "")}</pre>`;
+      ? `<pre id="docRes" data-raw="${escapeHtml(pretty(resolve(ep.example.response)))}">${highlightJson(pretty(resolve(ep.example.response)))}</pre>`
+      : `<pre id="docRes">${escapeHtml(ep.example && ep.example.responseNote ? t(ep.example.responseNote) : "")}</pre>`;
 
     return `
       <div class="doc-block">
         <div class="doc-cols">
           ${req}
           <div>
-            <h3>Réponse</h3>
+            <h3>${escapeHtml(k("api.response"))}</h3>
             <div class="code-wrap">${resBody}</div>
           </div>
         </div>
@@ -215,38 +288,38 @@ curl -s ${apiBase()}/download/demo/hello.pdf --output hello.pdf`,
     if (!ep) return;
     state.docKey = key;
 
-    const auth = ep.auth === false ? "🔓 sans token" : "🔐 token requis · X-API-Key";
+    const auth = ep.auth === false ? k("api.auth.free") : k("api.auth.token");
     const ctype = ep.json ? "application/json" : ep.form ? "multipart/form-data" : null;
     const { prev, next } = neighbours(key);
 
     $("#docBody").innerHTML = `
       <div class="doc-head">
-        <button class="btn sm ghost doc-back" id="docBack">← Endpoints</button>
+        <button class="btn sm ghost doc-back" id="docBack">${escapeHtml(k("api.back"))}</button>
         <span class="method ${ep.method.toLowerCase()}">${ep.method}</span>
         <code class="path">${escapeHtml(ep.path)}</code>
         <span class="spacer"></span>
-        <button class="btn sm" id="docCopyPath">Copier le chemin</button>
-        <button class="btn sm primary" id="docTry">Tester dans la console</button>
+        <button class="btn sm" id="docCopyPath">${escapeHtml(k("api.copypath"))}</button>
+        <button class="btn sm primary" id="docTry">${escapeHtml(k("api.try"))}</button>
       </div>
 
-      <h2 class="doc-title">${escapeHtml(ep.title)}</h2>
-      <p class="doc-desc">${escapeHtml(ep.desc)}</p>
+      <h2 class="doc-title">${escapeHtml(t(ep.title))}</h2>
+      <p class="doc-desc">${escapeHtml(t(ep.desc))}</p>
       <div class="doc-meta">
         <span class="tag dashed">${auth}</span>
         ${ctype ? `<span class="tag dashed">${ctype}</span>` : ""}
       </div>
 
       <div class="doc-block">
-        <h3>Paramètres</h3>
+        <h3>${escapeHtml(k("api.params"))}</h3>
         ${paramTable(ep)}
       </div>
 
       ${exampleCols(ep)}
 
       <div class="doc-block">
-        <h3>Réponses</h3>
+        <h3>${escapeHtml(k("api.responses"))}</h3>
         <div class="status-list">
-          ${ep.statuses.map(([code, label]) => `<span class="tag"><b>${code}</b> ${escapeHtml(label)}</span>`).join("")}
+          ${ep.statuses.map(([code, label]) => `<span class="tag"><b>${code}</b> ${escapeHtml(t(label))}</span>`).join("")}
         </div>
       </div>
 
@@ -258,7 +331,7 @@ curl -s ${apiBase()}/download/demo/hello.pdf --output hello.pdf`,
     $("#docPane").scrollTop = 0;
 
     $("#docTry").onclick = () => { location.hash = "#/console/" + ep.key; };
-    $("#docCopyPath").onclick = () => copyText(ep.method + " " + apiBase() + ep.path, "Chemin copié");
+    $("#docCopyPath").onclick = () => copyText(ep.method + " " + apiBase() + ep.path, k("api.pathcopied"));
     $("#docBack").onclick = () => { $("#apiSplit").dataset.mobile = "list"; };
     $$("#docBody [data-goto]").forEach((b) => {
       b.onclick = () => { location.hash = "#/api/" + b.dataset.goto; };
@@ -289,5 +362,13 @@ curl -s ${apiBase()}/download/demo/hello.pdf --output hello.pdf`,
     initSearch();
   }
 
-  return { init, renderEndpoint, renderNav, renderQuickstart, currentLang };
+  // Retraduction : le détail de l'endpoint est re-rendu par le routeur, tout ce
+  // qui vit hors de la vue courante est repris ici.
+  function refresh() {
+    renderFeatureCards();
+    renderQuickstart(currentLang());
+    renderNav();
+  }
+
+  return { init, refresh, renderEndpoint, renderNav, renderQuickstart, currentLang };
 })();

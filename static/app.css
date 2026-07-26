@@ -645,7 +645,8 @@ table.grid td.desc { color: var(--text-dim); }
 /* ───────────────────────────── vue API ──────────────────────────────── */
 
 .split { display: grid; height: 100%; min-height: 0; }
-#view-api .split { grid-template-columns: 268px minmax(0, 1fr); }
+#view-api .split,
+#view-guides .split { grid-template-columns: 268px minmax(0, 1fr); }
 
 .sidebar {
   display: grid;
@@ -1115,7 +1116,8 @@ img.preview { max-width: 100%; border: 1px solid var(--border); border-radius: v
 /* ─────────────────────────── responsive ─────────────────────────────── */
 
 @media (max-width: 1240px) {
-  #view-api .split { grid-template-columns: 232px minmax(0, 1fr); }
+  #view-api .split,
+  #view-guides .split { grid-template-columns: 232px minmax(0, 1fr); }
   .console-split { grid-template-columns: 200px var(--split, 1fr) 6px minmax(0, 1fr); }
 }
 
@@ -1141,10 +1143,14 @@ img.preview { max-width: 100%; border: 1px solid var(--border); border-radius: v
   .cmdk-hint { display: none; }
   .brand .ver { display: none; }
   .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  #view-api .split { grid-template-columns: minmax(0, 1fr); }
-  #view-api .sidebar { display: none; }
-  #view-api .split[data-mobile="list"] .sidebar { display: grid; }
-  #view-api .split[data-mobile="list"] .doc-pane { display: none; }
+  #view-api .split,
+  #view-guides .split { grid-template-columns: minmax(0, 1fr); }
+  #view-api .sidebar,
+  #view-guides .sidebar { display: none; }
+  #view-api .split[data-mobile="list"] .sidebar,
+  #view-guides .split[data-mobile="list"] .sidebar { display: grid; }
+  #view-api .split[data-mobile="list"] .doc-pane,
+  #view-guides .split[data-mobile="list"] .doc-pane { display: none; }
   .doc-back { display: inline-flex; }
   .doc-inner { padding: 20px 18px 48px; }
   .console-split { grid-template-columns: minmax(0, 1fr); }
@@ -1161,3 +1167,110 @@ img.preview { max-width: 100%; border: 1px solid var(--border); border-radius: v
   .health span:not(.dot) { display: none; }
   .wrap { padding: 0 16px; }
 }
+
+/* ──────────────────────────── sélecteur de langue ───────────────────── */
+
+/* Deux boutons de trois lettres : la langue est un réglage, pas une décision
+   à reprendre à chaque page. Il disparaît en premier sur petit écran. */
+.lang-switch button {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .04em;
+  padding: 5px 8px;
+}
+.lang-switch button[aria-pressed="true"] { color: var(--accent); }
+
+/* ──────────────────────────── vue guides ────────────────────────────── */
+
+/* Un titre de guide est une phrase, pas un identifiant : il passe à la ligne
+   au lieu d'être coupé — « Censure : masquer ce qui ne doi… » ne dit rien. */
+.nav-item.guide-item { font-family: inherit; font-size: 13px; align-items: flex-start; }
+.nav-item.guide-item svg { flex: 0 0 auto; opacity: .7; margin-top: 2px; }
+.nav-item.guide-item.active svg { opacity: 1; }
+.nav-item.guide-item .label { white-space: normal; overflow: visible; line-height: 1.35; }
+
+.guide-body { margin-top: 26px; }
+
+.guide-h {
+  margin-top: 34px;
+  margin-bottom: 12px;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  scroll-margin-top: 20px;
+}
+.guide-h:first-child { margin-top: 0; }
+
+.guide-p { margin-top: 12px; max-width: 74ch; color: var(--text-dim); line-height: 1.65; }
+.guide-p code, .guide-body td code, .guide-body .callout code { white-space: nowrap; }
+.guide-p b, .guide-p strong { color: var(--text); font-weight: 650; }
+
+.guide-body .code-wrap { margin-top: 14px; }
+.guide-body .table-wrap { margin-top: 14px; }
+.guide-body .callout { margin-top: 16px; max-width: 78ch; }
+
+.guide-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.guide-card {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r);
+  padding: 13px 14px;
+  background: var(--bg-alt);
+}
+.guide-card h4 { font-size: 13px; font-weight: 650; }
+.guide-card p { margin-top: 6px; font-size: 12.5px; color: var(--text-dim); line-height: 1.55; }
+
+.guide-try { margin-top: 20px; }
+
+/* Galerie de thèmes : les aperçus viennent du service interrogé, pas d'une
+   capture d'écran — une capture promet ce qu'un déploiement ne tient pas. */
+.theme-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+.theme-card {
+  margin: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--bg-alt);
+}
+.theme-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1.414;
+  object-fit: cover;
+  object-position: top center;
+  background: #fff;
+  border-bottom: 1px solid var(--border-soft);
+}
+.theme-card figcaption { padding: 12px 13px 14px; }
+.theme-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.theme-head strong { font-size: 13.5px; }
+.theme-head code { font-size: 11px; }
+.theme-card figcaption p { margin-top: 8px; font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
+
+.theme-tokens { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.theme-tokens .token {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 2px 7px 2px 3px;
+}
+.theme-tokens .token i {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  border: 1px solid rgba(128, 128, 128, .35);
+}
+.theme-fonts { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); }

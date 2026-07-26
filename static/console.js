@@ -12,13 +12,18 @@ const Console = (() => {
 
   const fieldId = (name) => "f_" + name.replace(/[^\w]/g, "_");
 
+  // La valeur par défaut d'un champ peut être une chaîne, une paire {en, fr}
+  // ou une fabrique (les documents d'exemple, qui dépendent de la langue).
+  const fieldValue = (field) =>
+    typeof field.value === "function" ? field.value() : t(field.value);
+
   function renderField(field, container) {
     if (field.type === "fieldset") {
       const fs = document.createElement("fieldset");
       if (field.collapsed) fs.className = "collapsed";
       const legend = document.createElement("legend");
       const setLabel = () => {
-        legend.textContent = (fs.classList.contains("collapsed") ? "▸ " : "▾ ") + field.legend;
+        legend.textContent = (fs.classList.contains("collapsed") ? "▸ " : "▾ ") + t(field.legend);
       };
       legend.onclick = () => { fs.classList.toggle("collapsed"); setLabel(); };
       setLabel();
@@ -51,7 +56,7 @@ const Console = (() => {
       input.checked = !!field.value;
       const label = document.createElement("label");
       label.htmlFor = input.id;
-      label.textContent = field.label;
+      label.textContent = t(field.label);
       wrap.append(input, label);
       container.appendChild(wrap);
       return;
@@ -59,11 +64,11 @@ const Console = (() => {
 
     const label = document.createElement("label");
     label.htmlFor = fieldId(field.name);
-    label.textContent = field.label + (field.required ? " *" : "");
+    label.textContent = t(field.label) + (field.required ? " *" : "");
     if (field.hint) {
       const hint = document.createElement("span");
       hint.className = "hint";
-      hint.textContent = " — " + field.hint;
+      hint.textContent = " — " + t(field.hint);
       label.appendChild(hint);
     }
     wrap.appendChild(label);
@@ -74,24 +79,24 @@ const Console = (() => {
       input = document.createElement("textarea");
       input.rows = field.rows || 4;
       input.spellcheck = false;
-      input.value = field.value || "";
+      input.value = fieldValue(field);
       if (field.type === "pdflist") input.placeholder = "/download/demo-client/doc1.pdf";
     } else if (field.type === "select" || field.type === "bool") {
       input = document.createElement("select");
       (field.options || ["", "true", "false"]).forEach((opt) => {
         const o = document.createElement("option");
         o.value = opt;
-        o.textContent = opt === "" ? "(défaut)" : opt;
+        o.textContent = opt === "" ? k("console.default") : opt;
         input.appendChild(o);
       });
-      input.value = field.value || "";
+      input.value = fieldValue(field);
     } else {
       input = document.createElement("input");
       input.type = field.type === "number" ? "number" : "text";
       input.spellcheck = false;
       if (field.step) input.step = field.step;
       if (field.placeholder) input.placeholder = field.placeholder;
-      input.value = field.value || "";
+      input.value = fieldValue(field);
     }
 
     input.id = fieldId(field.name);
@@ -102,11 +107,11 @@ const Console = (() => {
       const picker = document.createElement("div");
       picker.className = "pdf-picker";
       const select = document.createElement("select");
-      select.innerHTML = '<option value="">— PDFs générés —</option>' +
+      select.innerHTML = `<option value="">${escapeHtml(k("console.pdfpicker"))}</option>` +
         state.saved.map((u) => `<option value="${escapeHtml(u)}">${escapeHtml(u.replace("/download/", ""))}</option>`).join("");
       const add = document.createElement("button");
       add.type = "button";
-      add.textContent = field.type === "pdflist" ? "ajouter" : "utiliser";
+      add.textContent = field.type === "pdflist" ? k("console.add") : k("console.use");
       add.onclick = () => {
         if (!select.value) return;
         if (field.type === "pdflist") {
@@ -141,7 +146,7 @@ const Console = (() => {
     $("#reqMethod").textContent = ep.method;
     $("#reqMethod").className = "method " + ep.method.toLowerCase();
     $("#reqPath").textContent = ep.path;
-    $("#reqDesc").textContent = ep.desc;
+    $("#reqDesc").textContent = t(ep.desc);
     $("#docLink").href = "#/api/" + key;
 
     const mode = form.querySelector('[data-name="__mode"]');
@@ -166,8 +171,8 @@ const Console = (() => {
         <svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true">
           <path d="M5 4h9l5 5v11H5zM14 4v5h5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
         </svg>
-        <div>La réponse s'affichera ici — PDF, PNG ou JSON.</div>
-        <div><kbd>⌘</kbd> <kbd>⏎</kbd> pour envoyer</div>
+        <div>${escapeHtml(k("console.empty"))}</div>
+        <div><kbd>⌘</kbd> <kbd>⏎</kbd> ${escapeHtml(k("console.empty.send"))}</div>
       </div>`;
   }
 
@@ -219,11 +224,11 @@ const Console = (() => {
         try {
           value = JSON.parse(raw);
         } catch (e) {
-          throw new Error(`Champ « ${name} » : JSON invalide — ${e.message}`);
+          throw new Error(`${k("console.field")} « ${name} » : ${k("console.field.json")} — ${e.message}`);
         }
       } else if (kind === "number") {
         value = Number(raw);
-        if (Number.isNaN(value)) throw new Error(`Champ « ${name} » : nombre invalide`);
+        if (Number.isNaN(value)) throw new Error(`${k("console.field")} « ${name} » : ${k("console.field.number")}`);
       } else if (kind === "pdflist" || kind === "list") {
         value = String(raw).split("\n").map((s) => s.trim()).filter(Boolean);
         if (!value.length) return;
@@ -319,7 +324,7 @@ const Console = (() => {
       res = await fetch(url, { method: ep.method, headers, body });
     } catch (e) {
       $("#sendBtn").disabled = false;
-      showError("Requête impossible : " + e.message + "\n\nLa base URL est-elle correcte et le service démarré ?");
+      showError(k("console.error.network") + e.message + k("console.error.network.hint"));
       return;
     }
     const elapsed = Math.round(performance.now() - started);
@@ -351,15 +356,15 @@ const Console = (() => {
       state.blobUrl = URL.createObjectURL(blob);
       const frame = document.createElement("iframe");
       frame.className = "preview";
-      frame.title = "Aperçu du PDF généré";
+      frame.title = k("console.pdf.aria");
       frame.src = state.blobUrl;
       const dl = document.createElement("a");
       dl.className = "preview-link";
       dl.href = state.blobUrl;
       dl.download = "document.pdf";
-      dl.textContent = "⤓ télécharger le PDF";
+      dl.textContent = k("console.download");
       preview.append(frame, dl);
-      $("#tabRaw").textContent = `(corps binaire application/pdf — ${formatBytes(blob.size)})`;
+      $("#tabRaw").textContent = `${k("console.binary")}application/pdf — ${formatBytes(blob.size)})`;
       return;
     }
 
@@ -367,10 +372,10 @@ const Console = (() => {
       state.blobUrl = URL.createObjectURL(blob);
       const img = document.createElement("img");
       img.className = "preview";
-      img.alt = "Aperçu de la première page";
+      img.alt = k("console.png.aria");
       img.src = state.blobUrl;
       preview.appendChild(img);
-      $("#tabRaw").textContent = `(corps binaire image/png — ${formatBytes(blob.size)})`;
+      $("#tabRaw").textContent = `${k("console.binary")}image/png — ${formatBytes(blob.size)})`;
       return;
     }
 
@@ -395,13 +400,13 @@ const Console = (() => {
       link.href = apiBase() + json.download_url;
       link.target = "_blank";
       link.rel = "noopener";
-      link.textContent = "↗ ouvrir " + json.download_url;
+      link.textContent = k("console.open") + json.download_url;
       preview.appendChild(link);
     }
   }
 
   function showError(message) {
-    $("#statusBadge").textContent = "erreur";
+    $("#statusBadge").textContent = k("console.error");
     $("#statusBadge").className = "badge err";
     $("#tabPreview").innerHTML = "";
     const pre = document.createElement("pre");
@@ -410,7 +415,7 @@ const Console = (() => {
     $("#tabRaw").textContent = message;
     showTab("preview");
     showPane("res");
-    toast("La requête n'a pas pu être construite", "err");
+    toast(k("console.error.build"), "err");
   }
 
   // ══════════════════════════════════════════════════════════ PDFs générés
@@ -428,7 +433,7 @@ const Console = (() => {
     $("#savedCount").textContent = state.saved.length ? state.saved.length : "";
 
     if (!state.saved.length) {
-      list.innerHTML = '<li class="empty">aucun pour le moment</li>';
+      list.innerHTML = `<li class="empty">${escapeHtml(k("console.saved.empty"))}</li>`;
       return;
     }
 
@@ -443,7 +448,7 @@ const Console = (() => {
       a.title = url;
       const drop = document.createElement("button");
       drop.textContent = "✕";
-      drop.title = "retirer de la liste";
+      drop.title = k("console.saved.drop");
       drop.onclick = () => {
         state.saved = state.saved.filter((u) => u !== url);
         persist();
@@ -524,10 +529,10 @@ const Console = (() => {
 
   // ══════════════════════════════════════════════════════════ init
 
-  function init() {
+  function renderGroups() {
     $("#endpointList").innerHTML = GROUPED.map((g) => `
       <div class="nav-group">
-        <h4>${escapeHtml(g.title)}</h4>
+        <h4>${escapeHtml(t(g.title))}</h4>
         ${g.endpoints.map((ep) => `
           <button class="nav-item" data-key="${ep.key}" title="${escapeHtml(ep.method + " " + ep.path)}">
             <span class="m">${ep.method}</span>
@@ -538,6 +543,10 @@ const Console = (() => {
     $$("#endpointList .nav-item").forEach((b) => {
       b.onclick = () => { location.hash = "#/console/" + b.dataset.key; };
     });
+  }
+
+  function init() {
+    renderGroups();
 
     $$("#resTabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
     $$("#consoleSwitch button").forEach((b) => {
@@ -552,11 +561,11 @@ const Console = (() => {
     });
 
     $("#sendBtn").onclick = (e) => { e.preventDefault(); send(); };
-    $("#resetBtn").onclick = (e) => { e.preventDefault(); select(state.current, true); toast("Formulaire réinitialisé"); };
+    $("#resetBtn").onclick = (e) => { e.preventDefault(); select(state.current, true); toast(k("console.reset.done")); };
     $("#curlBtn").onclick = (e) => {
       e.preventDefault();
-      if (!state.lastCurl) { toast("Envoie d'abord une requête pour obtenir le curl équivalent", "err"); return; }
-      copyText(state.lastCurl, "Commande curl copiée");
+      if (!state.lastCurl) { toast(k("console.curl.none"), "err"); return; }
+      copyText(state.lastCurl, k("console.curl.copied"));
     };
 
     $("#form").addEventListener("submit", (e) => e.preventDefault());
@@ -566,5 +575,14 @@ const Console = (() => {
     renderSaved();
   }
 
-  return { init, select, send, renderSaved };
+  // Retraduction : la liste des endpoints et le formulaire courant portent des
+  // libellés issus de la spec, reconstruits ici plutôt que rechargés.
+  function refresh() {
+    renderGroups();
+    renderSaved();
+    showEmptyResponse();
+    select(state.current, true);
+  }
+
+  return { init, refresh, select, send, renderSaved };
 })();

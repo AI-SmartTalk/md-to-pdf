@@ -14,6 +14,8 @@ This enhanced version, maintained by [AI SmartTalk](https://aismarttalk.tech), e
 - **🔬 Visual diff:** `POST /api/diff` compares two renders pixel by pixel, for CI
 - **📄 Customizable Headers & Footers:** Apply professional templates to your documents
 - **🔄 Multiple PDF Engines:** Support for Weasyprint, Wkhtmltopdf, and Pdflatex
+- **📚 Guides:** Twelve example-driven guides served by the engine itself at `#/guides`,
+  in English and French, each linking straight into the test console
 
 ## 🔍 How to Use Document Censoring
 
@@ -153,17 +155,50 @@ it: `{"pdf": "/download/<client_id>/<name>.pdf"}` → a `LayoutReport`.
 
 ## 🏷️ Header & Footer Templates
 
-Create professional documents with custom headers and footers:
+Stylesheets are concatenated in a fixed order, later wins on equal specificity:
 
-1. Place your custom template files in the `templates` folder with `.html` extension
-2. Reference them in your API calls with `header_template` and `footer_template` parameters
+```
+templates/default.css → theme.css → your `css` field → `options` (paper, margins, numbering, watermark)
+```
 
-Example templates are included to get you started!
+`templates/default.css` is the floor every document stands on — readable typography,
+tables, page-break rules and the geometry of censored blocks — and it is applied even when
+no theme is asked for.
+
+Headers and footers are resolved in a strict priority, which is what lets one document
+override a brand kit for one page without abandoning the kit:
+
+| Source                                         | Priority | Content                                                    |
+|------------------------------------------------|----------|------------------------------------------------------------|
+| `header_html` / `footer_html`                   | 1        | Raw HTML, sent in the request                              |
+| `header_template` / `footer_template`           | 2        | The name of a file in `templates/`                         |
+| The theme's `header.html` / `footer.html`       | 3        | Used when the request names neither                        |
+
+Four files ship in `templates/`, as much examples as assets — copy one, change the logo
+and the wording, drop it next to them:
+
+| File                     | What it draws                                                        |
+|--------------------------|----------------------------------------------------------------------|
+| `header.html`            | The neutral starting point: an empty logo slot and a company name    |
+| `footer.html`            | A centred page number above a rule, fixed to the bottom of the page   |
+| `mdp.header.html`        | A filled-in example: MDP Data Protection branding                     |
+| `symexo.header.html`     | A filled-in example: Symexo branding                                  |
+
+> For page numbering, prefer `options.page_numbers` over a custom footer: it uses the CSS
+> paged-media counters the engine already sets up, and it survives a change of theme. A
+> footer template is for what numbering cannot express — a legal mention, a document
+> reference, a classification level.
+>
+> HTML headers and footers only make sense for the HTML-based engines. With
+> `engine: "pdflatex"` they are ignored, and the service says so in its logs rather than
+> silently producing a document without them.
 
 ## 🔌 API Usage
 
-Point a browser at the service root (`http://localhost:8000`) for the landing page, the full
-API reference and an interactive console that hits every endpoint for real. The contract is
+Point a browser at the service root (`http://localhost:8000`) for the landing page, the
+**guides** (`#/guides` — twelve example-driven guides covering every feature below, in
+English and French), the full API reference and an interactive console that hits every
+endpoint for real. The contract is
 also published as OpenAPI 3.0 in [`static/swagger.yaml`](static/swagger.yaml), served at
 `/static/swagger.yaml`. Integration suite: `./test_api.sh [base_url]` (or `make test-api`)
 against a running server.
@@ -512,10 +547,17 @@ their own `duration_ms`, `engine`, `source` and `cache`, and share the request's
 ## 🌐 Web Interface
 
 The service root (`http://localhost:8000`) serves a self-contained app — no CDN, works
-offline — split into four hash-routed views, each filling the window instead of stacking
+offline — split into five hash-routed views, each filling the window instead of stacking
 into one endless page:
 
 - **`#/` Landing** — what the engine does, live status and installed engines pulled from `/api/health`
+- **`#/guides` Guides** — the documentation this README cannot carry: twelve guides that
+  show, with runnable examples, what the engine is capable of and how the features
+  combine. Themes (with the kits of the *running* deployment pulled live from
+  `/api/themes`, previews and colour tokens included), headers/footers and the order
+  stylesheets are applied in, censoring, charts, diagrams, Layout Doctor, redaction and
+  visual diff, the PDF toolbox, five end-to-end recipes, and the operating limits. Every
+  guide links straight into the console.
 - **`#/api` API reference** — searchable sidebar, one endpoint at a time: parameters,
   request/response examples and status codes
 - **`#/console` Console** — a real client for every endpoint, in three independently
@@ -528,16 +570,25 @@ into one endless page:
   (`contact+mdtopdf@aismarttalk.tech`), stores it in the browser and verifies it against
   the running service
 
+The whole app is **bilingual, English and French**. The language follows the browser
+(`navigator.languages`) with English as the fallback for anything else, and the `EN`/`FR`
+switch in the top bar overrides it and is remembered. The markup ships in English so the
+page reads correctly before the scripts run — and keeps reading correctly if they never
+do; French is applied on top at boot.
+
 The token state is visible everywhere: a marker on the key button in the top bar and a
 banner in the console whenever no token is stored, plus an explicit toast when a request
 comes back `401`. `⌘K` opens a search palette over every endpoint and view (`⇧⏎` jumps
 straight to the console), `⌘⏎` sends the current request.
 
-Front-end files, all under `static/`: `spec.js` (the single API spec), `ui.js` (shared
-helpers, theme, toasts), `docs.js` (landing, reference), `console.js` (test console),
-`app.js` (router, palette, token, health) and `app.css`. Reference and console are
-generated from the same spec, so the documented payload is exactly the one the console
-sends.
+Front-end files, all under `static/`: `i18n.js` (language detection and the interface
+catalogue), `spec.js` (the single API spec), `ui.js` (shared helpers, theme, toasts),
+`guides.js` (the guides, content and rendering), `docs.js` (landing, reference),
+`console.js` (test console), `app.js` (router, palette, token, health) and `app.css`.
+Reference and console are generated from the same spec, so the documented payload is
+exactly the one the console sends. Guide prose carries both languages in place
+(`{en, fr}`) rather than through a key catalogue: a guide is prose, and prose translated
+three files away drifts within a month.
 
 > Deployment and configuration are documented in this README only — the web app targets
 > integrators, not operators. Set `API_KEY` in the environment: without it the service

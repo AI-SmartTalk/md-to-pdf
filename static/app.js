@@ -8,7 +8,7 @@
 
 // ══════════════════════════════════════════════════════════ routage
 
-const VIEWS = ["home", "api", "console", "acces"];
+const VIEWS = ["home", "guides", "api", "console", "acces"];
 
 // Anciens ancrages de la page unique — les liens partagés continuent de tomber
 // sur la bonne vue. #deploy n'existe plus : la configuration serveur ne concerne
@@ -18,12 +18,14 @@ const LEGACY = {
   "#doc": "#/api", "#playground": "#/console", "#deploy": "#/", "#/deploy": "#/",
 };
 
-const TITLES = {
-  home: "md-to-pdf — Moteur de documents PDF",
-  api: "Référence API — md-to-pdf",
-  console: "Console — md-to-pdf",
-  acces: "Accès — md-to-pdf",
-};
+// Une clé de route appartient soit aux endpoints, soit aux guides : la vue
+// décide dans quel index la chercher, sinon `#/guides/themes` tomberait sur
+// l'endpoint `themes`.
+function validKey(view, key) {
+  if (!key) return null;
+  if (view === "guides") return Guides.byKey[key] ? key : null;
+  return BY_KEY[key] ? key : null;
+}
 
 function parseHash() {
   const raw = location.hash;
@@ -33,7 +35,7 @@ function parseHash() {
 
   const parts = raw.replace(/^#\/?/, "").split("/").filter(Boolean);
   const view = VIEWS.includes(parts[0]) ? parts[0] : "home";
-  return { view, key: parts[1] && BY_KEY[parts[1]] ? parts[1] : null };
+  return { view, key: validKey(view, parts[1]) };
 }
 
 function route() {
@@ -44,16 +46,50 @@ function route() {
     if (a.dataset.route === view) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
-  document.title = TITLES[view];
+  document.title = k("title." + view);
 
   if (view === "api") {
     Docs.renderEndpoint(key || state.docKey || ORDERED_KEYS[0]);
     // En dessous de 860px la sidebar et le détail se partagent l'écran :
     // arriver sur /api sans endpoint doit montrer l'index, pas une fiche.
     $("#apiSplit").dataset.mobile = key ? "detail" : "list";
+  } else if (view === "guides") {
+    Guides.render(key || Guides.keys()[0]);
+    $("#guideSplit").dataset.mobile = key ? "detail" : "list";
   } else if (view === "console") {
     Console.select(key || state.current);
   }
+}
+
+// ══════════════════════════════════════════════════════════ langue
+
+// Le catalogue réécrit `innerHTML` : tout ce qu'une autre fonction avait injecté
+// dans un nœud traduit — les compteurs de l'accueil — est réécrit après coup.
+function initLang() {
+  const paint = () => {
+    $$("#langSwitch button").forEach((b) => {
+      const on = b.dataset.lang === I18n.current();
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+  };
+
+  $$("#langSwitch button").forEach((b) => {
+    b.onclick = () => I18n.set(b.dataset.lang);
+  });
+
+  I18n.onChange(() => {
+    paint();
+    $("#statEndpoints").textContent = ENDPOINTS.length;
+    $("#endpointCount").textContent = ENDPOINTS.length;
+    Docs.refresh();
+    Console.refresh();
+    route();
+    ping();
+  });
+
+  I18n.apply();
+  paint();
 }
 
 // ══════════════════════════════════════════════════════════ accès / token
@@ -78,8 +114,8 @@ const Access = (() => {
     $("#keyBanner").hidden = has;
     $("#apiKey").value = state.apiKey;
     $("#acquireKey").value = state.apiKey;
-    if (!has) setStatus("", "aucun token enregistré");
-    else if (!$("#keyState").classList.contains("ok")) setStatus("", "token enregistré — non vérifié");
+    if (!has) setStatus("", k("key.none"));
+    else if (!$("#keyState").classList.contains("ok")) setStatus("", k("key.unverified"));
   }
 
   // Un token collé arrive souvent avec une espace ou un retour à la ligne. Il
@@ -90,16 +126,16 @@ const Access = (() => {
     state.apiKey = String(value).trim();
     persist();
     refresh();
-    if (!quiet && state.apiKey) toast("Token enregistré dans ce navigateur");
+    if (!quiet && state.apiKey) toast(k("key.saved"));
   }
 
   // Aucun endpoint « ping authentifié » n'existe : on génère le plus petit PDF
   // possible et on lit le statut. 401 = clé refusée, 200 = clé acceptée.
   async function verify() {
     const key = state.apiKey;
-    if (!key) { setStatus("err", "renseignez d'abord un token"); return; }
+    if (!key) { setStatus("err", k("key.needed")); return; }
 
-    setStatus("", "vérification sur " + apiBase() + "…");
+    setStatus("", k("key.checking") + apiBase() + "…");
     $("#verifyKeyBtn").disabled = true;
     try {
       const res = await fetch(apiBase() + "/api/convert", {
@@ -107,11 +143,11 @@ const Access = (() => {
         headers: { "Content-Type": "application/json", "X-API-Key": key },
         body: JSON.stringify({ markdown: "# ping" }),
       });
-      if (res.status === 401) setStatus("err", "401 — token refusé par " + apiBase());
-      else if (res.ok) setStatus("ok", "✓ token valide sur " + apiBase());
-      else setStatus("err", res.status + " — erreur renvoyée par " + apiBase());
+      if (res.status === 401) setStatus("err", "401" + k("key.refused") + apiBase());
+      else if (res.ok) setStatus("ok", k("key.valid") + apiBase());
+      else setStatus("err", res.status + k("key.error") + apiBase());
     } catch (e) {
-      setStatus("err", "service injoignable : " + e.message);
+      setStatus("err", k("key.unreachable") + e.message);
     } finally {
       $("#verifyKeyBtn").disabled = false;
     }
@@ -119,9 +155,9 @@ const Access = (() => {
 
   // Appelé par la console quand une requête revient en 401.
   function flag401() {
-    setStatus("err", "401 — token absent ou refusé par " + apiBase());
+    setStatus("err", k("key.401") + apiBase());
     $("#keyAlert").hidden = false;
-    toast("401 sur " + apiBase() + " — token absent ou refusé.", "err");
+    toast("401 · " + apiBase() + k("key.401.toast"), "err");
   }
 
   function initPopover() {
@@ -165,14 +201,14 @@ const Access = (() => {
       try {
         setKey((await navigator.clipboard.readText()).trim());
       } catch (e) {
-        setStatus("err", "presse-papier inaccessible — collez à la main");
+        setStatus("err", k("key.clipboard"));
       }
     };
     $("#verifyKeyBtn").onclick = (e) => { e.preventDefault(); verify(); };
-    $("#clearKeyBtn").onclick = () => { setKey("", true); setStatus("", "token effacé"); };
+    $("#clearKeyBtn").onclick = () => { setKey("", true); setStatus("", k("key.cleared")); };
 
     $("#bannerKeyBtn").onclick = (e) => { e.stopPropagation(); popover.open(); };
-    $("#copyMailBtn").onclick = () => copyText(MAIL, "Adresse copiée");
+    $("#copyMailBtn").onclick = () => copyText(MAIL, k("key.mail.copied"));
 
     refresh();
     return popover;
@@ -186,7 +222,7 @@ const Access = (() => {
 async function ping() {
   const dot = $("#healthDot");
   const text = $("#healthText");
-  text.textContent = "connexion…";
+  text.textContent = k("chrome.health.connecting");
   dot.className = "dot";
   $("#settingsStatus").textContent = "";
 
@@ -199,29 +235,30 @@ async function ping() {
     $("#statVersion").textContent = json.version;
     $("#statEngines").textContent = json.engines.length;
     $("#statStatus").textContent = json.status;
-    $("#healthPill").title = "Moteurs : " + json.engines.join(", ");
+    $("#healthPill").title = k("chrome.health.engines") + json.engines.join(", ");
     $("#settingsStatus").textContent = json.status + " · " + json.engines.join(", ");
   } catch (e) {
     dot.className = "dot err";
-    text.textContent = "injoignable";
+    text.textContent = k("chrome.health.offline");
     $("#brandVersion").textContent = "—";
     $("#statVersion").textContent = "—";
     $("#statEngines").textContent = "—";
-    $("#statStatus").textContent = "hors ligne";
-    $("#settingsStatus").textContent = "injoignable";
+    $("#statStatus").textContent = k("chrome.health.offline");
+    $("#settingsStatus").textContent = k("chrome.health.offline");
   }
 }
 
 // ══════════════════════════════════════════════════════════ palette ⌘K
 
 const Palette = (() => {
-  const COMMANDS = [
-    { name: "Accueil", hint: "vue", hash: "#/" },
-    { name: "Référence API", hint: "vue", hash: "#/api" },
-    { name: "Console de test", hint: "vue", hash: "#/console" },
-    { name: "Demander un accès", hint: "vue", hash: "#/acces" },
-    { name: "Éditeur markdown", hint: "page", href: "/static/editor.html" },
-    { name: "swagger.yaml", hint: "fichier", href: "/static/swagger.yaml" },
+  const commands = () => [
+    { name: k("palette.cmd.home"), hint: k("palette.hint.view"), hash: "#/" },
+    { name: k("palette.cmd.guides"), hint: k("palette.hint.view"), hash: "#/guides" },
+    { name: k("palette.cmd.api"), hint: k("palette.hint.view"), hash: "#/api" },
+    { name: k("palette.cmd.console"), hint: k("palette.hint.view"), hash: "#/console" },
+    { name: k("palette.cmd.acces"), hint: k("palette.hint.view"), hash: "#/acces" },
+    { name: k("palette.cmd.editor"), hint: k("palette.hint.page"), href: "/static/editor.html" },
+    { name: "swagger.yaml", hint: k("palette.hint.file"), href: "/static/swagger.yaml" },
   ];
 
   let items = [];
@@ -231,18 +268,25 @@ const Palette = (() => {
 
   function build(query) {
     const q = query.trim().toLowerCase();
+
     const eps = ENDPOINTS
-      .filter((ep) => !q || (ep.key + " " + ep.path + " " + ep.title).toLowerCase().includes(q))
+      .filter((ep) => !q || (ep.key + " " + ep.path + " " + t(ep.title)).toLowerCase().includes(q))
       .map((ep) => ({
         method: ep.method,
-        name: ep.title,
+        name: t(ep.title),
         hint: ep.path,
         hash: "#/api/" + ep.key,
         consoleHash: "#/console/" + ep.key,
       }));
 
-    const cmds = COMMANDS.filter((c) => !q || c.name.toLowerCase().includes(q));
-    items = eps.concat(cmds);
+    // Les guides passent avant les endpoints : c'est la réponse à « comment
+    // fait-on X », et la palette est le premier endroit où on la cherche.
+    const guides = Guides.all()
+      .filter((g) => !q || (g.key + " " + t(g.title) + " " + t(g.lede)).toLowerCase().includes(q))
+      .map((g) => ({ name: t(g.title), hint: k("palette.hint.guide"), hash: "#/guides/" + g.key }));
+
+    const cmds = commands().filter((c) => !q || c.name.toLowerCase().includes(q));
+    items = guides.concat(eps, cmds);
     index = 0;
     render();
   }
@@ -250,7 +294,7 @@ const Palette = (() => {
   function render() {
     const list = $("#paletteList");
     if (!items.length) {
-      list.innerHTML = '<p class="nav-empty">Aucun résultat.</p>';
+      list.innerHTML = `<p class="nav-empty">${escapeHtml(k("palette.empty"))}</p>`;
       return;
     }
     list.innerHTML = items.map((it, i) => `
@@ -307,8 +351,10 @@ const Palette = (() => {
 // ══════════════════════════════════════════════════════════ init
 
 function init() {
+  initLang();
   initTheme();
   initCopyButtons();
+  Guides.init();
   Docs.init();
   Console.init();
 
