@@ -173,6 +173,26 @@ const UI = {
     en: '<span id="endpointCount">—</span> endpoints, one contract: binary PDF by default, a download URL when you ask for the file to be saved.',
     fr: '<span id="endpointCount">—</span> endpoints, un contrat unique : PDF binaire par défaut, URL de téléchargement si vous demandez la sauvegarde.',
   },
+  "home.verdict.title": { en: "A document, its verdict, and its proof", fr: "Un document, son verdict, et sa preuve" },
+  "home.verdict.lede": {
+    en: "Most engines hand you a file and leave you to discover the split table. This one grades what it produced, shows it, and can seal it.",
+    fr: "La plupart des moteurs rendent un fichier et vous laissent découvrir le tableau coupé en deux. Celui-ci note ce qu'il a produit, le montre, et sait le sceller.",
+  },
+  "home.verdict.c1.title": { en: "It grades its own pagination", fr: "Il note sa propre pagination" },
+  "home.verdict.c1.body": {
+    en: "<code>autolayout</code> re-renders until overflow, blank pages and orphan headings are gone, then returns a score out of 100 and every remaining issue with its page and its bounding box.",
+    fr: "<code>autolayout</code> refait le rendu jusqu'à ce que débordements, pages blanches et titres orphelins aient disparu, puis rend une note sur 100 et chaque défaut restant, avec sa page et son cadre.",
+  },
+  "home.verdict.c2.title": { en: "It shows the pages", fr: "Il montre les pages" },
+  "home.verdict.c2.body": {
+    en: "<code>POST /api/preview</code> returns the pages as PNG — one page, a range, or a contact sheet. An agent that writes markdown blind can finally see what it wrote.",
+    fr: "<code>POST /api/preview</code> rend les pages en PNG — une page, une plage, ou une planche-contact. Un agent qui écrit du markdown à l'aveugle voit enfin ce qu'il a écrit.",
+  },
+  "home.verdict.c3.title": { en: "It compares two versions", fr: "Il compare deux versions" },
+  "home.verdict.c3.body": {
+    en: "<code>POST /api/diff</code> answers with a pixel verdict, page by page. A renderer change that moves a single heading no longer passes for identical.",
+    fr: "<code>POST /api/diff</code> répond par un verdict au pixel, page par page. Un changement de moteur qui déplace un seul titre ne passe plus pour identique.",
+  },
   "home.quick.title": { en: "Thirty seconds to the first PDF", fr: "Démarrage en trente secondes" },
   "home.quick.lede": {
     en: "No SDK: HTTP and JSON, plus your token in the <code>X-API-Key</code> header.",

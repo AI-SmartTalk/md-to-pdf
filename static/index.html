@@ -172,6 +172,29 @@ Revenue is <span class="tok-b">up</span>.
     </div>
   </div>
 
+  <div class="home-section">
+    <div class="wrap">
+      <header class="section-head">
+        <h2 data-i18n="home.verdict.title">A document, its verdict, and its proof</h2>
+        <p data-i18n="home.verdict.lede">Most engines hand you a file and leave you to discover the split table. This one grades what it produced, shows it, and can seal it.</p>
+      </header>
+      <div class="card-grid">
+        <article class="card">
+          <h3 data-i18n="home.verdict.c1.title">It grades its own pagination</h3>
+          <p data-i18n="home.verdict.c1.body"><code>autolayout</code> re-renders until overflow, blank pages and orphan headings are gone, then returns a score out of 100 and every remaining issue with its page and its bounding box.</p>
+        </article>
+        <article class="card">
+          <h3 data-i18n="home.verdict.c2.title">It shows the pages</h3>
+          <p data-i18n="home.verdict.c2.body"><code>POST /api/preview</code> returns the pages as PNG — one page, a range, or a contact sheet. An agent that writes markdown blind can finally see what it wrote.</p>
+        </article>
+        <article class="card">
+          <h3 data-i18n="home.verdict.c3.title">It compares two versions</h3>
+          <p data-i18n="home.verdict.c3.body"><code>POST /api/diff</code> answers with a pixel verdict, page by page. A renderer change that moves a single heading no longer passes for identical.</p>
+        </article>
+      </div>
+    </div>
+  </div>
+
   <div class="home-section tinted">
     <div class="wrap">
       <header class="section-head">
