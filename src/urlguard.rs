@@ -244,8 +244,15 @@ fn is_name_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_' || byte == b':'
 }
 
+/// Compared on bytes, never on a string slice: the scan calls this at every `f` and every
+/// `@` of the document, and `haystack[..5]` panics as soon as those five bytes land inside
+/// a multi-byte character — "offre — le" is enough. The needles are ASCII, so a head that
+/// cuts a character can only fail to match anyway.
 fn starts_with_ignore_case(haystack: &str, needle: &str) -> bool {
-    haystack.len() >= needle.len() && haystack[..needle.len()].eq_ignore_ascii_case(needle)
+    haystack
+        .as_bytes()
+        .get(..needle.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(needle.as_bytes()))
 }
 
 /// Read an attribute or `@import` value: quoted, or up to the next delimiter
@@ -616,9 +623,14 @@ fn decode_entities(input: &str) -> String {
     let mut index = 0usize;
     while index < bytes.len() {
         if bytes[index] != b'&' {
-            let end = index + 1;
-            out.push_str(&input[index..end.min(input.len())]);
-            index = end;
+            // Copied whole: stepping one byte at a time would cut a multi-byte character
+            // in half. `&` is ASCII, so nothing is ever skipped over by this.
+            let c = input[index..]
+                .chars()
+                .next()
+                .unwrap_or(char::REPLACEMENT_CHARACTER);
+            out.push(c);
+            index += c.len_utf8();
             continue;
         }
         let tail = &input[index + 1..];
@@ -687,7 +699,9 @@ fn percent_decode(input: &str) -> String {
     let mut index = 0usize;
     while index < bytes.len() {
         if bytes[index] == b'%' && index + 2 < bytes.len() {
-            let hex = &input[index + 1..index + 3];
+            // Read as bytes: `%é` would slice the accented character in half. Two bytes
+            // that are not valid UTF-8 are not hex digits either, so the decode is unchanged.
+            let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).unwrap_or("");
             if let Ok(byte) = u8::from_str_radix(hex, 16) {
                 out.push(byte);
                 index += 3;
@@ -781,6 +795,26 @@ mod tests {
         rejects("<style>@import 'file:///etc/shadow';</style>");
         rejects("un file:///etc/passwd perdu dans le texte");
         rejects(r#"<img src="FILE:///etc/passwd">"#);
+    }
+
+    /// The scan tries "file:" at every `f` and "@import" at every `@`, so those five or
+    /// seven bytes regularly run into the em dash of ordinary French prose. Slicing the
+    /// string there panicked, and the panic took the whole render task with it.
+    #[test]
+    fn survives_a_marker_followed_by_a_multi_byte_character() {
+        accepts("un engagement de leur offre — le dire à voix haute");
+        accepts("f— g");
+        accepts("@ — une arobase seule");
+        accepts("@im—port");
+    }
+
+    /// Same class of bug inside a URL: the entity and percent decoders walked the bytes
+    /// one at a time and cut accented characters in half.
+    #[test]
+    fn decodes_a_url_that_carries_accents() {
+        accepts("![](https://cdn.aismarttalk.tech/a.png?x=1&y=2#é)");
+        accepts("![](https://cdn.aismarttalk.tech/%é)");
+        rejects("![](file:///etc/passwd?a=1&b=é)");
     }
 
     #[test]

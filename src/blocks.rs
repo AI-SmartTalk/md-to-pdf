@@ -603,12 +603,15 @@ fn html_attributes(tag: &str) -> Vec<(String, String)> {
     let mut i = tag.find(char::is_whitespace).unwrap_or(tag.len());
 
     while i < bytes.len() {
-        while i < bytes.len() && (bytes[i] as char).is_whitespace() {
+        // ASCII whitespace only: `byte as char` reads a continuation byte as Latin-1, and
+        // 0xa0 — the tail of `à` — would answer "whitespace", stopping the cursor inside a
+        // character and panicking on the slice below.
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
             i += 1;
         }
 
         let name_start = i;
-        while i < bytes.len() && !(bytes[i] as char).is_whitespace() && bytes[i] != b'=' {
+        while i < bytes.len() && !bytes[i].is_ascii_whitespace() && bytes[i] != b'=' {
             i += 1;
         }
         if i == name_start {
@@ -630,7 +633,7 @@ fn html_attributes(tag: &str) -> Vec<(String, String)> {
                 i += 1;
             } else {
                 let value_start = i;
-                while i < bytes.len() && !(bytes[i] as char).is_whitespace() {
+                while i < bytes.len() && !bytes[i].is_ascii_whitespace() {
                     i += 1;
                 }
                 value = unescape(&tag[value_start..i]);
@@ -707,6 +710,16 @@ mod tests {
 
     fn run(input: &str, renderers: Renderers) -> (String, Vec<BlockWarning>) {
         expand_inner(input, &renderers)
+    }
+
+    /// `0xa0`, the second byte of `à`, is whitespace once it is read as Latin-1: the cursor
+    /// stopped inside the character and the slice that followed panicked.
+    #[test]
+    fn an_accent_in_an_unquoted_attribute_is_not_a_word_boundary() {
+        let attrs = html_attributes("<code class=chart data-title=déjà>");
+
+        assert_eq!(attrs[0], ("class".to_string(), "chart".to_string()));
+        assert!(attrs[1].1.starts_with("déjà"), "got {:?}", attrs[1]);
     }
 
     /// A document of distinct diagrams is what turns one request into thousands of
