@@ -35,6 +35,37 @@ services:
       PDF_LAYOUT_MAX_PASSES: "${PDF_LAYOUT_MAX_PASSES:-1}"
       PDF_PREVIEW_MAX_PAGES: "${PDF_PREVIEW_MAX_PAGES:-20}"
 
+      # Quota par clé nommée, en requêtes par minute. 0 = aucun plafond, ce qui
+      # est le comportement historique de la clé unique.
+      API_QUOTA_PER_MINUTE: "${API_QUOTA_PER_MINUTE:-0}"
+
+      # Palier gratuit des pages publiques. À false, un déploiement fermé le
+      # reste : c'est la valeur qui ne change rien à l'existant.
+      #
+      # ATTENTION — allumer ce drapeau ouvre POST /api/files à Internet, donc
+      # expose Ghostscript, LibreOffice, Tesseract et img2pdf à des octets
+      # choisis par un inconnu. Ces parseurs tournent aujourd'hui dans CE
+      # conteneur, avec le réseau. Le durcissement ci-dessous (capacités,
+      # no-new-privileges, /tmp en tmpfs) est un plancher, pas le bac à sable du
+      # PLAN-METAMORPHOSE.md §5.2. Voir REVUE-LOT-B.md, constats B1 et B3 :
+      # ne pas passer ce drapeau à true en production avant le conteneur worker.
+      PUBLIC_TOOLS: "${PUBLIC_TOOLS:-false}"
+      PUBLIC_QUOTA_PER_MINUTE: "${PUBLIC_QUOTA_PER_MINUTE:-20}"
+
+      # Fichiers déposés par les appelants. La durée de vie est la promesse de
+      # rétention faite sur le site public : la changer ici la change là-bas.
+      ASSET_TTL_SECS: "${ASSET_TTL_SECS:-7200}"
+      ASSET_MAX_MB: "${ASSET_MAX_MB:-100}"
+      ASSET_MAX_PAGES: "${ASSET_MAX_PAGES:-2000}"
+      JOB_TTL_SECS: "${JOB_TTL_SECS:-3600}"
+
+      # Signature des attestations de rendu. Sans valeur, une clé est tirée au
+      # démarrage et les attestations cessent d'être vérifiables au redéploiement.
+      ATTESTATION_SECRET: "${ATTESTATION_SECRET:-}"
+
+      # Base publique utilisée par /sitemap.xml et /robots.txt.
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-https://pdf.aismarttalk.tech}"
+
       # Anti-SSRF. Une liste d'hôtes vide vaut « tout hôte public » ; les
       # adresses privées et les endpoints de métadonnées restent refusés.
       PDF_ALLOWED_URL_HOSTS: "${PDF_ALLOWED_URL_HOSTS:-}"
@@ -68,6 +99,12 @@ services:
       # Le cache de rendu est adressé par contenu : sans volume il repart à zéro
       # à chaque déploiement et le premier rendu de chaque document se repaie.
       - pdf-cache:/home/rocket/public/cache
+      # Les fichiers déposés par les appelants. Volume distinct de pdf-storage à
+      # dessein : ce sont des données personnelles à durée de vie courte
+      # (ASSET_TTL_SECS, 2 h par défaut), et non des documents que le service a
+      # produits. Les séparer permet de les purger, les chiffrer ou les effacer
+      # sans toucher aux download_url déjà distribués.
+      - pdf-assets:/home/rocket/public/assets
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
       interval: 30s
@@ -81,6 +118,30 @@ services:
     mem_limit: "${MEM_LIMIT:-1g}"
     cpus: ${CPUS:-2.0}
     pids_limit: 256
+
+    # Depuis que le service ingère des fichiers, cinq parseurs (Ghostscript,
+    # LibreOffice, Tesseract, img2pdf, poppler) travaillent sur des octets qu'un
+    # inconnu a choisis. Aucun n'a besoin d'une capacité noyau ni du droit
+    # d'élever ses privilèges : le lui retirer ne coûte rien et retire une marche
+    # à toute évasion.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    # Les temporaires de rendu, le profil jetable de LibreOffice et les caches de
+    # polices vivent en mémoire, bornés : un fichier hostile qui gonfle remplit un
+    # tmpfs plafonné, pas le disque de l'hôte.
+    tmpfs:
+      - /tmp:size=2g,mode=1777
+      - /home/rocket/.cache:size=256m
+
+    # Étape suivante, à activer après un essai en préproduction : `read_only: true`.
+    # Le conteneur n'écrit qu'ici — public/pdf, public/cache, public/assets (des
+    # volumes), /tmp et ~/.cache (les tmpfs ci-dessus). Non activé par défaut faute
+    # d'avoir pu l'éprouver ; l'activer sans essai, c'est risquer un service qui
+    # démarre et échoue au premier rendu.
+    # read_only: true
     stop_grace_period: 30s
     logging:
       driver: "json-file"
@@ -93,6 +154,7 @@ services:
 volumes:
   pdf-storage:
   pdf-cache:
+  pdf-assets:
 
 networks:
   ai-toolkit-network:

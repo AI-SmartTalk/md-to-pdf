@@ -29,3 +29,7 @@ docker-compose.override.yml
 # Cache de rendu adressé par contenu. La règle *.pdf couvre les entrées, pas les
 # sidecars <hash>.json qui portent le rapport de mise en page.
 /public/cache/
+
+# Fichiers déposés par les appelants : des données personnelles à durée de vie
+# courte. Elles n'ont jamais rien à faire dans un dépôt.
+/public/assets/

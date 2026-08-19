@@ -717,13 +717,428 @@ CODE=$(api -o "$TMP_DIR/latex_lfi.json" -w "%{http_code}" \
 check "pdflatex \\input of a local file → 500, not a PDF" 500 "$CODE"
 check_absent "and nothing of the file came back" "$TMP_DIR/latex_lfi.json" "root:x:"
 
+# -----------------------------------------------------------
+# Ingestion — the way a caller's own file gets in
+# -----------------------------------------------------------
+echo
+echo "Ingestion (POST /api/files)"
+
+# The fixture is a PDF this service produced: the suite must not depend on a
+# binary file committed to the repository.
+api -o "$TMP_DIR/upload_src.pdf" \
+  -H "Content-Type: application/json" \
+  -d "{\"markdown\": \"# Ingestion $RUN_ID\n\nUne page, du texte, un tableau.\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n\\\\newpage\n\n## Deuxieme page\n\nSuite.\"}" \
+  "$BASE_URL/api/convert" > /dev/null
+check_pdf "fixture produced for the upload tests" "$TMP_DIR/upload_src.pdf"
+
+CODE=$(api -o "$TMP_DIR/upload.json" -w "%{http_code}" \
+  -F "file=@$TMP_DIR/upload_src.pdf;filename=fixture.pdf" \
+  "$BASE_URL/api/files")
+check "POST /api/files → 201" 201 "$CODE"
+check_contains "the asset reports its detected kind" "$TMP_DIR/upload.json" '"kind":"pdf"'
+check_contains "and when it expires" "$TMP_DIR/upload.json" '"expires_at"'
+
+ASSET=$(sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p' "$TMP_DIR/upload.json" | head -1)
+if [ -z "$ASSET" ]; then
+  red "  ✗ no asset id came back — skipping the tool suite"
+  FAIL=$((FAIL + 1))
+else
+  green "  ✓ asset id: $ASSET"
+  PASS=$((PASS + 1))
+
+  CODE=$(api -o "$TMP_DIR/meta.json" -w "%{http_code}" "$BASE_URL/api/files/$ASSET/meta")
+  check "GET /api/files/{id}/meta → 200" 200 "$CODE"
+  check_contains "the page count was read from the file" "$TMP_DIR/meta.json" '"pages"'
+
+  CODE=$(api -o "$TMP_DIR/fetched.pdf" -w "%{http_code}" "$BASE_URL/api/files/$ASSET")
+  check "GET /api/files/{id} → 200" 200 "$CODE"
+  check_pdf "and the bytes come back unchanged" "$TMP_DIR/fetched.pdf"
+
+  # The whole point of the socle: a route that predates uploads accepts one
+  CODE=$(api -o "$TMP_DIR/wm_asset.pdf" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\", \"text\": \"CONFIDENTIEL\"}" \
+    "$BASE_URL/api/watermark")
+  check "an existing route accepts asset:// → 200" 200 "$CODE"
+  check_pdf "and still answers a PDF body" "$TMP_DIR/wm_asset.pdf"
+
+  # -----------------------------------------------------------
+  # The toolbelt
+  # -----------------------------------------------------------
+  echo
+  echo "Toolbelt"
+
+  CODE=$(api -o "$TMP_DIR/compress.json" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\", \"level\": \"ebook\", \"output\": \"asset\"}" \
+    "$BASE_URL/api/compress")
+  check "POST /api/compress → 200" 200 "$CODE"
+  check_contains "compression returns a verdict" "$TMP_DIR/compress.json" '"verdict"'
+  check_contains "and the verdict names its checks" "$TMP_DIR/compress.json" '"checks"'
+  check_contains "including whether the text survived" "$TMP_DIR/compress.json" 'text-preserved'
+
+  CODE=$(api -o "$TMP_DIR/extract_pages.pdf" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\", \"op\": \"extract\", \"pages\": \"1\"}" \
+    "$BASE_URL/api/pages")
+  check "POST /api/pages (extract) → 200" 200 "$CODE"
+  check_pdf "and hands back the extracted page" "$TMP_DIR/extract_pages.pdf"
+
+  CODE=$(api -o "$TMP_DIR/pages_bad.json" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\", \"op\": \"extract\", \"pages\": \"9-3\"}" \
+    "$BASE_URL/api/pages")
+  check "a reversed page range → 400, not a silent empty PDF" 400 "$CODE"
+
+  CODE=$(api -o "$TMP_DIR/rotate.pdf" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\", \"op\": \"rotate\", \"angle\": 90}" \
+    "$BASE_URL/api/pages")
+  check "POST /api/pages (rotate) → 200" 200 "$CODE"
+  check_pdf "and the rotated document is a PDF" "$TMP_DIR/rotate.pdf"
+
+  CODE=$(api -o "$TMP_DIR/raster.png" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\", \"pages\": \"1\", \"dpi\": 72}" \
+    "$BASE_URL/api/rasterize")
+  check "POST /api/rasterize → 200" 200 "$CODE"
+  check_png "one page comes back as a raw PNG" "$TMP_DIR/raster.png"
+
+  # img2pdf is a small dependency, but a slim image may still not carry it
+  if api "$BASE_URL/api/health" | grep -q '"images-to-pdf"'; then
+    # The image fixture is drawn by the service itself from the PDF above: nothing
+    # binary in the repository, and nothing to install to run this suite.
+    CODE=$(api -o "$TMP_DIR/raster_asset.json" -w "%{http_code}" \
+      -H "Content-Type: application/json" \
+      -d "{\"pdf\": \"asset://$ASSET\", \"pages\": \"1\", \"dpi\": 72, \"output\": \"asset\"}" \
+      "$BASE_URL/api/rasterize")
+    check "a rasterized page kept as an asset → 200" 200 "$CODE"
+    check_contains "and stored as a PNG" "$TMP_DIR/raster_asset.json" '"kind":"png"'
+
+    IMG=$(sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p' "$TMP_DIR/raster_asset.json" | head -1)
+    if [ -n "$IMG" ]; then
+      CODE=$(api -o "$TMP_DIR/images.pdf" -w "%{http_code}" \
+        -H "Content-Type: application/json" \
+        -d "{\"images\": [\"asset://$IMG\", \"asset://$IMG\"], \"paper_size\": \"A4\", \"margin\": 12}" \
+        "$BASE_URL/api/images-to-pdf")
+      check "POST /api/images-to-pdf → 200" 200 "$CODE"
+      check_pdf "two images make one document" "$TMP_DIR/images.pdf"
+
+      CODE=$(api -o "$TMP_DIR/images_asset.json" -w "%{http_code}" \
+        -H "Content-Type: application/json" \
+        -d "{\"images\": [\"asset://$IMG\"], \"fit\": \"actual\", \"output\": \"asset\"}" \
+        "$BASE_URL/api/images-to-pdf")
+      check "one image at its own size → 200" 200 "$CODE"
+      check_contains "and the page count is reported" "$TMP_DIR/images_asset.json" '"pages":1'
+
+      # The kind is read from the bytes: a PDF handed in as an image is refused
+      # rather than embedded as a page nobody can open
+      CODE=$(api -o /dev/null -w "%{http_code}" \
+        -H "Content-Type: application/json" \
+        -d "{\"images\": [\"asset://$ASSET\"]}" \
+        "$BASE_URL/api/images-to-pdf")
+      check "a PDF passed off as an image → 400" 400 "$CODE"
+    else
+      red "  ✗ no image asset came back from /api/rasterize"
+      FAIL=$((FAIL + 1))
+    fi
+  else
+    skip "img2pdf is not installed in this image"
+  fi
+
+  # -----------------------------------------------------------
+  # An encrypted document is the caller's problem to fix, not a breakdown of ours.
+  # The fixture is produced by /api/protect: no password-protected file is committed.
+  # -----------------------------------------------------------
+  CODE=$(api -o "$TMP_DIR/protected.json" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\", \"password\": \"secret-$RUN_ID\", \"output\": \"asset\"}" \
+    "$BASE_URL/api/protect")
+  check "an encrypted fixture is produced → 200" 200 "$CODE"
+
+  LOCKED=$(sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p' "$TMP_DIR/protected.json" | head -1)
+  if [ -n "$LOCKED" ]; then
+    LOCKED_ROUTES="compress rasterize pdfa extract"
+    # OCR opens the document the same way, but only where its binary exists
+    if api "$BASE_URL/api/health" | grep -q '"ocr"'; then
+      LOCKED_ROUTES="$LOCKED_ROUTES ocr"
+    fi
+
+    for route in $LOCKED_ROUTES; do
+      CODE=$(api -o "$TMP_DIR/locked_$route.json" -w "%{http_code}" \
+        -H "Content-Type: application/json" \
+        -d "{\"pdf\": \"asset://$LOCKED\"}" \
+        "$BASE_URL/api/$route")
+      check "an encrypted PDF on /api/$route → 400, not 500" 400 "$CODE"
+      check_contains "and the answer sends the caller to /api/unlock" \
+        "$TMP_DIR/locked_$route.json" "/api/unlock"
+    done
+
+    # And the route it names does take that file
+    CODE=$(api -o "$TMP_DIR/unlocked.json" -w "%{http_code}" \
+      -H "Content-Type: application/json" \
+      -d "{\"pdf\": \"asset://$LOCKED\", \"password\": \"secret-$RUN_ID\", \"output\": \"asset\"}" \
+      "$BASE_URL/api/unlock")
+    check "POST /api/unlock with the right password → 200" 200 "$CODE"
+  else
+    red "  ✗ /api/protect returned no asset — the encryption cases cannot run"
+    FAIL=$((FAIL + 1))
+  fi
+
+  CODE=$(api -o "$TMP_DIR/extract.json" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\", \"format\": \"markdown\"}" \
+    "$BASE_URL/api/extract")
+  check "POST /api/extract → 200" 200 "$CODE"
+  check_contains "the extracted document carries its text" "$TMP_DIR/extract.json" '"content"'
+
+  CODE=$(api -o "$TMP_DIR/repair.pdf" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\"}" \
+    "$BASE_URL/api/repair")
+  check "POST /api/repair on a sound file → 200" 200 "$CODE"
+
+  # A tool that removes a protection must never be a tool that breaks one
+  CODE=$(api -o /dev/null -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\"}" \
+    "$BASE_URL/api/unlock")
+  check "POST /api/unlock without a password → 400 (it cracks nothing)" 400 "$CODE"
+
+  CODE=$(api -o "$TMP_DIR/numbered.pdf" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\", \"format\": \"{page} / {pages}\"}" \
+    "$BASE_URL/api/pages/number")
+  check "POST /api/pages/number → 200" 200 "$CODE"
+
+  CODE=$(api -o "$TMP_DIR/crop.pdf" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\", \"box\": \"auto\"}" \
+    "$BASE_URL/api/crop")
+  check "POST /api/crop (auto) → 200" 200 "$CODE"
+
+  CODE=$(api -o "$TMP_DIR/pdfa.json" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\", \"variant\": \"pdf/a-2b\", \"output\": \"asset\"}" \
+    "$BASE_URL/api/pdfa")
+  check "POST /api/pdfa → 200" 200 "$CODE"
+
+  # OCR is slow and its binary may be absent from a slim image: report, do not fail
+  if api "$BASE_URL/api/health" | grep -q '"ocr"'; then
+    CODE=$(api -o "$TMP_DIR/ocr.json" -w "%{http_code}" \
+      -H "Content-Type: application/json" \
+      -d "{\"pdf\": \"asset://$ASSET\", \"mode\": \"auto\", \"output\": \"asset\"}" \
+      "$BASE_URL/api/ocr")
+    check "POST /api/ocr → 200" 200 "$CODE"
+    check_contains "OCR reports what it could read" "$TMP_DIR/ocr.json" '"verdict"'
+  else
+    skip "OCR is not installed in this image"
+  fi
+
+  # LibreOffice is a large dependency and a slim image may not carry it
+  if api "$BASE_URL/api/health" | grep -q '"office"'; then
+    # The other direction: a PDF rebuilt into an editable document. It is a guess, and
+    # the response has to say so — that warning is the whole point of the route.
+    CODE=$(api -o "$TMP_DIR/pdf_to_office.json" -w "%{http_code}" \
+      -H "Content-Type: application/json" \
+      -d "{\"pdf\": \"asset://$ASSET\", \"to\": \"docx\", \"output\": \"asset\"}" \
+      "$BASE_URL/api/pdf-to-office")
+    check "POST /api/pdf-to-office → 200" 200 "$CODE"
+    check_contains "the produced asset is a Word document" "$TMP_DIR/pdf_to_office.json" '"kind":"docx"'
+    check_contains "the reconstruction is announced as approximate" "$TMP_DIR/pdf_to_office.json" 'approximate by nature'
+    check_contains "and how much of the text survived is measured" "$TMP_DIR/pdf_to_office.json" 'text-preserved'
+
+    CODE=$(api -o /dev/null -w "%{http_code}" \
+      -H "Content-Type: application/json" \
+      -d "{\"pdf\": \"asset://$ASSET\", \"to\": \"odt\"}" \
+      "$BASE_URL/api/pdf-to-office")
+    check "a target format nobody can produce here → 400" 400 "$CODE"
+
+    # The fixture is built by LibreOffice itself: no binary file in the repository
+    docker compose exec -T pandoc sh -c \
+      'cd /tmp && printf "Rapport\n\nUn paragraphe.\n" > s.txt && soffice --headless \
+       --convert-to docx --outdir /tmp/docxfix /tmp/s.txt' >/dev/null 2>&1 || true
+    docker compose exec -T pandoc cat /tmp/docxfix/s.docx > "$TMP_DIR/fixture.docx" 2>/dev/null || true
+
+    if [ -s "$TMP_DIR/fixture.docx" ]; then
+      CODE=$(api -o "$TMP_DIR/docx_upload.json" -w "%{http_code}" \
+        -F "file=@$TMP_DIR/fixture.docx" "$BASE_URL/api/files")
+      check "a Word file uploads → 201" 201 "$CODE"
+      check_contains "and is recognised as docx from its bytes" "$TMP_DIR/docx_upload.json" '"kind":"docx"'
+
+      DOCX=$(sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p' "$TMP_DIR/docx_upload.json" | head -1)
+      CODE=$(api -o "$TMP_DIR/office.json" -w "%{http_code}" \
+        -H "Content-Type: application/json" \
+        -d "{\"file\": \"asset://$DOCX\", \"output\": \"asset\"}" \
+        "$BASE_URL/api/office-to-pdf")
+      check "POST /api/office-to-pdf → 200" 200 "$CODE"
+      check_contains "and reports what survived the conversion" "$TMP_DIR/office.json" 'text-layer'
+
+      # -----------------------------------------------------------
+      # Asynchronous work
+      # -----------------------------------------------------------
+      echo
+      echo "Jobs"
+
+      CODE=$(api -o "$TMP_DIR/job.json" -w "%{http_code}" \
+        -H "Content-Type: application/json" \
+        -d "{\"endpoint\": \"/api/office-to-pdf\", \"body\": {\"file\": \"asset://$DOCX\"}}" \
+        "$BASE_URL/api/jobs")
+      check "POST /api/jobs → 202" 202 "$CODE"
+      check_contains "and hands back where to poll" "$TMP_DIR/job.json" '"poll_url"'
+
+      JOB=$(sed -n 's/.*"job_id":"\(job_[0-9a-f]*\)".*/\1/p' "$TMP_DIR/job.json" | head -1)
+      # Twenty attempts at a second apart: LibreOffice's first start is the slow one
+      for _ in $(seq 1 20); do
+        api -o "$TMP_DIR/job_state.json" "$BASE_URL/api/jobs/$JOB" >/dev/null 2>&1
+        grep -q '"status":"done"\|"status":"failed"' "$TMP_DIR/job_state.json" && break
+        sleep 1
+      done
+      check_contains "the job finishes" "$TMP_DIR/job_state.json" '"status":"done"'
+      check_contains "and its result carries the produced asset" "$TMP_DIR/job_state.json" '"asset"'
+    else
+      skip "could not build a Word fixture with LibreOffice"
+    fi
+  else
+    skip "LibreOffice is not installed in this image"
+  fi
+
+  CODE=$(api -o /dev/null -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d '{"endpoint": "/api/nonexistent", "body": {}}' \
+    "$BASE_URL/api/jobs")
+  check "an endpoint that cannot be queued → 400" 400 "$CODE"
+
+  # -----------------------------------------------------------
+  # Proof — nobody else answers this question
+  # -----------------------------------------------------------
+  echo
+  echo "Attestation"
+
+  CODE=$(api -o "$TMP_DIR/attest.json" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$ASSET\", \"engine\": \"weasyprint\"}" \
+    "$BASE_URL/api/attest")
+  check "POST /api/attest → 200" 200 "$CODE"
+  check_contains "the sealed record is a v1 line" "$TMP_DIR/attest.json" '"attestation":"v1.'
+
+  SEAL=$(sed -n 's/.*"attestation":"\([^"]*\)".*/\1/p' "$TMP_DIR/attest.json" | head -1)
+  if [ -n "$SEAL" ]; then
+    CODE=$(api -o "$TMP_DIR/verify.json" -w "%{http_code}" \
+      -H "Content-Type: application/json" \
+      -d "{\"pdf\": \"asset://$ASSET\", \"attestation\": \"$SEAL\"}" \
+      "$BASE_URL/api/verify")
+    check "POST /api/verify on the genuine file → 200" 200 "$CODE"
+    check_contains "and it verifies" "$TMP_DIR/verify.json" '"verdict":"valid"'
+
+    # The same seal against a different document must say so, and say which way
+    api -o "$TMP_DIR/other.json" \
+      -H "Content-Type: application/json" \
+      -d "{\"markdown\": \"# Autre document $RUN_ID\", \"client_id\": \"test-$RUN_ID\", \"pdf_name\": \"other\"}" \
+      "$BASE_URL/api/convert" > /dev/null
+    CODE=$(api -o "$TMP_DIR/verify_other.json" -w "%{http_code}" \
+      -H "Content-Type: application/json" \
+      -d "{\"pdf\": \"/download/test-$RUN_ID/other.pdf\", \"attestation\": \"$SEAL\"}" \
+      "$BASE_URL/api/verify")
+    check "the same seal on another document → 200" 200 "$CODE"
+    check_contains "and it reports an altered match" "$TMP_DIR/verify_other.json" '"verdict":"altered"'
+
+    CODE=$(api -o "$TMP_DIR/verify_forged.json" -w "%{http_code}" \
+      -H "Content-Type: application/json" \
+      -d "{\"pdf\": \"asset://$ASSET\", \"attestation\": \"v1.YWJj.deadbeef\"}" \
+      "$BASE_URL/api/verify")
+    check_contains "a rewritten seal is reported as forged" "$TMP_DIR/verify_forged.json" '"verdict":"forged"'
+  else
+    red "  ✗ no attestation came back"
+    FAIL=$((FAIL + 1))
+  fi
+
+  # -----------------------------------------------------------
+  # The document contract
+  # -----------------------------------------------------------
+  echo
+  echo "Compose (the contract)"
+
+  CODE=$(api -o "$TMP_DIR/compose.json" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"markdown\": \"# Contrat $RUN_ID\n\nUn paragraphe court.\", \"constraints\": {\"max_pages\": 4, \"min_layout_score\": 60}, \"client_id\": \"test-$RUN_ID\", \"pdf_name\": \"composed\"}" \
+    "$BASE_URL/api/compose")
+  check "POST /api/compose → 200" 200 "$CODE"
+  check_contains "it renders a verdict on the contract" "$TMP_DIR/compose.json" '"verdict":"met"'
+  check_contains "and the log of its passes" "$TMP_DIR/compose.json" '"passes"'
+
+  # An impossible contract must be reported, not silently ignored
+  CODE=$(api -o "$TMP_DIR/compose_unmet.json" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"markdown\": \"# Contrat impossible $RUN_ID\n\nUn paragraphe court.\", \"constraints\": {\"min_pages\": 40}, \"client_id\": \"test-$RUN_ID\", \"pdf_name\": \"composed2\"}" \
+    "$BASE_URL/api/compose")
+  check "an unreachable contract still returns the document" 200 "$CODE"
+  check_contains "and says which constraint is unmet" "$TMP_DIR/compose_unmet.json" '"unmet"'
+
+  # -----------------------------------------------------------
+  # Retention
+  # -----------------------------------------------------------
+  echo
+  echo "Retention"
+
+  CODE=$(api -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/api/files/$ASSET")
+  check "DELETE /api/files/{id} → 204" 204 "$CODE"
+
+  CODE=$(api -o /dev/null -w "%{http_code}" "$BASE_URL/api/files/$ASSET/meta")
+  check "and the asset is gone → 404" 404 "$CODE"
+fi
+
+# An id that is not one of ours never reaches the filesystem
+CODE=$(api -o /dev/null -w "%{http_code}" "$BASE_URL/api/files/as_..%2f..%2fetc%2fpasswd/meta")
+check "a traversal in the asset id → 400 or 404" "$( [ "$CODE" = "400" ] && echo 400 || echo 404 )" "$CODE"
+
+CODE=$(api -o /dev/null -w "%{http_code}" "$BASE_URL/api/jobs/job_00000000000000000000000000000000")
+check "an unknown job → 404" 404 "$CODE"
+
 # Authentication (only meaningful when the server runs with API_KEY)
 if [ -n "$API_KEY" ]; then
+  # Ownership: an id is not a capability. What a key uploads, and what a tool produces
+  # for it, both carry that key's name — otherwise an id leaked in a log or a support
+  # ticket would hand a stranger the document.
+  api -o "$TMP_DIR/owned_src.pdf" -H "Content-Type: application/json" \
+    -d "{\"markdown\": \"# Propriete $RUN_ID\"}" "$BASE_URL/api/convert" > /dev/null
+  api -o "$TMP_DIR/owned_upload.json" -F "file=@$TMP_DIR/owned_src.pdf" "$BASE_URL/api/files" > /dev/null
+  check_contains "an upload records the key that made it" "$TMP_DIR/owned_upload.json" '"owner"'
+
+  OWNED=$(sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p' "$TMP_DIR/owned_upload.json" | head -1)
+  if [ -n "$OWNED" ]; then
+    api -o "$TMP_DIR/owned_out.json" -H "Content-Type: application/json" \
+      -d "{\"pdf\": \"asset://$OWNED\", \"op\": \"extract\", \"pages\": \"1\", \"output\": \"asset\"}" \
+      "$BASE_URL/api/pages" > /dev/null
+    check_contains "and so does what a tool produces from it" "$TMP_DIR/owned_out.json" '"owner"'
+
+    # A wrong key must not even learn the asset exists: 404, never 403
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "X-API-Key: ${API_KEY}-wrong" \
+      "$BASE_URL/api/files/$OWNED/meta")
+    check "a key that is not the owner cannot read it" 401 "$CODE"
+  fi
+
+  # PUBLIC_TOOLS changes what an anonymous request gets, and the suite has no access to
+  # the server's environment: ask the server instead. An anonymous upload that succeeds
+  # means the free tier is on, and the endpoints the public pages drive answer without a
+  # key by design. Guessing one of the two configurations would make this suite fail on a
+  # correctly configured deployment.
+  PUBLIC_TIER=no
+  if [ "$(curl -s -o /dev/null -w "%{http_code}" -F "file=@$TMP_DIR/legacy.pdf" \
+          "$BASE_URL/api/files")" = "201" ]; then
+    PUBLIC_TIER=yes
+    yellow "  ~ free tier is on (PUBLIC_TOOLS): the tool endpoints answer without a key"
+  fi
+
   CODE=$(curl -s -o /dev/null -w "%{http_code}" \
     -H "Content-Type: application/json" \
     -d '{"markdown": "# x"}' \
     "$BASE_URL/api/convert")
-  check "convert without API key → 401" 401 "$CODE"
+  if [ "$PUBLIC_TIER" = "yes" ]; then
+    check "convert without a key → 200 on the free tier" 200 "$CODE"
+  else
+    check "convert without API key → 401" 401 "$CODE"
+  fi
 
   CODE=$(curl -s -o /dev/null -w "%{http_code}" \
     -H "Content-Type: application/json" \
@@ -732,17 +1147,34 @@ if [ -n "$API_KEY" ]; then
     "$BASE_URL/api/convert")
   check "convert with bearer token → 200" 200 "$CODE"
 
-  # The new routes are behind the key too — /api/health is the only exception
-  for path in themes metrics; do
-    CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/$path")
-    check "GET /api/$path without API key → 401" 401 "$CODE"
-  done
+  # `/api/metrics` and `/api/render` are never on the free tier, whatever it is set to:
+  # a template engine and an operator's counters do not face the open internet.
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/metrics")
+  check "GET /api/metrics without API key → 401, free tier or not" 401 "$CODE"
+
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d '{"template": "<p>x</p>", "data": {}}' \
+    "$BASE_URL/api/render")
+  check "POST /api/render without API key → 401, free tier or not" 401 "$CODE"
+
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/themes")
+  if [ "$PUBLIC_TIER" = "yes" ]; then
+    check "GET /api/themes without a key → 200 on the free tier" 200 "$CODE"
+  else
+    check "GET /api/themes without API key → 401" 401 "$CODE"
+  fi
 
   CODE=$(curl -s -o /dev/null -w "%{http_code}" \
     -H "Content-Type: application/json" \
     -d '{"before": "/download/a/b.pdf", "after": "/download/a/c.pdf"}' \
     "$BASE_URL/api/diff")
-  check "POST /api/diff without API key → 401" 401 "$CODE"
+  if [ "$PUBLIC_TIER" = "yes" ]; then
+    # The guard lets it through, so the answer is about the missing document, not the key
+    check "POST /api/diff without a key → 404 on the free tier" 404 "$CODE"
+  else
+    check "POST /api/diff without API key → 401" 401 "$CODE"
+  fi
 
   CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/health")
   check "GET /api/health stays open (container probe)" 200 "$CODE"
