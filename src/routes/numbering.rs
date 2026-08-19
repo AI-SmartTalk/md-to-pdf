@@ -72,7 +72,7 @@ pub async fn number_pages(
     options(&req)?;
 
     let (produced, response) = exec::as_owner(key.0, exec::offload(move || run(req))).await?;
-    helpers::deliver_tool(produced, response).await
+    helpers::deliver_tool(produced, response, "numbering").await
 }
 
 /// All the blocking work. Public and free of Rocket: the async job dispatcher calls it as is.

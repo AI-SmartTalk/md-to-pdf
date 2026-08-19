@@ -49,7 +49,7 @@ pub async fn watermark(
     )
     .await?;
 
-    helpers::deliver_tool(produced, response).await
+    helpers::deliver_tool(produced, response, "watermark").await
 }
 
 #[allow(clippy::too_many_arguments)]

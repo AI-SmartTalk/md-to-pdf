@@ -99,9 +99,19 @@ function copyText(text, okMessage) {
 const MOON = "M12 3a9 9 0 109 9 7 7 0 01-9-9z";
 const SUN = "M12 7a5 5 0 100 10 5 5 0 000-10zm0-6v3m0 16v3M4.2 4.2l2.1 2.1m11.4 11.4l2.1 2.1M1 12h3m16 0h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1";
 
+/* Une clé de thème par surface, et c'est délibéré.
+   La vitrine et la section développeurs partagent la marque, pas le défaut :
+   le blanc dit « simple et sûr » à qui vient alléger un PDF personnel, le
+   sombre dit « outil de travail » à qui passe la journée dans une console. Avec
+   la clé commune `mdpdf.theme`, la dernière des deux surfaces visitées imposait
+   son thème à l'autre — un aller-retour par ici repeignait l'accueil en sombre.
+   La vitrine garde donc `mdpdf.theme` (voir static/outils/app.js) et cette
+   section a la sienne. Chacune se souvient de son propre choix. */
+const THEME_STORAGE = "mdpdf.theme.dev";
+
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  localStorage.setItem("mdpdf.theme", theme);
+  localStorage.setItem(THEME_STORAGE, theme);
   const icon = $("#themeIcon");
   if (!icon) return;
   if (theme === "light") {
@@ -118,9 +128,13 @@ function applyTheme(theme) {
 }
 
 function initTheme() {
-  const stored = localStorage.getItem("mdpdf.theme");
+  const stored = localStorage.getItem(THEME_STORAGE);
+  // À défaut de choix explicite, le thème servi dans `data-theme` fait foi —
+  // sombre ici, comme le site public sert clair. La préférence du système ne
+  // sert que si le document n'a rien dit.
+  const served = document.documentElement.dataset.theme;
   const prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
-  applyTheme(stored || (prefersLight ? "light" : "dark"));
+  applyTheme(stored || served || (prefersLight ? "light" : "dark"));
   $("#themeToggle").onclick = () =>
     applyTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
 }

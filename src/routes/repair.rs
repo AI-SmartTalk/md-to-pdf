@@ -97,7 +97,7 @@ pub async fn repair(
     validate_reference(&req.pdf)?;
 
     let (produced, response) = exec::as_owner(key.0, exec::offload(move || run(req))).await?;
-    helpers::deliver_tool(produced, response).await
+    helpers::deliver_tool(produced, response, "repair").await
 }
 
 /// All the blocking work. Public and free of Rocket: the asynchronous job dispatcher calls
@@ -520,7 +520,7 @@ pub async fn unlock(
 
     let (produced, response) =
         exec::as_owner(key.0, exec::offload(move || run_unlock(req))).await?;
-    helpers::deliver_tool(produced, response).await
+    helpers::deliver_tool(produced, response, "unlock").await
 }
 
 /// Same contract as `run`, for the second tool of this file.

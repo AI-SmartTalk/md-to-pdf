@@ -275,6 +275,12 @@ const TOOL_PARAMS = [...SAVE_PARAMS, OUTPUT_PARAM, VERDICT_PARAM];
 
 // ══════════════════════════════════════════════════════════ endpoints
 
+// Un endpoint = un objet, et son « method » et son « path » tiennent sur la
+// même ligne que sa « key ». Ce n'est pas une coquetterie : tests/api_surface.rs
+// lit ce fichier ligne à ligne pour le confronter aux routes montées dans
+// src/main.rs et aux chemins de swagger.yaml, et casse si les trois inventaires
+// divergent. Un endpoint dont la déclaration s'étale sur plusieurs lignes serait
+// signalé comme manquant.
 const ENDPOINTS = [
   {
     key: "health", method: "GET", path: "/api/health", auth: false, group: "service",
@@ -1221,6 +1227,237 @@ const ENDPOINTS = [
     statuses: [["200", "JobView"], ["401", ST.unauthorized], ["404", { en: "Unknown or expired job", fr: "Travail inconnu ou expiré" }]],
   },
 
+  // ────────────────────────────────────────── compte et clés ──────────────
+
+  // Ces huit endpoints s'authentifient par le cookie de session, jamais par
+  // X-API-Key : `auth: false` dit qu'aucune clé n'est attendue, et la session
+  // requise est dite dans chaque description.
+  {
+    key: "signup", method: "POST", path: "/api/auth/signup", json: true, auth: false, group: "account",
+    title: { en: "Create an account", fr: "Créer un compte" },
+    icon: "M16 20v-2a4 4 0 00-8 0v2M12 12a4 4 0 100-8 4 4 0 000 8zM19 8v6M22 11h-6",
+    card: { en: "Creates the account and opens the session in one call: the cookie ships with the answer, there is no second step.",
+      fr: "Crée le compte et ouvre la session dans le même appel : le cookie part avec la réponse, il n'y a pas de deuxième étape." },
+    desc: { en: "The address is lower-cased and trimmed, and is the account identifier. The password is at least 10 characters and is hashed with PBKDF2-HMAC-SHA256.\nTwo sign-ups racing on the same address cannot both win: the second gets a 400.",
+      fr: "L'adresse est mise en minuscules et nettoyée, et sert d'identifiant du compte. Le mot de passe fait 10 caractères au minimum et est haché en PBKDF2-HMAC-SHA256.\nDeux inscriptions simultanées sur la même adresse ne peuvent pas gagner toutes les deux : la seconde reçoit un 400." },
+    params: [
+      { name: "email", type: "string", required: true, desc: { en: "The login. Normalised before anything else.", fr: "L'identifiant. Normalisée avant toute chose." } },
+      { name: "password", type: "string", required: true, desc: { en: "10 characters at least.", fr: "10 caractères au minimum." } },
+      { name: "name", type: "string", desc: { en: "Optional display name.", fr: "Nom affiché, facultatif." } },
+    ],
+    fields: [
+      { name: "email", type: "text", label: "email", required: true, placeholder: "jean@exemple.fr", value: "" },
+      { name: "password", type: "text", label: "password", required: true, value: "" },
+      { name: "name", type: "text", label: "name", value: "" },
+    ],
+    example: {
+      request: { email: "jean@exemple.fr", password: "un mot de passe assez long", name: "Jean Dupont" },
+      response: { account: { id: "acc_9f2c…", email: "jean@exemple.fr", plan: "free", created_at: "2026-08-19T12:02:11Z" } },
+    },
+    statuses: [["201", { en: "Account created, session open", fr: "Compte créé, session ouverte" }], ["400", { en: "Implausible address, password too short, or address already taken", fr: "Adresse invraisemblable, mot de passe trop court, ou adresse déjà prise" }]],
+  },
+
+  {
+    key: "login", method: "POST", path: "/api/auth/login", json: true, auth: false, group: "account",
+    title: { en: "Sign in", fr: "Se connecter" },
+    icon: "M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3",
+    card: { en: "Sets the mdpdf_session cookie: HttpOnly, SameSite=Lax, and Secure as soon as the connection is HTTPS.",
+      fr: "Pose le cookie mdpdf_session : HttpOnly, SameSite=Lax, et Secure dès que la connexion est en HTTPS." },
+    desc: { en: "Checks the address and the password, then opens a session. The \"name\" field is ignored here.\nA refusal never says which of the two was wrong — otherwise the endpoint becomes a directory of registered addresses.",
+      fr: "Vérifie l'adresse et le mot de passe, puis ouvre une session. Le champ « name » est ignoré ici.\nUn refus ne dit jamais laquelle des deux valeurs était fausse — sinon l'endpoint devient un annuaire d'adresses inscrites." },
+    params: [
+      { name: "email", type: "string", required: true, desc: { en: "The account address.", fr: "L'adresse du compte." } },
+      { name: "password", type: "string", required: true, desc: { en: "The password.", fr: "Le mot de passe." } },
+    ],
+    fields: [
+      { name: "email", type: "text", label: "email", required: true, placeholder: "jean@exemple.fr", value: "" },
+      { name: "password", type: "text", label: "password", required: true, value: "" },
+    ],
+    example: {
+      request: { email: "jean@exemple.fr", password: "un mot de passe assez long" },
+      response: { account: { id: "acc_9f2c…", email: "jean@exemple.fr", plan: "free", created_at: "2026-08-19T12:02:11Z" } },
+    },
+    statuses: [["200", { en: "Session open", fr: "Session ouverte" }], ["401", { en: "Wrong address or password", fr: "Adresse ou mot de passe incorrects" }]],
+  },
+
+  {
+    key: "logout", method: "POST", path: "/api/auth/logout", auth: false, group: "account",
+    title: { en: "Sign out", fr: "Se déconnecter" },
+    icon: "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
+    card: { en: "Invalidates the session server-side and drops the cookie.",
+      fr: "Invalide la session côté serveur et retire le cookie." },
+    desc: { en: "Answers 204 even with no cookie: signing out twice is not an error.",
+      fr: "Répond 204 même sans cookie : se déconnecter deux fois n'est pas une erreur." },
+    params: [],
+    fields: [],
+    example: { responseNote: { en: "Empty body", fr: "Corps vide" } },
+    statuses: [["204", { en: "Session closed", fr: "Session fermée" }]],
+  },
+
+  {
+    key: "me", method: "GET", path: "/api/auth/me", auth: false, group: "account",
+    title: { en: "The current account", fr: "Le compte connecté" },
+    icon: "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z",
+    card: { en: "Who the session cookie belongs to. Needs the cookie, not an API key.",
+      fr: "À qui appartient le cookie de session. Demande le cookie, pas une clé d'API." },
+    desc: { en: "Returns the account attached to the mdpdf_session cookie.\n401 rather than a redirect: this is a JSON endpoint, and sending someone to a sign-in page is a page's job.",
+      fr: "Renvoie le compte attaché au cookie mdpdf_session.\n401 plutôt qu'une redirection : c'est un endpoint JSON, et renvoyer quelqu'un vers une page de connexion est le travail d'une page." },
+    params: [],
+    fields: [],
+    example: { response: { account: { id: "acc_9f2c…", email: "jean@exemple.fr", plan: "free", name: "Jean Dupont", created_at: "2026-08-19T12:02:11Z" } } },
+    statuses: [["200", "SessionResponse"], ["401", { en: "No session — sign in first", fr: "Aucune session — se connecter d'abord" }]],
+  },
+
+  {
+    key: "key-create", method: "POST", path: "/api/keys", json: true, auth: false, group: "account",
+    title: { en: "Create an API key", fr: "Créer une clé d'API" },
+    icon: "M15 7a5 5 0 11-4.6 3H3v4h3v-2h2v2h2.4",
+    card: { en: "Self-service keys. The secret travels once, here, and is stored hashed — so it can never be shown again.",
+      fr: "Des clés en libre-service. Le secret ne circule qu'ici, et n'est stocké que haché — il ne pourra jamais être réaffiché." },
+    desc: { en: "Creates a named key for the signed-in account. Only its hash is kept, exactly like a password: a copy of the store is not a copy of the keys.\nTwenty keys per account at most; past that one has to be revoked.",
+      fr: "Crée une clé nommée pour le compte connecté. Seul son hachage est conservé, exactement comme un mot de passe : une copie du magasin n'est pas une copie des clés.\nVingt clés par compte au plus ; au-delà, il faut en révoquer une." },
+    params: [
+      { name: "name", type: "string", required: true, desc: { en: "What the key is for, so it can be told apart in the list.", fr: "À quoi sert la clé, pour la reconnaître dans la liste." } },
+    ],
+    fields: [
+      { name: "name", type: "text", label: "name", required: true, placeholder: "zapier", value: "" },
+    ],
+    example: {
+      request: { name: "zapier" },
+      response: { key: { id: "key_9f2c…", name: "zapier", created_at: "2026-08-19T12:02:11Z", hint: "sk_9f2c1d84" }, secret: "sk_9f2c1d84e6b74a01bd35c7f0a1e2d3c4", notice: "Copy this key now: it is stored hashed and cannot be shown again." },
+    },
+    statuses: [["201", { en: "Key created — the secret is in this answer and nowhere else", fr: "Clé créée — le secret est dans cette réponse et nulle part ailleurs" }], ["400", { en: "Invalid name, or twentieth key already reached", fr: "Nom invalide, ou vingtième clé déjà atteinte" }], ["401", { en: "No session", fr: "Aucune session" }]],
+  },
+
+  {
+    key: "key-list", method: "GET", path: "/api/keys", auth: false, group: "account",
+    title: { en: "List your API keys", fr: "Lister ses clés d'API" },
+    icon: "M4 6h16M4 12h16M4 18h10",
+    card: { en: "Name, creation date, last use, and the first characters of each secret.",
+      fr: "Nom, date de création, dernière utilisation, et les premiers caractères de chaque secret." },
+    desc: { en: "The keys of the signed-in account. The hint is the first eleven characters of the secret: enough to tell two keys apart, not enough to use one.",
+      fr: "Les clés du compte connecté. Le hint reprend les onze premiers caractères du secret : assez pour distinguer deux clés, pas assez pour s'en servir." },
+    params: [],
+    fields: [],
+    example: { response: { keys: [{ id: "key_9f2c…", name: "zapier", created_at: "2026-08-19T12:02:11Z", last_used: "2026-08-19T13:40:02Z", hint: "sk_9f2c1d84" }] } },
+    statuses: [["200", "KeyList"], ["401", { en: "No session", fr: "Aucune session" }]],
+  },
+
+  {
+    key: "key-revoke", method: "DELETE", path: "/api/keys/{id}", auth: false, group: "account",
+    title: { en: "Revoke an API key", fr: "Révoquer une clé d'API" },
+    icon: "M6 6l12 12M18 6L6 18",
+    card: { en: "Immediate and final. A key belonging to another account is a 404, not a 403.",
+      fr: "Immédiate et définitive. Une clé d'un autre compte est un 404, pas un 403." },
+    desc: { en: "Revokes one key of the signed-in account.\nThe existence of a key that is not yours is none of your business, which is why the answer is 404 and not 403.",
+      fr: "Révoque une clé du compte connecté.\nL'existence d'une clé qui n'est pas la vôtre ne vous regarde pas, d'où le 404 plutôt qu'un 403." },
+    params: [{ name: "id", type: "path", required: true, desc: { en: "Key identifier, <code>key_</code> followed by 32 hexadecimal characters.", fr: "Identifiant de clé, <code>key_</code> suivi de 32 caractères hexadécimaux." } }],
+    fields: [{ name: "id", type: "text", label: "id", required: true, placeholder: "key_…", value: "" }],
+    buildPath: (v) => `/api/keys/${encodeURIComponent(v.id || "")}`,
+    example: { responseNote: { en: "Empty body", fr: "Corps vide" } },
+    statuses: [["204", { en: "Key revoked", fr: "Clé révoquée" }], ["401", { en: "No session", fr: "Aucune session" }], ["404", { en: "Unknown key for this account", fr: "Clé inconnue pour ce compte" }]],
+  },
+
+  {
+    key: "history", method: "GET", path: "/api/history", auth: false, group: "account",
+    title: { en: "Quality record", fr: "Registre de qualité" },
+    icon: "M4 5h16M4 12h16M4 19h10",
+    card: { en: "What this account did, newest first, with the verdict of each operation.",
+      fr: "Ce que ce compte a fait, du plus récent au plus ancien, avec le verdict de chaque opération." },
+    desc: { en: "Their history is a list of files; this one is a list of what each operation cost.\nWritten automatically whenever an operation is authenticated by one of the account's keys. An anonymous visitor leaves no trace — that is the counterpart of a free tier that asks for no account. Five hundred entries are kept per account, and this endpoint returns the hundred most recent.",
+      fr: "Leur historique est une liste de fichiers ; celui-ci est une liste de ce que chaque opération a coûté.\nÉcrit automatiquement dès qu'une opération est authentifiée par une clé du compte. Un visiteur anonyme ne laisse aucune trace — c'est la contrepartie d'un palier gratuit qui ne demande pas de compte. Cinq cents entrées sont conservées par compte, et cet endpoint renvoie les cent plus récentes." },
+    params: [],
+    fields: [],
+    example: { response: { entries: [{ id: "op_9f3a", tool: "compress", at: "2026-08-19T20:42:54Z", file: "contrat.pdf", bytes: 798720, pages: 12, verdict: { status: "ok", score: 100, summary: "4.2 MB → 780 kB, text intact, 12 pages" } }] } },
+    statuses: [["200", { en: "The operations, newest first", fr: "Les opérations, la plus récente d'abord" }], ["401", { en: "No session", fr: "Aucune session" }]],
+  },
+
+  {
+    key: "history-clear", method: "DELETE", path: "/api/history", auth: false, group: "account",
+    title: { en: "Clear the record", fr: "Effacer le registre" },
+    icon: "M6 7h12M9 7V5h6v2M8 7l1 13h6l1-13",
+    card: { en: "Empties the history without touching the account.",
+      fr: "Vide l'historique sans toucher au compte." },
+    desc: { en: "\"Delete my history\" is something people ask without wanting to leave: it deserves its own button.",
+      fr: "« Effacer mon historique » est une demande qu'on fait sans vouloir partir : elle mérite son propre bouton." },
+    params: [],
+    fields: [],
+    example: { responseNote: { en: "Empty body", fr: "Corps vide" } },
+    statuses: [["204", { en: "Record cleared", fr: "Registre vidé" }], ["401", { en: "No session", fr: "Aucune session" }]],
+  },
+
+  {
+    key: "usage", method: "GET", path: "/api/usage", auth: false, group: "account",
+    title: { en: "Plan and limits", fr: "Palier et limites" },
+    icon: "M4 19h16M7 16V9M12 16V5M17 16v-6",
+    card: { en: "What the plan allows, so a 429 is never the first time someone hears about a limit.",
+      fr: "Ce que le palier autorise, pour qu'un 429 ne soit jamais la première fois qu'on entend parler d'une limite." },
+    desc: { en: "The plan of the signed-in account, its number of keys, and the ceilings that go with it: file size, retention, requests per minute.",
+      fr: "Le palier du compte connecté, son nombre de clés, et les plafonds qui vont avec : taille de fichier, rétention, requêtes par minute." },
+    params: [],
+    fields: [],
+    example: { response: { plan: "free", keys: 2, limits: { max_file_mb: 100, retention_hours: 2, requests_per_minute: "unlimited" } } },
+    statuses: [["200", "Usage"], ["401", { en: "No session", fr: "Aucune session" }]],
+  },
+
+  // ────────────────────────────────────────── la surface agent ────────────
+
+  {
+    key: "mcp-describe", method: "GET", path: "/mcp", auth: false, group: "agents",
+    title: { en: "Describe the MCP server", fr: "Décrire le serveur MCP" },
+    icon: "M12 3a9 9 0 100 18 9 9 0 000-18zM3.6 9h16.8M3.6 15h16.8M12 3c2.5 2.4 3.8 5.4 3.8 9s-1.3 6.6-3.8 9c-2.5-2.4-3.8-5.4-3.8-9S9.5 5.4 12 3z",
+    card: { en: "What this MCP server is: protocol, transport, methods and the tool catalogue. No token — an integrator has to see the endpoint before configuring the key that opens it.",
+      fr: "Ce qu'est ce serveur MCP : protocole, transport, méthodes et catalogue d'outils. Sans token — un intégrateur doit voir l'endpoint avant de configurer la clé qui l'ouvre." },
+    desc: { en: "Name, version, protocol revision, transport, the JSON-RPC methods implemented and the twelve tools with their descriptions.\nOpen even when API_KEY is set: it carries no data, and an endpoint nobody can see is an endpoint nobody configures.",
+      fr: "Nom, version, révision du protocole, transport, les méthodes JSON-RPC implémentées et les douze outils avec leur description.\nOuvert même quand API_KEY est configurée : il ne porte aucune donnée, et un endpoint que personne ne voit est un endpoint que personne ne configure." },
+    params: [],
+    fields: [],
+    example: {
+      response: {
+        name: "md-to-pdf", product: "AI SmartTalk Documents", version: "0.2.0",
+        protocol: "Model Context Protocol", protocolVersion: "2025-06-18",
+        methods: ["initialize", "notifications/initialized", "ping", "tools/list", "tools/call"],
+        tools: [{ name: "document_render", description: "Render Markdown … into a PDF…" }],
+      },
+    },
+    statuses: [["200", { en: "Server description", fr: "Description du serveur" }]],
+  },
+
+  {
+    key: "mcp", method: "POST", path: "/mcp", json: true, group: "agents",
+    title: { en: "Model Context Protocol", fr: "Model Context Protocol" },
+    icon: "M9 4H5v6h4zM19 4h-4v6h4zM14 14h-4v6h4zM7 10v2h10v-2M12 12v2",
+    card: { en: "The agent surface: an assistant connects, reads the catalogue and drives the engine itself — with your key, so its consumption is attributed like any other integration.",
+      fr: "La surface agent : un assistant se connecte, lit le catalogue et pilote le moteur lui-même — avec votre clé, donc sa consommation est attribuée comme n'importe quelle intégration." },
+    desc: { en: "JSON-RPC 2.0 over streamable HTTP, with a plain JSON reply: this server never pushes, so it never opens an SSE stream. Methods: initialize, notifications/initialized, ping, tools/list, tools/call. A batch is accepted and answers one response per request that carried an id.\n" +
+        "Twelve tools: document_render, document_preview, document_audit, document_compose, document_compress, document_ocr, document_extract, document_pages, document_convert_office, document_attest, document_verify, themes_list. Their input schemas come from tools/list, which is the source of truth.\n" +
+        "A tool that fails answers isError: true inside its result, not a JSON-RPC error — a protocol error is invisible to a model, a readable result is a mistake it can correct. Every file produced comes back as an asset://, except document_preview, which returns PNG image blocks.",
+      fr: "JSON-RPC 2.0 sur streamable HTTP, avec une réponse JSON simple : ce serveur ne pousse jamais rien, donc il n'ouvre aucun flux SSE. Méthodes : initialize, notifications/initialized, ping, tools/list, tools/call. Un batch est accepté et répond une réponse par requête portant un id.\n" +
+        "Douze outils : document_render, document_preview, document_audit, document_compose, document_compress, document_ocr, document_extract, document_pages, document_convert_office, document_attest, document_verify, themes_list. Leurs schémas d'entrée viennent de tools/list, qui fait foi.\n" +
+        "Un outil qui échoue répond isError: true dans son résultat, pas une erreur JSON-RPC — une erreur de protocole est invisible pour un modèle, un résultat lisible est une faute qu'il corrige. Tout fichier produit revient en asset://, sauf document_preview, qui renvoie des blocs image PNG." },
+    params: [
+      { name: "jsonrpc", type: "string", required: true, desc: { en: "Exactly <code>\"2.0\"</code>.", fr: "Exactement <code>« 2.0 »</code>." } },
+      { name: "id", type: "number|string", desc: { en: "Echoed back in the answer. Leave it out and the call is a notification: nothing comes back, and a body holding only notifications answers <code>202</code>.", fr: "Repris dans la réponse. Omis, l'appel est une notification : rien ne revient, et un corps ne portant que des notifications répond <code>202</code>." } },
+      { name: "method", type: "enum", required: true, desc: { en: "<code>initialize</code>, <code>notifications/initialized</code>, <code>ping</code>, <code>tools/list</code> or <code>tools/call</code>.", fr: "<code>initialize</code>, <code>notifications/initialized</code>, <code>ping</code>, <code>tools/list</code> ou <code>tools/call</code>." } },
+      { name: "params", type: "object", desc: { en: "For <code>tools/call</code>: <code>{ \"name\": \"&lt;tool&gt;\", \"arguments\": { … } }</code>.", fr: "Pour <code>tools/call</code> : <code>{ \"name\": \"&lt;outil&gt;\", \"arguments\": { … } }</code>." } },
+    ],
+    fields: [
+      { type: "row", fields: [
+        { name: "jsonrpc", type: "text", label: "jsonrpc", required: true, value: "2.0" },
+        { name: "id", type: "number", label: "id", value: "1" },
+      ]},
+      { name: "method", type: "select", label: "method",
+        options: ["tools/list", "tools/call", "initialize", "ping"], value: "tools/list" },
+      { name: "params", type: "json", rows: 8, label: "params",
+        hint: { en: "for tools/call only", fr: "pour tools/call uniquement" }, value: "" },
+    ],
+    example: {
+      request: { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "document_render", arguments: { markdown: "# Rapport", options: { theme: "report" } } } },
+      response: { jsonrpc: "2.0", id: 2, result: { isError: false, content: [{ type: "text", text: "{ \"asset\": { \"id\": \"as_9f2c…\" }, \"pages\": 4 }" }] } },
+    },
+    statuses: [["200", { en: "JSON-RPC response, or an array of them for a batch", fr: "Réponse JSON-RPC, ou un tableau pour un batch" }], ["202", { en: "Notifications only: nothing to answer", fr: "Notifications seules : rien à répondre" }], ["400", { en: "Body is not JSON", fr: "Corps non JSON" }], ["401", ST.unauthorized], ["429", { en: "Quota exceeded for the key", fr: "Quota dépassé pour la clé" }]],
+  },
+
   {
     key: "themes", method: "GET", path: "/api/themes", group: "service",
     title: { en: "Available themes", fr: "Thèmes disponibles" },
@@ -1343,6 +1580,8 @@ const GROUPS = [
   { id: "convert", title: { en: "Conversions", fr: "Conversions" } },
   { id: "files", title: { en: "Files", fr: "Fichiers" } },
   { id: "jobs", title: { en: "Asynchronous jobs", fr: "Travaux asynchrones" } },
+  { id: "agents", title: { en: "Agents (MCP)", fr: "Agents (MCP)" } },
+  { id: "account", title: { en: "Account and keys", fr: "Compte et clés" } },
   { id: "service", title: { en: "Service", fr: "Service" } },
   { id: "legacy", title: { en: "Compatibility", fr: "Compatibilité" } },
 ];

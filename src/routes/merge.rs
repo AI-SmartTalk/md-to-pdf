@@ -37,7 +37,7 @@ pub async fn merge(
     )
     .await?;
 
-    helpers::deliver_tool(pdf, response).await
+    helpers::deliver_tool(pdf, response, "merge").await
 }
 
 fn unite(

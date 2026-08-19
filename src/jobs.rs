@@ -408,6 +408,7 @@ fn describe(err: &AppError) -> String {
         | AppError::Timeout(m)
         | AppError::Unauthorized(m)
         | AppError::TooManyRequests(m) => m.clone(),
+        AppError::Conflict(m) => m.clone(),
         AppError::Upstream { service, details } => format!("{} unavailable: {}", service, details),
     }
 }

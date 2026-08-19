@@ -45,7 +45,7 @@ pub async fn protect(
     )
     .await?;
 
-    helpers::deliver_tool(produced, response).await
+    helpers::deliver_tool(produced, response, "protect").await
 }
 
 fn encrypt(

@@ -205,6 +205,7 @@ pub fn reason(error: &AppError) -> String {
         | AppError::Timeout(message)
         | AppError::Unauthorized(message)
         | AppError::TooManyRequests(message) => message.clone(),
+        AppError::Conflict(message) => message.clone(),
         AppError::ProcessFailed { message, stderr } if stderr.is_empty() => message.clone(),
         AppError::ProcessFailed { message, stderr } => format!("{}: {}", message, stderr),
         AppError::Upstream { service, details } => format!("{} unavailable: {}", service, details),

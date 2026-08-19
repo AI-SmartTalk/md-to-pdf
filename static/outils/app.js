@@ -87,6 +87,9 @@
       "run.working": "Traitement…",
       "theme.toLight": "Passer au thème clair",
       "theme.toDark": "Passer au thème sombre",
+      "invite.text": "Gardez ce document et son verdict : créez un compte, c'est gratuit.",
+      "invite.create": "Créer un compte",
+      "invite.signin": "J'ai déjà un compte",
       "bytes.b": "o", "bytes.kb": "ko", "bytes.mb": "Mo",
     },
     en: {
@@ -130,11 +133,22 @@
       "run.working": "Working…",
       "theme.toLight": "Switch to the light theme",
       "theme.toDark": "Switch to the dark theme",
+      "invite.text": "Keep this document and its verdict: create an account, it is free.",
+      "invite.create": "Create an account",
+      "invite.signin": "I already have an account",
       "bytes.b": "B", "bytes.kb": "kB", "bytes.mb": "MB",
     },
   };
 
   const LANG = (document.documentElement.lang || "fr").toLowerCase().startsWith("en") ? "en" : "fr";
+
+  /* Les pages de compte existent dans les deux langues. Proposer « Create an account » qui
+     ouvre une page en français serait pire que ne rien proposer, et c'est exactement ce que
+     l'entonnoir faisait pour toute la moitié anglaise du site. */
+  const ACCOUNT_PATHS = {
+    fr: { signup: "/inscription", signin: "/connexion" },
+    en: { signup: "/signup", signin: "/signin" },
+  }[LANG];
 
   function t(key, vars) {
     const raw = (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.fr[key] || key;
@@ -292,6 +306,103 @@
   function authHeaders() {
     const key = apiKey();
     return key ? { "X-API-Key": key } : {};
+  }
+
+  // ═══════════════════════════════════════════════════════ compte
+
+  /* Le cookie de session s'appelle `mdpdf_session` et il est HttpOnly : le script ne peut
+     pas le lire, et n'a pas à le faire. Une seule question suffit — `GET /api/auth/me`,
+     envoyé avec les cookies de l'origine — et sa réponse sert deux choses : le libellé du
+     bouton d'en-tête, et le fait de ne jamais proposer un compte à qui en a déjà un.
+
+     Trois états, et la nuance compte : `true` connecté, `false` anonyme (le service a
+     répondu 401), `null` on ne sait pas (service injoignable). On ne propose rien dans le
+     troisième cas — se taire vaut mieux que de proposer un compte à un membre. */
+
+  // « Déjà proposé pendant cette visite » : sessionStorage, donc l'onglet, donc la visite.
+  const INVITE_STORAGE = "mdpdf.accountInvite";
+
+  const accountReady = (function () {
+    try {
+      return fetch(API_BASE + "/api/auth/me", {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      })
+        .then((response) => (response.ok ? true : false))
+        .catch(() => null);
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  })();
+
+  /* La page est servie avec la rétention du visiteur anonyme, et c'est volontaire : c'est
+     ce que voient le moteur de recherche et la grande majorité des arrivants, et la page
+     reste ainsi la même pour tout le monde en cache. Un membre a droit à un autre chiffre,
+     alors on le corrige ici — sinon la page annoncerait deux heures à quelqu'un qui en a
+     vingt-quatre, ce qui revient à ne pas tenir ce qu'on lui a vendu à l'inscription. */
+  function initRetention() {
+    const marques = $$('[data-role="retention-hours"]');
+    if (!marques.length) return;
+    accountReady.then((signedIn) => {
+      if (signedIn !== true) return;
+      marques.forEach((marque) => {
+        const heures = marque.dataset.memberHours;
+        if (heures) marque.textContent = heures;
+      });
+    });
+  }
+
+  /* Le serveur sert « Se connecter » : c'est le bon défaut, y compris hors ligne. On ne
+     touche au lien que dans le cas où il a tort — quelqu'un est connecté. */
+  function initAccountLinks() {
+    const links = $$('[data-role="account-link"]');
+    if (!links.length) return;
+    accountReady.then((signedIn) => {
+      if (signedIn !== true) return;
+      links.forEach((link) => {
+        if (link.dataset.inHref) link.setAttribute("href", link.dataset.inHref);
+        if (link.dataset.inLabel) link.textContent = link.dataset.inLabel;
+      });
+    });
+  }
+
+  /* La proposition de compte : après un premier traitement réussi, et jamais avant.
+
+     Elle arrive sous la carte de résultat, après le téléchargement et après le verdict —
+     donc elle ne bloque rien, ne recouvre rien, et ne demande rien pour continuer. Une
+     fois par visite, jamais à un membre. C'est le seul moment où l'offre a du sens : la
+     personne vient de voir ce qu'on sait faire, et ce qu'elle gagnerait à le garder. */
+  let inviteOffered = false;
+
+  function offerAccount(host) {
+    if (inviteOffered || !host) return;
+    // Le drapeau est posé tout de suite : deux outils sur la même page ne doivent pas
+    // faire la proposition deux fois pendant que la réponse du serveur se fait attendre.
+    inviteOffered = true;
+
+    try {
+      if (sessionStorage.getItem(INVITE_STORAGE)) return;
+    } catch (e) { /* navigation privée : on proposera, une fois, et c'est tout */ }
+
+    accountReady.then((signedIn) => {
+      if (signedIn !== false) return; // membre, ou réponse inconnue
+      if (host.hidden) return; // le résultat a été effacé entre-temps
+      try { sessionStorage.setItem(INVITE_STORAGE, "1"); } catch (e) { /* idem */ }
+
+      const band = el("p", { class: "notice account-invite" }, [
+        el("span", { text: t("invite.text") }),
+        el("a", { class: "btn ghost sm", text: t("invite.create"), attrs: { href: ACCOUNT_PATHS.signup } }),
+        el("a", { text: t("invite.signin"), attrs: { href: ACCOUNT_PATHS.signin } }),
+      ]);
+      // `.notice` est une ligne ; ici elle en fait trois sur un téléphone. Trois
+      // déclarations posées ici plutôt qu'une classe de plus dans la feuille de style.
+      band.style.flexWrap = "wrap";
+      band.style.alignItems = "center";
+      band.style.gap = "10px";
+
+      host.appendChild(band);
+    });
   }
 
   // ═══════════════════════════════════════════════════════ appels HTTP
@@ -834,6 +945,7 @@
 
     this.renderChain(assets[0]);
     host.appendChild(this.renderRetention());
+    offerAccount(host);
 
     // Le focus part sur le résultat : au clavier comme au lecteur d'écran, la
     // réponse ne doit pas être à chercher.
@@ -889,6 +1001,7 @@
     host.appendChild(el("div", { class: "result-head" }, [el("h2", { text: t("result.title") })]));
     host.appendChild(button);
     host.appendChild(this.renderRetention());
+    offerAccount(host);
   };
 
   /* Enchaînement : les liens déclarés `data-chain` repartent avec l'asset
@@ -906,11 +1019,29 @@
     this.dom.chain.hidden = false;
   };
 
+  /* Combien de temps ces fichiers-là vivront, réellement.
+
+     L'attribut `data-retention-hours` porte la valeur du visiteur anonyme, servie dans une
+     page identique pour tout le monde. Mais un membre connecté a droit à une rétention plus
+     longue, et le service l'a déjà tranché : chaque fichier revient avec son `expires_unix`.
+     On lit donc la décision plutôt que de la redeviner, et on ne retombe sur l'attribut que
+     lorsqu'aucun fichier n'est là pour le dire. */
+  Tool.prototype.actualRetentionHours = function () {
+    const dates = this.produced.map((a) => a.expires_unix)
+      .concat(this.entries.filter((e) => e.asset).map((e) => e.asset.expires_unix))
+      .filter((value) => typeof value === "number" && value > 0);
+
+    if (!dates.length) return this.retentionHours;
+
+    const heures = Math.round((Math.max.apply(null, dates) - Date.now() / 1000) / 3600);
+    return heures > 0 ? heures : this.retentionHours;
+  };
+
   /* La rétention se rappelle après chaque traitement, avec le moyen d'y couper
      court tout de suite. C'est un argument, pas une petite ligne. */
   Tool.prototype.renderRetention = function () {
     const self = this;
-    const note = el("p", { class: "notice", text: t("result.retention", { hours: this.retentionHours }) });
+    const note = el("p", { class: "notice", text: t("result.retention", { hours: this.actualRetentionHours() }) });
 
     const ids = this.produced.map((a) => a.id)
       .concat(this.entries.filter((e) => e.asset).map((e) => e.asset.id));
@@ -1275,6 +1406,8 @@
   function init() {
     initTheme();
     initApiKeyFields();
+    initAccountLinks();
+    initRetention();
     guardWindowDrops();
     $$("[data-tool]").forEach((root) => {
       if (root.dataset.endpoint) new Tool(root);

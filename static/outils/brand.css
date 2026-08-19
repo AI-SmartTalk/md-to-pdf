@@ -545,7 +545,13 @@ button { font-family: inherit; }
 .field.inline { display: flex; align-items: center; gap: 9px; }
 .field.inline > label { font-weight: 500; }
 
-input[type="text"], input[type="number"], input[type="password"], select, textarea {
+/* Les formulaires de compte : une colonne étroite, parce qu'un champ e-mail large
+   n'aide personne à le relire. */
+.account-col { display: grid; gap: 14px; max-width: 460px; }
+.account-alt { font-size: 13.5px; color: var(--text-dim); }
+
+input[type="text"], input[type="number"], input[type="password"], input[type="email"],
+select, textarea {
   width: 100%;
   font-family: var(--mono);
   font-size: 13px;

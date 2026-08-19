@@ -376,7 +376,10 @@ The **kind is read from the first bytes, never from the extension**: a zip renam
 `invoice.pdf` is refused by the endpoint that needs a PDF rather than handed to a parser
 that nobody checked. `ASSET_MAX_MB` (100) and `ASSET_MAX_PAGES` (2000) bound what gets in.
 
-`ASSET_TTL_SECS` (7200, i.e. two hours) bounds how long it stays. **Expiry is enforced on
+`ASSET_TTL_SECS` (7200, i.e. two hours) bounds how long it stays — or
+`ASSET_TTL_MEMBER_SECS` (86400, a day) when the work belongs to an account, which is what
+the sign-up page offers in exchange for an address. The choice is made from the owner
+already attached to the request, never from anything a caller sends. **Expiry is enforced on
 read as well as by the sweeper**: an asset the sweeper has not reached yet is already
 invisible, otherwise the retention promise would only be a promise. `DELETE /api/files/{id}`
 forgets it sooner.
@@ -545,7 +548,11 @@ the conversation.
 | `/` · `/en` | The public home, French and English |
 | `/outils/<slug>` · `/tools/<slug>` | One page per tool, 21 in each language |
 | `/tarifs` · `/pricing` | The offer |
-| **`/console`** | **The integrator console, unchanged** — every view it had, at its own address |
+| `/guides` · `/guides/<slug>` | Fifteen guides, indexable, one per question people search for |
+| `/inscription` · `/signup` · `/connexion` · `/signin` | Creating an account and signing in |
+| `/app` · `/en/app` | The workspace: quality record, keys, plan |
+| **`/dev`** | **The integrator console, unchanged** — every view it had, under the site's shell |
+| `/console` | 308 to `/dev`, because that address is in READMEs and bookmarks |
 | `/sitemap.xml` · `/robots.txt` · `/og.png` | What a crawler and a social preview need |
 
 The root used to be the console, which greeted every visitor with
@@ -557,6 +564,40 @@ Pages are server-rendered with Tera from `static/outils/catalog.{fr,en}.json`. A
 is a catalogue entry, not a template change — the client (`static/outils/app.js`) is driven
 entirely by `data-*` attributes, so one implementation serves all of them.
 `static/outils/README.md` documents the contract.
+
+### Accounts, and what an account is for
+
+Signing up takes an address and a password, and nothing else — no card, at any point. What
+it buys is deliberately not a gate: every tool works signed out, without a watermark and
+without a task limit. An account **adds**, it never takes away.
+
+| | Anonymous | With a free account |
+|---|---|---|
+| Every tool, no watermark | yes | yes |
+| Retention | `ASSET_TTL_SECS` (2 h) | `ASSET_TTL_MEMBER_SECS` (24 h) |
+| Quality record | — | every operation, with its verdict |
+| API keys | — | self-served, created and revoked without us |
+
+**Two credentials reach the API and they never mix.** An `X-API-Key` header says a program
+is calling; a session cookie says a human is looking at a page. Both resolve to the same
+attribution name — `<12 hex of the account>/<key name>`, and `/web` for a browser session —
+which is what lands in the logs, in the metrics, and in the quality record.
+
+That second half matters more than it looks: the tool pages call the API **with no key at
+all**, and most members will never mint one. Without the cookie branch in `src/auth.rs`
+their work is attributed to nobody and the workspace is an empty page for almost everyone
+who signs up. The cookie is `HttpOnly` and `SameSite=Lax` — the second property is what
+makes reading it here safe, since a cross-site form cannot spend somebody's session.
+
+Passwords are PBKDF2-HMAC-SHA256, 600 000 rounds (the OWASP floor for this construction),
+built on the HMAC already in `src/sign.rs` rather than pulled in as a crate. Hashing runs on
+`exec::offload_cpu`, which is a **separate** queue from the render pool: signing in must not
+be refused because the service is busy compressing a PDF, and a burst of sign-ins must not
+starve the renderers.
+
+Everything lives in files under `public/accounts/` and `public/sessions/`, both
+`.gitignore`d — one holds e-mail addresses and password hashes, the other holds tokens that
+open an account.
 
 ### Drop first, choose after
 
@@ -721,6 +762,9 @@ Copy `.env.example` to `.env` (or let `install.sh` generate it).
 | `RUST_LOG`                 | `info`    | Log level                                                            |
 | `MEM_LIMIT` / `CPUS`       | `1g` / `2.0` | Container resource ceiling                                        |
 | `PDF_RETENTION_DAYS`       | `180`     | Age past which the purge deletes saved PDFs                          |
+| `ASSET_TTL_SECS`           | `7200`    | Retention of an anonymous visitor's uploads                           |
+| `ASSET_TTL_MEMBER_SECS`    | `86400`   | Retention of work that belongs to an account — the figure the sign-up page quotes |
+| `AUTH_ATTEMPTS_PER_MINUTE` | `10`      | Sign-in and sign-up attempts per client address — the brute-force *and* the denial-of-service limit, since each one costs 600 000 PBKDF2 rounds |
 | `PDF_MAX_CONCURRENCY`      | cores, ≤ 8 | Simultaneous renders; the rest queue                                |
 | `PDF_QUEUE_TIMEOUT_SECS`   | `30`      | Wait in the queue before a `429`                                     |
 | `PDF_CACHE_ENABLED`        | `true`    | Content-addressed render cache in `public/cache`                     |

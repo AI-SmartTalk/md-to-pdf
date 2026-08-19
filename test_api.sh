@@ -117,7 +117,7 @@ echo
 # -----------------------------------------------------------
 echo "--- The public site ---"
 
-for path in / /en /tarifs /pricing /outils/compresser-pdf /tools/compress-pdf /console /sitemap.xml /robots.txt /og.png; do
+for path in / /en /tarifs /pricing /outils/compresser-pdf /tools/compress-pdf /dev /sitemap.xml /robots.txt /og.png; do
   CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$path")
   check "GET $path" 200 "$CODE"
 done
@@ -126,8 +126,19 @@ done
 curl -s -o "$TMP_DIR/home.html" "$BASE_URL/"
 check_contains "the root is the public site, not the console" "$TMP_DIR/home.html" "AI SmartTalk <strong>Documents</strong>"
 check_absent "and no longer announces the stack to a visitor" "$TMP_DIR/home.html" "SERVICE INTERNE"
-curl -s -o "$TMP_DIR/console.html" "$BASE_URL/console"
+curl -s -o "$TMP_DIR/console.html" "$BASE_URL/dev"
 check_contains "the console is intact at its own address" "$TMP_DIR/console.html" 'id="view-console"'
+
+# The console moved from /console to /dev when the two front doors became one. The old
+# address has to keep answering: it is in READMEs, in bookmarks, and in people's habits.
+CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/console")
+check "the old console address redirects rather than 404s" 308 "$CODE"
+LOCATION=$(curl -s -o /dev/null -w "%{redirect_url}" "$BASE_URL/console")
+if [ "${LOCATION%/dev}" != "$LOCATION" ]; then
+  green "  ✓ and it redirects to /dev"; PASS=$((PASS + 1))
+else
+  red "  ✗ and it redirects to /dev — got: $LOCATION"; FAIL=$((FAIL + 1))
+fi
 
 # Where the home pages used to live must redirect, never serve a second copy
 for pair in "/outils 308" "/tools 308"; do
@@ -183,6 +194,90 @@ check_contains "and stays JSON for an integration" "$TMP_DIR/404.json" '"error"'
 # The card that shows up when a link is shared, rendered by the engine itself
 curl -s -o "$TMP_DIR/og.png" "$BASE_URL/og.png"
 check_png "the social card is a real image" "$TMP_DIR/og.png"
+echo
+
+# -----------------------------------------------------------
+# 0bis. One source of truth for the API
+#
+# tests/api_surface.rs already compares src/main.rs, swagger.yaml and spec.js at
+# build time — that is where a drift is caught first, before anything ships.
+# This block covers what a build-time test cannot see: the documents actually
+# SERVED by this instance. An image built from a stale static/ passes cargo test
+# on the source tree and still hands visitors a reference for another service.
+# -----------------------------------------------------------
+echo "--- One source of truth for the API ---"
+
+curl -s -o "$TMP_DIR/spec.js" "$BASE_URL/static/spec.js"
+curl -s -o "$TMP_DIR/swagger.yaml" "$BASE_URL/static/swagger.yaml"
+
+python3 - "$TMP_DIR/spec.js" "$TMP_DIR/swagger.yaml" <<'PY' && { green "  ✓ the served spec.js and swagger.yaml describe the same endpoints"; PASS=$((PASS + 1)); } || { red "  ✗ the two served documents disagree (see above)"; FAIL=$((FAIL + 1)); }
+import sys
+
+METHODS = ("get", "post", "put", "delete", "patch", "head", "options")
+
+
+def from_spec_js(path):
+    """One endpoint per object, with method and path on the line that carries the key."""
+    found = set()
+    for line in open(path, encoding="utf-8"):
+        method, endpoint = quoted(line, "method: "), quoted(line, "path: ")
+        if method and endpoint:
+            found.add(f"{method} {endpoint}")
+    return found
+
+
+def quoted(line, key):
+    start = 0
+    while (at := line.find(key, start)) != -1:
+        before = line[at - 1] if at else ""
+        if not (before.isalnum() or before == "_"):
+            rest = line[at + len(key):]
+            if rest.startswith('"'):
+                return rest[1:].split('"')[0]
+            return None
+        start = at + len(key)
+    return None
+
+
+def from_swagger(path):
+    """Two spaces name a path, four an operation on it."""
+    found, current, inside = set(), None, False
+    for line in open(path, encoding="utf-8"):
+        line = line.rstrip("\n")
+        if line.startswith("paths:"):
+            inside = True
+            continue
+        if not inside:
+            continue
+        if line and not line.startswith((" ", "#")):
+            break
+        if line.startswith("  /") and line.endswith(":"):
+            current = line.strip().rstrip(":")
+        elif current and line[:4] == "    " and line[4:] in [m + ":" for m in METHODS]:
+            found.add(f"{line.strip().rstrip(':').upper()} {current}")
+    return found
+
+
+spec, swagger = from_spec_js(sys.argv[1]), from_swagger(sys.argv[2])
+if not spec or not swagger:
+    print(f"  one of the documents came back empty: spec.js {len(spec)}, swagger.yaml {len(swagger)}")
+    sys.exit(1)
+
+for missing, where, other in ((spec - swagger, "swagger.yaml", "spec.js"),
+                              (swagger - spec, "spec.js", "swagger.yaml")):
+    for endpoint in sorted(missing):
+        print(f"  missing from {where} but declared by {other}: {endpoint}")
+
+print(f"  {len(spec)} endpoints documented, both documents agreeing")
+sys.exit(0 if spec == swagger else 1)
+PY
+
+# The agent surface used to be mounted and documented nowhere. It is open by
+# design: an integrator who cannot see the endpoint cannot configure the key.
+CODE=$(curl -s -o "$TMP_DIR/mcp.json" -w "%{http_code}" "$BASE_URL/mcp")
+check "GET /mcp describes the agent surface without a key" 200 "$CODE"
+check_contains "and names the protocol it speaks" "$TMP_DIR/mcp.json" "Model Context Protocol"
+check_contains "and lists its tools" "$TMP_DIR/mcp.json" "document_render"
 echo
 
 # -----------------------------------------------------------
@@ -1260,6 +1355,252 @@ if [ -n "$API_KEY" ]; then
   CODE=$(curl -s -o /dev/null -w "%{http_code}" -F "markdown=# legacy" "$BASE_URL/")
   check "POST / stays open without a key (legacy contract)" 200 "$CODE"
 fi
+
+# =========================================================================
+# Accounts: signing up, minting a key, and the quality record
+# =========================================================================
+# This is the funnel the whole product hangs off, and it broke silently once
+# already: on a deployment with no API_KEY the guard answered `open` before it
+# ever looked up a member's own key, so no work was ever attributed and the
+# quality record stayed permanently empty. These tests are that regression.
+
+echo
+yellow "== Accounts and the quality record =="
+
+JAR=$(mktemp)
+EMAIL="suite-$$@example.test"
+
+CODE=$(curl -s -o /tmp/api_signup.json -w "%{http_code}" -c "$JAR" \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"un mot de passe assez long\"}" \
+  "$BASE_URL/api/auth/signup")
+
+# `AUTH_ATTEMPTS_PER_MINUTE` guards these routes, and this block spends several attempts.
+# Two runs inside the same minute therefore hit the limit — which is the limit working, not
+# a regression. Say so and move on rather than reporting a wall of red.
+if [ "$CODE" = "429" ]; then
+  skip "Accounts: the sign-in rate limit is still counting a previous run — wait a minute"
+  ACCOUNTS_LIMITED=yes
+else
+  ACCOUNTS_LIMITED=no
+fi
+
+if [ "$ACCOUNTS_LIMITED" = "no" ]; then
+check "POST /api/auth/signup creates an account" 201 "$CODE"
+check_contains "signup answers with the account" /tmp/api_signup.json '"email"'
+check_absent "signup never echoes the password back" /tmp/api_signup.json 'mot de passe'
+
+CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"un mot de passe assez long\"}" \
+  "$BASE_URL/api/auth/signup")
+check "the same address cannot be claimed twice" 409 "$CODE"
+
+CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"le mauvais\"}" \
+  "$BASE_URL/api/auth/login")
+check "a wrong password is refused" 401 "$CODE"
+
+# A session cookie with no age dies when the browser closes, which would make a thirty-day
+# server session worth exactly one browsing session — everybody signing in again, every
+# time, with nothing on screen explaining why.
+COOKIE_EXPIRY=$(grep mdpdf_session "$JAR" 2>/dev/null | awk '{print $5}')
+if [ -n "$COOKIE_EXPIRY" ] && [ "$COOKIE_EXPIRY" -gt 0 ]; then
+  green "  ✓ the session cookie outlives the browser window"
+  PASS=$((PASS + 1))
+else
+  red "  ✗ the session cookie outlives the browser window — got expiry \"$COOKIE_EXPIRY\""
+  FAIL=$((FAIL + 1))
+fi
+
+
+CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/auth/me")
+check "GET /api/auth/me without a session → 401" 401 "$CODE"
+
+CODE=$(curl -s -o /tmp/api_key.json -w "%{http_code}" -b "$JAR" \
+  -H 'Content-Type: application/json' -d '{"name":"suite"}' "$BASE_URL/api/keys")
+check "POST /api/keys mints a key for the member" 201 "$CODE"
+check_contains "the secret travels once, and says so" /tmp/api_key.json 'cannot be shown again'
+
+MEMBER_KEY=$(sed -n 's/.*"secret":"\([^"]*\)".*/\1/p' /tmp/api_key.json)
+if [ -z "$MEMBER_KEY" ]; then
+  red "  ✗ no key secret returned — skipping the attribution tests"
+  FAIL=$((FAIL + 1))
+else
+  curl -s -o /tmp/api_owned.pdf -H "X-API-Key: $MEMBER_KEY" \
+    -H 'Content-Type: application/json' \
+    -d '{"markdown":"# Attribution\n\nUn paragraphe assez long pour porter une couche de texte."}' \
+    "$BASE_URL/api/convert" > /dev/null
+
+  curl -s -o /tmp/api_owned.json -H "X-API-Key: $MEMBER_KEY" \
+    -F "file=@/tmp/api_owned.pdf" "$BASE_URL/api/files" > /dev/null
+  # The regression in one line: the asset must carry the member's name, not "open"
+  check_contains "a member's key attributes the work to that member" /tmp/api_owned.json '/suite"'
+
+  ASSET=$(sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p' /tmp/api_owned.json)
+  curl -s -o /dev/null -H "X-API-Key: $MEMBER_KEY" -H 'Content-Type: application/json' \
+    -d "{\"pdf\":\"asset://$ASSET\",\"output\":\"asset\"}" "$BASE_URL/api/compress"
+
+  curl -s -o /tmp/api_history.json -b "$JAR" "$BASE_URL/api/history" > /dev/null
+  check_contains "the operation is written to the quality record" /tmp/api_history.json '"tool":"compress"'
+  # The record exists to hold the verdict; without it the page is an empty shell
+  check_contains "the record keeps the verdict, not just the file" /tmp/api_history.json '"verdict"'
+  check_absent "the tool is named, not guessed from the file name" /tmp/api_history.json '"tool":"compressed.pdf"'
+
+  cp /tmp/api_owned.pdf /tmp/api_web.pdf
+
+  # The record has to name the visitor's own document. It named the tool's output instead —
+  # every line reading "compressed.pdf" — which turns a history into ten identical rows on the
+  # one page this product hangs its argument on.
+  cp /tmp/api_owned.pdf /tmp/contrat-de-test.pdf
+  curl -s -o /tmp/api_named.json -b "$JAR" -F "file=@/tmp/contrat-de-test.pdf" "$BASE_URL/api/files" > /dev/null
+  NAMED_ASSET=$(sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p' /tmp/api_named.json)
+  curl -s -o /dev/null -b "$JAR" -H 'Content-Type: application/json' \
+    -d "{\"pdf\":\"asset://$NAMED_ASSET\",\"output\":\"asset\"}" "$BASE_URL/api/compress"
+  curl -s -o /tmp/api_named_history.json -b "$JAR" "$BASE_URL/api/history" > /dev/null
+  check_contains "the record names the caller's document, not the tool's output" \
+    /tmp/api_named_history.json '"file":"contrat-de-test.pdf"'
+  rm -f /tmp/contrat-de-test.pdf /tmp/api_named.json /tmp/api_named_history.json
+
+  # "web" is what a browser session files under. A key of the same name would share its
+  # attribution entry, and revoking the key would silently stop recording the member's work.
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" -b "$JAR" -H 'Content-Type: application/json' \
+    -d '{"name":"web"}' "$BASE_URL/api/keys")
+  check "a key cannot be named after the browser session" 400 "$CODE"
+
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" -b "$JAR" -H 'Content-Type: application/json' \
+    -d '{"name":"suite"}' "$BASE_URL/api/keys")
+  check "two keys of one account cannot share a name" 409 "$CODE"
+
+  # Shown beside every key, and the one signal a member leans on to decide which is safe to
+  # revoke — so "never used" about the key running production is worse than no column at all.
+  curl -s -o /dev/null -H "X-API-Key: $MEMBER_KEY" -F "file=@/tmp/api_web.pdf" "$BASE_URL/api/files"
+  curl -s -o /tmp/api_keys.json -b "$JAR" "$BASE_URL/api/keys" > /dev/null
+  check_contains "a key that was just used no longer reads as never used" /tmp/api_keys.json '"last_used"'
+  rm -f /tmp/api_keys.json
+
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE -b "$JAR" "$BASE_URL/api/history")
+  check "DELETE /api/history clears it" 204 "$CODE"
+
+  KEY_ID=$(sed -n 's/.*"key":{"id":"\([^"]*\)".*/\1/p' /tmp/api_key.json)
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE -b "$JAR" "$BASE_URL/api/keys/$KEY_ID")
+  check "DELETE /api/keys/<id> revokes it" 204 "$CODE"
+
+  CODE=$(curl -s -o /tmp/api_revoked.json -w "%{http_code}" -H "X-API-Key: $MEMBER_KEY" \
+    -F "file=@/tmp/api_owned.pdf" "$BASE_URL/api/files")
+  # A revoked key is no longer *anybody's*. Where a key is required that means 401;
+  # on a deployment that requires none it means the request passes as anonymous. What
+  # must never happen, in either case, is the work still being filed under the member.
+  if [ "$CODE" = "401" ]; then
+    check "a revoked key stops working" 401 "$CODE"
+  else
+    check "a revoked key is still accepted where none is required" 201 "$CODE"
+    check_absent "but the work is no longer attributed to the member" /tmp/api_revoked.json '/suite"'
+  fi
+fi
+
+# The case that matters most: a member who never mints a key. The tool pages call this
+# API from the browser with a session cookie and no key at all, and that work has to reach
+# their record — otherwise the workspace is an empty page for almost everyone who signs up.
+curl -s -o /tmp/api_web.json -b "$JAR" -F "file=@/tmp/api_web.pdf" "$BASE_URL/api/files" > /dev/null
+check_contains "a browser session attributes the work to the member" /tmp/api_web.json '/web"'
+
+WEB_ASSET=$(sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p' /tmp/api_web.json)
+curl -s -o /dev/null -b "$JAR" -H 'Content-Type: application/json' \
+  -d "{\"pdf\":\"asset://$WEB_ASSET\",\"output\":\"asset\"}" "$BASE_URL/api/compress"
+curl -s -o /tmp/api_web_history.json -b "$JAR" "$BASE_URL/api/history" > /dev/null
+check_contains "and it reaches the quality record without any API key" /tmp/api_web_history.json '"tool":"compress"'
+
+# The sign-up page offers longer retention in exchange for an address. That has to be a
+# number in the code, not a sentence on a page: a member's file must outlive an anonymous
+# one, and the page must quote the figure the service actually applies.
+ANON_TTL=$(curl -s -F "file=@/tmp/api_web.pdf" "$BASE_URL/api/files" \
+  | sed -n 's/.*"expires_unix":\([0-9]*\).*/\1/p')
+MEMBER_TTL=$(curl -s -b "$JAR" -F "file=@/tmp/api_web.pdf" "$BASE_URL/api/files" \
+  | sed -n 's/.*"expires_unix":\([0-9]*\).*/\1/p')
+if [ -n "$ANON_TTL" ] && [ -n "$MEMBER_TTL" ] && [ "$MEMBER_TTL" -gt "$ANON_TTL" ]; then
+  green "  ✓ a member's files really are kept longer than an anonymous visitor's"
+  PASS=$((PASS + 1))
+else
+  red "  ✗ a member's files really are kept longer — anonymous $ANON_TTL, member $MEMBER_TTL"
+  FAIL=$((FAIL + 1))
+fi
+
+curl -s -o /tmp/api_signup_page.html "$BASE_URL/inscription"
+MEMBER_HOURS=$(curl -s -b "$JAR" "$BASE_URL/api/usage" \
+  | sed -n 's/.*"retention_hours":\([0-9]*\).*/\1/p')
+check_contains "and the sign-up page quotes the figure the service applies" \
+  /tmp/api_signup_page.html "$MEMBER_HOURS heures"
+rm -f /tmp/api_signup_page.html
+
+# The privacy promise works the other way round: no session, no trace.
+curl -s -o /tmp/api_anon.json -F "file=@/tmp/api_web.pdf" "$BASE_URL/api/files" > /dev/null
+check_absent "an anonymous visitor is still attributed to nobody" /tmp/api_anon.json '/web"'
+
+rm -f /tmp/api_web.json /tmp/api_web_history.json /tmp/api_anon.json /tmp/api_web.pdf
+
+CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST -b "$JAR" "$BASE_URL/api/auth/logout")
+check "POST /api/auth/logout closes the session" 204 "$CODE"
+
+CODE=$(curl -s -o /dev/null -w "%{http_code}" -b "$JAR" "$BASE_URL/api/history")
+check "the session is dead afterwards" 401 "$CODE"
+
+rm -f "$JAR" /tmp/api_signup.json /tmp/api_key.json /tmp/api_owned.pdf /tmp/api_owned.json \
+  /tmp/api_revoked.json /tmp/api_history.json
+
+# Two protections that only exist because each attempt costs 600 000 PBKDF2 rounds on a
+# bounded pool: an unbounded password would hash for minutes, and unlimited attempts would
+# be both a brute-force oracle and a denial of service against everyone else's sign-in.
+LONG_PASSWORD=$(head -c 4000 /dev/zero | tr '\0' 'a')
+CODE=$(curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"long-$$@example.test\",\"password\":\"$LONG_PASSWORD\"}" \
+  "$BASE_URL/api/auth/signup")
+# 400 refuses it outright, 429 means the rate limit got there first — both refuse to hash
+if [ "$CODE" = "400" ] || [ "$CODE" = "429" ]; then
+  green "  ✓ an unbounded password is refused before it is hashed"
+  PASS=$((PASS + 1))
+else
+  red "  ✗ an unbounded password is refused before it is hashed — got HTTP $CODE"
+  FAIL=$((FAIL + 1))
+fi
+
+LIMITED=no
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
+    -d '{"email":"nobody@example.test","password":"un mot de passe assez long"}' \
+    "$BASE_URL/api/auth/login")
+  [ "$CODE" = "429" ] && LIMITED=yes && break
+done
+if [ "$LIMITED" = "yes" ]; then
+  green "  ✓ repeated sign-in attempts are rate-limited"
+  PASS=$((PASS + 1))
+else
+  red "  ✗ repeated sign-in attempts are rate-limited — twelve went through untouched"
+  FAIL=$((FAIL + 1))
+fi
+
+fi  # ACCOUNTS_LIMITED
+
+# =========================================================================
+# The pages a visitor without an account actually lands on
+# =========================================================================
+echo
+yellow "== Account pages =="
+
+for PAGE in /connexion /inscription /signin /signup /app /en/app; do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$PAGE")
+  check "GET $PAGE renders" 200 "$CODE"
+done
+
+# An English visitor who clicks "Sign in" must not land on a page written in French — at
+# the exact moment we are asking them for a password.
+curl -s -o /tmp/api_en.html "$BASE_URL/en"
+check_contains "the English site links to the English sign-in" /tmp/api_en.html 'href="/signin"'
+check_absent "and never to the French one" /tmp/api_en.html 'href="/connexion"'
+curl -s -o /tmp/api_fr.html "$BASE_URL/"
+check_contains "the French site links to the French sign-in" /tmp/api_fr.html 'href="/connexion"'
+rm -f /tmp/api_en.html /tmp/api_fr.html
 
 echo
 echo "========================================="

@@ -192,11 +192,6 @@ impl<'r> FromRequest<'r> for ApiKey {
     async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let keys = keys();
 
-        if keys.open {
-            req.local_cache(|| KeyName(OPEN));
-            return Outcome::Success(ApiKey(OPEN));
-        }
-
         let provided = req
             .headers()
             .get_one("X-API-Key")
@@ -207,12 +202,47 @@ impl<'r> FromRequest<'r> for ApiKey {
             })
             .unwrap_or_default();
 
+        // An open deployment still has to *recognise* a member's own key, even though it
+        // would have let the request through anyway. The two things a key does are let you
+        // in and say who you are, and only the first one is redundant here: skipping the
+        // lookup would leave the quality record permanently empty on the default
+        // configuration, which is the one nearly every deployment runs.
+        if keys.open {
+            if let Some(name) = member_name(req, provided) {
+                req.local_cache(|| KeyName(name));
+                return Outcome::Success(ApiKey(name));
+            }
+
+            // Anything else passes as it always has: an unset `API_KEY` means an open API,
+            // and a key nobody minted is not an error on a service that asks for none.
+            req.local_cache(|| KeyName(OPEN));
+            return Outcome::Success(ApiKey(OPEN));
+        }
+
         // Every candidate is compared, even after a match, so the time taken does not say
         // which integration the presented key belongs to.
         let mut matched: Option<&'static str> = None;
         for (name, secret) in &keys.entries {
             if constant_time_eq(provided.as_bytes(), secret.as_bytes()) {
                 matched = Some(name);
+            }
+        }
+
+        if matched.is_none() {
+            if let Some(name) = member_name(req, provided) {
+                if !within_quota(name) {
+                    return Outcome::Error((
+                        Status::TooManyRequests,
+                        AppError::TooManyRequests(format!(
+                            "Quota exceeded for \"{}\": {} requests per minute",
+                            name,
+                            quota_per_minute()
+                        )),
+                    ));
+                }
+
+                req.local_cache(|| KeyName(name));
+                return Outcome::Success(ApiKey(name));
             }
         }
 
@@ -321,6 +351,65 @@ fn within_public_quota(address: &str) -> bool {
     window.count <= quota
 }
 
+// ------------ Signing in ------------
+
+/// Sign-in and sign-up attempts a single address may make per minute.
+///
+/// Low on purpose, and it is two things at once. It is the brute-force limit — without it,
+/// nothing at all stands between a wordlist and an account, since a wrong password produces
+/// no lockout and no delay beyond the hashing. And it is the denial-of-service limit: each
+/// attempt costs six hundred thousand PBKDF2 rounds on a bounded pool, so a handful of
+/// clients looping on `/api/auth/login` can make signing in impossible for everybody.
+fn auth_attempts_per_minute() -> u32 {
+    static QUOTA: OnceLock<u32> = OnceLock::new();
+    *QUOTA.get_or_init(|| {
+        env::var("AUTH_ATTEMPTS_PER_MINUTE")
+            .ok()
+            .and_then(|value| value.trim().parse().ok())
+            .unwrap_or(10)
+    })
+}
+
+/// May this address try to sign in or sign up right now?
+///
+/// Counted per client address rather than per account: counting per account would let anyone
+/// lock a member out of their own account by failing on their behalf, which turns a defence
+/// into a weapon.
+pub fn within_auth_quota(address: &str) -> bool {
+    let quota = auth_attempts_per_minute();
+    if quota == 0 {
+        return true;
+    }
+
+    static COUNTERS: OnceLock<Mutex<HashMap<String, Window>>> = OnceLock::new();
+    let counters = COUNTERS.get_or_init(|| Mutex::new(HashMap::new()));
+
+    let mut guard = match counters.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    if guard.len() >= MAX_TRACKED_ADDRESSES {
+        guard.retain(|_, window| window.started.elapsed() < Duration::from_secs(60));
+        if guard.len() >= MAX_TRACKED_ADDRESSES {
+            return false;
+        }
+    }
+
+    let window = guard.entry(address.to_string()).or_insert_with(|| Window {
+        started: Instant::now(),
+        count: 0,
+    });
+
+    if window.started.elapsed() >= Duration::from_secs(60) {
+        window.started = Instant::now();
+        window.count = 0;
+    }
+
+    window.count += 1;
+    window.count <= quota
+}
+
 /// Guard for the endpoints the public tool pages drive.
 ///
 /// It is `ApiKey` with one extra branch: when `PUBLIC_TOOLS` is on and no key was
@@ -374,6 +463,71 @@ impl<'r> FromRequest<'r> for PublicOrKey {
             Outcome::Forward(status) => Outcome::Forward(status),
         }
     }
+}
+
+/// Resolve a member's credential to the name their work is filed under.
+///
+/// Two credentials lead here, and both have to, for different reasons.
+///
+/// A **key the member minted** is the integration case: the lookup costs one file read — see
+/// `accounts::key_index` — and it is what makes self-service actually self-service, since the
+/// operator no longer has to redeploy to hand somebody an API key.
+///
+/// A **session cookie** is the browser case, and it is the one that matters most. Most
+/// members will never mint a key: they sign in and use the tool pages, which call this API
+/// with no key at all. Without this branch their work is attributed to nobody, their quality
+/// record stays empty for ever, and the one thing this product has that competitors do not
+/// is a page that never fills. The cookie is `SameSite=Lax`, so a cross-site form cannot
+/// spend somebody's session here — that property is what makes reading it safe.
+fn member_name(req: &Request<'_>, provided: &str) -> Option<&'static str> {
+    if !provided.is_empty() {
+        if let Some((account, key)) = crate::accounts::account_for_key(provided) {
+            return Some(intern(&crate::accounts::owner_name(&account.id, &key.name)));
+        }
+        // A key was presented and is not a member's. Falling through to the cookie would
+        // attribute the request to whoever happens to be signed in that browser, which is
+        // not what the caller asked for.
+        return None;
+    }
+
+    let account = crate::routes::auth::session_account(req.cookies())?;
+    Some(intern(&crate::accounts::owner_name(
+        &account.id,
+        crate::accounts::WEB_KEY_NAME,
+    )))
+}
+
+/// Turn a name into a `&'static str`, once.
+///
+/// The attribution machinery — the guard, the log field, the metric label — is built on
+/// `&'static str`, which is free for names read from the environment at startup. A member's
+/// key name is discovered at request time, so it has to be leaked to get that lifetime, and
+/// leaking on every request would be a slow memory leak proportional to traffic.
+///
+/// Interning makes the leak happen once per distinct name and never again. The table is
+/// bounded for the same reason the metric label set is: a caller must not be able to grow
+/// it by inventing names.
+fn intern(name: &str) -> &'static str {
+    const MAX_INTERNED: usize = 4096;
+
+    static NAMES: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
+    let table = NAMES.get_or_init(|| Mutex::new(HashMap::new()));
+
+    let mut guard = match table.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    if let Some(existing) = guard.get(name) {
+        return existing;
+    }
+    if guard.len() >= MAX_INTERNED {
+        return "member";
+    }
+
+    let leaked: &'static str = Box::leak(name.to_string().into_boxed_str());
+    guard.insert(name.to_string(), leaked);
+    leaked
 }
 
 /// Compare two secrets without leaking their length or content through timing

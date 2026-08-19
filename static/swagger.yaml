@@ -152,6 +152,10 @@ tags:
     description: Health check du service
   - name: Metrics
     description: Exposition Prometheus
+  - name: Accounts
+    description: Compte, session et clés d'API en libre-service
+  - name: MCP
+    description: Model Context Protocol — la surface agent, authentifiée par les mêmes clés
   - name: Legacy
     description: Endpoint legacy (backward compatible)
 
@@ -1815,6 +1819,536 @@ paths:
           $ref: "#/components/responses/Unauthorized"
 
   # ───────────────────────────────────────────────
+  # Comptes, session et clés en libre-service
+  # ───────────────────────────────────────────────
+  /api/auth/signup:
+    post:
+      tags: [Accounts]
+      summary: Créer un compte
+      description: |
+        Crée un compte et ouvre la session dans la foulée : le cookie `mdpdf_session` part
+        avec la réponse, il n'y a pas de connexion à refaire derrière.
+
+        L'adresse est normalisée (minuscules, espaces retirés) et sert d'identifiant unique.
+        Le mot de passe est haché en PBKDF2-HMAC-SHA256, et le hachage — délibérément lent —
+        s'exécute sur un fil bloquant comme tout ce qui coûte cher ici.
+      operationId: signup
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+            example:
+              email: "jean@exemple.fr"
+              password: "un mot de passe assez long"
+              name: "Jean Dupont"
+      responses:
+        "201":
+          description: Compte créé, session ouverte
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              example: "mdpdf_session=…; HttpOnly; SameSite=Lax; Path=/"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "400":
+          description: |
+            Adresse invraisemblable, mot de passe trop court, ou compte déjà existant pour
+            cette adresse. Deux inscriptions simultanées sur la même adresse ne peuvent pas
+            gagner toutes les deux : la seconde reçoit ce 400.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/login:
+    post:
+      tags: [Accounts]
+      summary: Ouvrir une session
+      description: |
+        Vérifie l'adresse et le mot de passe, puis pose le cookie de session. Le champ
+        `name` du corps est ignoré ici.
+
+        Un refus ne dit jamais laquelle des deux valeurs est fausse : « Wrong e-mail address
+        or password » couvre les deux cas, sinon l'endpoint devient un annuaire d'adresses
+        inscrites.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+            example:
+              email: "jean@exemple.fr"
+              password: "un mot de passe assez long"
+      responses:
+        "200":
+          description: Session ouverte
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          description: Adresse ou mot de passe incorrects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/logout:
+    post:
+      tags: [Accounts]
+      summary: Fermer la session
+      description: |
+        Invalide la session côté serveur et retire le cookie. Répond `204` même sans cookie :
+        se déconnecter deux fois n'est pas une erreur.
+      operationId: logout
+      security: []
+      responses:
+        "204":
+          description: Session fermée
+
+  /api/auth/me:
+    get:
+      tags: [Accounts]
+      summary: Le compte de la session en cours
+      operationId: currentAccount
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Le compte
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          description: Aucune session — se connecter d'abord
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/history:
+    get:
+      tags: [Accounts]
+      summary: Le registre de qualité du compte
+      description: |
+        Ce que ce compte a fait, du plus récent au plus ancien, **avec le verdict de chaque
+        opération**. C'est la différence entre un historique de fichiers — ce que proposent
+        les autres services — et un registre : « ce contrat, compressé le 12 mars, texte
+        intact, 96/100 ».
+
+        Écrit automatiquement dès qu'une opération est authentifiée par une clé du compte.
+        Un visiteur anonyme ne laisse aucune trace : c'est la contrepartie du palier gratuit
+        sans compte, et ce n'est pas négociable.
+
+        Cinq cents entrées sont conservées par compte ; au-delà, les plus anciennes tombent.
+      operationId: accountHistory
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Les opérations, la plus récente d'abord
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries]
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/HistoryEntry"
+        "401":
+          description: Aucune session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags: [Accounts]
+      summary: Effacer le registre
+      description: |
+        Vide l'historique sans toucher au compte. « Effacer mon historique » est une demande
+        qu'on fait sans vouloir partir : elle mérite son propre bouton.
+      operationId: clearAccountHistory
+      security:
+        - SessionCookie: []
+      responses:
+        "204":
+          description: Registre vidé
+        "401":
+          description: Aucune session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/keys:
+    post:
+      tags: [Accounts]
+      summary: Créer une clé d'API
+      description: |
+        Crée une clé nommée pour le compte connecté. **Le secret ne circule qu'ici** : seul
+        son hachage est conservé, exactement comme un mot de passe, donc il ne pourra jamais
+        être réaffiché. La réponse le dit, et ce n'est pas une politesse : c'est le contrat.
+
+        Vingt clés par compte au plus ; au-delà, il faut en révoquer une.
+      operationId: createApiKey
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  description: À quoi sert cette clé, pour la reconnaître dans la liste
+                  example: "zapier"
+      responses:
+        "201":
+          description: Clé créée — le secret est dans cette réponse et nulle part ailleurs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewKeyResponse"
+        "400":
+          description: Nom invalide, ou vingtième clé déjà atteinte
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Aucune session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      tags: [Accounts]
+      summary: Lister ses clés d'API
+      description: |
+        Les clés du compte connecté : identifiant, nom, date de création, dernière
+        utilisation et les premiers caractères du secret — assez pour distinguer deux clés,
+        pas assez pour s'en servir.
+      operationId: listApiKeys
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Les clés du compte
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiKeyRecord"
+        "401":
+          description: Aucune session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/keys/{id}:
+    delete:
+      tags: [Accounts]
+      summary: Révoquer une clé d'API
+      description: |
+        Révocation immédiate et définitive. Une clé d'un autre compte est un `404`, pas un
+        `403` : l'existence d'une clé qui n'est pas la vôtre ne vous regarde pas.
+      operationId: revokeApiKey
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "`key_` suivi de 32 caractères hexadécimaux"
+          schema:
+            type: string
+          example: "key_9f2c1d84e6b74a01bd35c7f0a1e2d3c4"
+      responses:
+        "204":
+          description: Clé révoquée
+        "401":
+          description: Aucune session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Clé inconnue pour ce compte
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/usage:
+    get:
+      tags: [Accounts]
+      summary: Palier et limites du compte
+      description: |
+        Le palier du compte, son nombre de clés, et ce que le palier autorise — pour qu'un
+        `429` ne soit jamais la première fois qu'on entend parler d'une limite.
+      operationId: accountUsage
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Palier et limites
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Usage"
+        "401":
+          description: Aucune session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/history:
+    get:
+      tags: [Accounts]
+      summary: Le registre de qualité du compte
+      description: |
+        Ce que ce compte a fait, du plus récent au plus ancien, **avec le verdict de chaque
+        opération**. Cinq cents entrées sont conservées par compte ; cet endpoint renvoie les
+        cent plus récentes.
+
+        C'est la différence de fond avec un historique de fichiers. Une liste de fichiers dit
+        ce qui est passé ; celle-ci dit ce que chaque passage a coûté — pages conservées,
+        texte préservé, score. Un verdict isolé est une jolie carte ; un registre de verdicts
+        est une preuve de qualité.
+
+        Une opération n'est enregistrée que si elle a été faite au nom d'une clé rattachée à
+        un compte : un appel anonyme ne laisse rien.
+      operationId: accountHistory
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Les opérations du compte, la plus récente en tête
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/HistoryEntry"
+        "401":
+          description: Aucune session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags: [Accounts]
+      summary: Effacer le registre
+      description: |
+        Supprime tout l'historique du compte, sans confirmation et sans retour. Le droit à
+        l'effacement doit être un bouton, pas un e-mail.
+      operationId: clearAccountHistory
+      security:
+        - SessionCookie: []
+      responses:
+        "204":
+          description: Registre effacé
+        "401":
+          description: Aucune session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ───────────────────────────────────────────────
+  # MCP  (la surface agent)
+  # ───────────────────────────────────────────────
+  /mcp:
+    get:
+      tags: [MCP]
+      summary: Décrire le serveur MCP
+      description: |
+        Ce qu'est ce serveur, sous une forme exploitable par un humain qui a collé l'URL
+        dans un navigateur : nom, version, révision du protocole, transport, méthodes
+        JSON-RPC implémentées et catalogue des outils (nom et description).
+
+        Endpoint ouvert, y compris quand `API_KEY` est configurée : il ne porte aucune
+        donnée, et un intégrateur qui ne peut pas constater que l'endpoint existe ne peut
+        pas configurer la clé qui l'ouvre.
+      operationId: mcpDescribe
+      security: []
+      responses:
+        "200":
+          description: Description du serveur et de son catalogue
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  product:
+                    type: string
+                  version:
+                    type: string
+                  protocol:
+                    type: string
+                  protocolVersion:
+                    type: string
+                  transport:
+                    type: string
+                  authentication:
+                    type: string
+                  methods:
+                    type: array
+                    items:
+                      type: string
+                  tools:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        description:
+                          type: string
+              example:
+                name: md-to-pdf
+                product: AI SmartTalk Documents
+                version: "0.2.0"
+                protocol: Model Context Protocol
+                protocolVersion: "2025-06-18"
+                transport: "Streamable HTTP, JSON-RPC 2.0 over POST to this same URL."
+                methods:
+                  - initialize
+                  - notifications/initialized
+                  - ping
+                  - tools/list
+                  - tools/call
+                tools:
+                  - name: document_render
+                    description: "Render Markdown (or raw HTML, or a Tera template plus its data) into a PDF…"
+
+    post:
+      tags: [MCP]
+      summary: Model Context Protocol (JSON-RPC 2.0)
+      description: |
+        Le point d'entrée unique du protocole : un agent s'y connecte, lit le catalogue et
+        pilote le moteur de documents lui-même. Transport *streamable HTTP* avec une réponse
+        JSON simple — ce serveur ne pousse jamais rien, donc il n'ouvre aucun flux SSE.
+
+        Méthodes implémentées : `initialize`, `notifications/initialized`, `ping`,
+        `tools/list`, `tools/call`. Un tableau de requêtes (batch) est accepté et reçoit une
+        réponse par requête portant un `id`.
+
+        Douze outils : `document_render`, `document_preview`, `document_audit`,
+        `document_compose`, `document_compress`, `document_ocr`, `document_extract`,
+        `document_pages`, `document_convert_office`, `document_attest`, `document_verify`,
+        `themes_list`. Leurs schémas d'entrée complets se lisent avec `tools/list` — c'est
+        la source de vérité, et ce document ne la recopie pas pour ne pas la contredire.
+
+        Deux règles gouvernent les réponses :
+
+        - **Un outil qui échoue répond `isError: true` dans son résultat, pas une erreur
+          JSON-RPC.** Une erreur de protocole est invisible pour le modèle ; un résultat
+          qu'il peut lire est une faute qu'il corrige à l'appel suivant. Les erreurs
+          JSON-RPC sont réservées à ce que le modèle n'a pas écrit : corps illisible,
+          méthode inconnue, `params` malformés.
+        - **Tout fichier produit revient en `asset://`**, jamais en octets — sauf
+          `document_preview`, qui renvoie des blocs image PNG, seule façon pour un agent de
+          *voir* la page qu'il vient de produire.
+
+        Authentifié par les mêmes clés que le reste de l'API, pour que la consommation d'un
+        agent soit attribuée et contingentée comme n'importe quelle intégration.
+      operationId: mcpCall
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/JsonRpcRequest"
+                - type: array
+                  items:
+                    $ref: "#/components/schemas/JsonRpcRequest"
+            examples:
+              list:
+                summary: Lire le catalogue
+                value:
+                  jsonrpc: "2.0"
+                  id: 1
+                  method: tools/list
+              call:
+                summary: Appeler un outil
+                value:
+                  jsonrpc: "2.0"
+                  id: 2
+                  method: tools/call
+                  params:
+                    name: document_render
+                    arguments:
+                      markdown: "# Rapport"
+                      options:
+                        theme: report
+      responses:
+        "200":
+          description: |
+            Réponse JSON-RPC, ou tableau de réponses pour un batch. Un outil qui a échoué
+            répond 200 avec `result.isError` à `true`.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/JsonRpcResponse"
+                  - type: array
+                    items:
+                      $ref: "#/components/schemas/JsonRpcResponse"
+              example:
+                jsonrpc: "2.0"
+                id: 2
+                result:
+                  isError: false
+                  content:
+                    - type: text
+                      text: "{\n  \"asset\": { \"id\": \"as_9f2c…\" },\n  \"pages\": 4\n}"
+        "202":
+          description: |
+            Le corps ne contenait que des notifications : rien à renvoyer. C'est ce que la
+            spécification demande, et un client qui reçoit un corps pour une notification
+            considère l'échange comme désynchronisé.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ───────────────────────────────────────────────
   # Download
   # ───────────────────────────────────────────────
   /download/{client_id}/{pdf_name}:
@@ -1924,6 +2458,18 @@ components:
       scheme: bearer
       description: |
         Même clé que `X-API-Key`, transmise via `Authorization: Bearer <clé>`.
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: mdpdf_session
+      description: |
+        Cookie de session posé par `POST /api/auth/signup` et `POST /api/auth/login`.
+        `HttpOnly`, `SameSite=Lax`, et `Secure` dès que `X-Forwarded-Proto` vaut `https`.
+
+        Il ne se mélange jamais avec `X-API-Key` : le cookie dit « un humain regarde une
+        page », l'en-tête dit « un programme appelle ». C'est cette séparation qui permet au
+        cookie de rester `Lax` — donc de refuser de voyager sur un POST cross-site — pendant
+        que la clé reste utilisable depuis n'importe où.
 
   # ─── Paramètres réutilisables ─────────────────
   parameters:
@@ -3411,6 +3957,212 @@ components:
           type: string
           description: Détails / message d'erreur
           example: "At least 2 PDFs are required for merging"
+
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Normalisée en minuscules ; c'est l'identifiant du compte.
+        password:
+          type: string
+          format: password
+          description: Dix caractères au minimum.
+        name:
+          type: string
+          nullable: true
+          description: Facultatif, et ignoré à la connexion.
+
+    Account:
+      type: object
+      description: |
+        Le compte tel qu'il sort de l'API. Le hachage du mot de passe n'y figure jamais, pas
+        même une fois.
+      properties:
+        id:
+          type: string
+          example: "acc_9f2c1d84e6b74a01bd35c7f0a1e2d3c4"
+        email:
+          type: string
+          example: "jean@exemple.fr"
+        created_at:
+          type: string
+          format: date-time
+        plan:
+          type: string
+          enum: [free, pro, team]
+          description: Le palier est stocké, jamais déduit des clés que quelqu'un possède.
+        name:
+          type: string
+          nullable: true
+
+    SessionResponse:
+      type: object
+      properties:
+        account:
+          $ref: "#/components/schemas/Account"
+
+    ApiKeyRecord:
+      type: object
+      description: |
+        Une clé, sans son secret : celui-ci n'est stocké que haché, donc une copie du magasin
+        n'est pas une copie des clés.
+      properties:
+        id:
+          type: string
+          example: "key_9f2c1d84e6b74a01bd35c7f0a1e2d3c4"
+        name:
+          type: string
+          example: "zapier"
+        created_at:
+          type: string
+          format: date-time
+        last_used:
+          type: string
+          format: date-time
+          description: Absent tant que la clé n'a jamais servi.
+        hint:
+          type: string
+          description: Les onze premiers caractères du secret, pour distinguer deux clés dans une liste.
+          example: "sk_9f2c1d84"
+
+    HistoryEntry:
+      type: object
+      description: Une opération, et ce qu'elle a coûté.
+      required: [id, tool, at]
+      properties:
+        id: { type: string, example: "op_9f3a…" }
+        tool:
+          type: string
+          description: Le nom du fichier produit, qui identifie l'outil qui l'a produit
+          example: "compressed.pdf"
+        at: { type: string, format: date-time }
+        file: { type: string, example: "contrat.pdf" }
+        asset_id: { type: string, example: "as_9f3a…" }
+        bytes: { type: integer, format: int64 }
+        pages: { type: integer }
+        verdict:
+          allOf:
+            - $ref: "#/components/schemas/Verdict"
+          description: Le verdict rendu au moment de l'opération, conservé tel quel
+
+    NewKeyResponse:
+      type: object
+      properties:
+        key:
+          $ref: "#/components/schemas/ApiKeyRecord"
+        secret:
+          type: string
+          description: Le secret en clair. Il ne repassera jamais par ici.
+          example: "sk_9f2c1d84e6b74a01bd35c7f0a1e2d3c4"
+        notice:
+          type: string
+          example: "Copy this key now: it is stored hashed and cannot be shown again."
+
+    Usage:
+      type: object
+      properties:
+        plan:
+          type: string
+          example: "free"
+        keys:
+          type: integer
+          description: Nombre de clés actives sur le compte.
+        limits:
+          type: object
+          properties:
+            max_file_mb:
+              type: integer
+            retention_hours:
+              type: integer
+            requests_per_minute:
+              type: string
+              description: "`unlimited` quand `API_QUOTA_PER_MINUTE` n'est pas configurée."
+
+    HistoryEntry:
+      type: object
+      description: |
+        Une opération, et ce qu'elle a coûté. Les champs facultatifs sont absents quand
+        l'outil n'a rien à en dire, jamais `null`.
+      properties:
+        id:
+          type: string
+          example: "op_9f2c1d84e6b74a01bd35c7f0a1e2d3c4"
+        tool:
+          type: string
+          description: "L'outil qui a tourné : `compress`, `ocr`, `office-to-pdf`…"
+          example: "compress"
+        at:
+          type: string
+          format: date-time
+        file:
+          type: string
+          description: Nom du fichier, tel que l'appelant l'a déposé.
+        asset_id:
+          type: string
+          example: "as_9f2c1d84e6b74a01bd35c7f0a1e2d3c4"
+        bytes:
+          type: integer
+        pages:
+          type: integer
+        verdict:
+          $ref: "#/components/schemas/Verdict"
+
+    JsonRpcRequest:
+      type: object
+      description: |
+        Une requête JSON-RPC 2.0. Sans `id`, c'est une notification : elle ne reçoit aucune
+        réponse, et un corps composé uniquement de notifications répond `202`.
+      required: [jsonrpc, method]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        id:
+          description: Nombre ou chaîne, repris tel quel dans la réponse. Absent = notification.
+          oneOf:
+            - type: integer
+            - type: string
+        method:
+          type: string
+          enum:
+            - initialize
+            - notifications/initialized
+            - ping
+            - tools/list
+            - tools/call
+        params:
+          type: object
+          description: |
+            Pour `tools/call` : `{ "name": "<outil>", "arguments": { … } }`. Le schéma
+            d'entrée de chaque outil est publié par `tools/list`.
+
+    JsonRpcResponse:
+      type: object
+      description: |
+        Une réponse JSON-RPC 2.0 : `result` ou `error`, jamais les deux. Un outil qui a
+        échoué est un `result` portant `isError: true`, pas un `error`.
+      required: [jsonrpc, id]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        id:
+          description: |
+            Repris tel quel de la requête — nombre ou chaîne. Vaut `null` quand le corps
+            était illisible au point que son `id` n'a pas pu être lu.
+        result:
+          type: object
+        error:
+          type: object
+          properties:
+            code:
+              type: integer
+              description: Code JSON-RPC standard (-32700, -32600, -32601, -32602).
+            message:
+              type: string
 
   # ─── Responses réutilisables ──────────────────
   responses:

@@ -41,6 +41,13 @@ pub fn index_en_moved() -> Redirect {
     Redirect::permanent("/en")
 }
 
+/// The console lived here for a few hours, and the links in the footer and the tool pages
+/// were written against it. A redirect costs nothing and spares everyone a dead link.
+#[get("/console")]
+pub fn console_moved() -> Redirect {
+    Redirect::permanent("/dev")
+}
+
 // ------------ Tool pages ------------
 
 #[get("/outils/<slug>")]
@@ -69,7 +76,7 @@ pub fn pricing_en() -> Result<RawHtml<String>, AppError> {
 
 /// The integrator console, exactly as it was when it lived at the root. It is a
 /// hash-routed single page, so serving its file here is enough for every one of its views.
-#[get("/console")]
+#[get("/dev")]
 pub async fn console() -> Result<NamedFile, AppError> {
     NamedFile::open("static/index.html")
         .await
@@ -164,6 +171,34 @@ pub fn sitemap() -> rocket::response::content::RawXml<String> {
         );
         push_url(&mut out, &base, lang.pricing(), "monthly", "0.6", None);
 
+        // Les guides sont le seul contenu de fond du produit : ils doivent être découverts
+        // comme les pages d'outil, pas laissés à un lien de pied de page.
+        let guides_root = if lang == Lang::Fr {
+            "/guides"
+        } else {
+            "/en/guides"
+        };
+        push_url(&mut out, &base, guides_root, "monthly", "0.7", None);
+        for guide in crate::routes::guides::guides().all(lang) {
+            let path = format!("{}/{}", guides_root, guide.slug);
+            let alternate = guide.alt_slug.as_ref().map(|slug| {
+                let other_root = if other == Lang::Fr {
+                    "/guides"
+                } else {
+                    "/en/guides"
+                };
+                format!("{}/{}", other_root, slug)
+            });
+            push_url(
+                &mut out,
+                &base,
+                &path,
+                "monthly",
+                "0.7",
+                alternate.map(|href| (lang, other, href)),
+            );
+        }
+
         for tool in &site.catalog(lang).tools {
             let path = format!("{}/{}", lang.tools(), tool.slug);
             // Each tool declares its counterpart, so the alternate link points at the same
@@ -229,7 +264,7 @@ pub fn robots() -> rocket::response::content::RawText<String> {
         "User-agent: *\n\
          Disallow: /api/\n\
          Disallow: /download/\n\
-         Disallow: /console\n\
+         Disallow: /dev\n\
          Allow: /\n\n\
          Sitemap: {}/sitemap.xml\n",
         base

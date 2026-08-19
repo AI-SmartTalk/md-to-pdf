@@ -55,6 +55,8 @@ services:
       # Fichiers déposés par les appelants. La durée de vie est la promesse de
       # rétention faite sur le site public : la changer ici la change là-bas.
       ASSET_TTL_SECS: "${ASSET_TTL_SECS:-7200}"
+      ASSET_TTL_MEMBER_SECS: "${ASSET_TTL_MEMBER_SECS:-86400}"
+      AUTH_ATTEMPTS_PER_MINUTE: "${AUTH_ATTEMPTS_PER_MINUTE:-10}"
       ASSET_MAX_MB: "${ASSET_MAX_MB:-100}"
       ASSET_MAX_PAGES: "${ASSET_MAX_PAGES:-2000}"
       JOB_TTL_SECS: "${JOB_TTL_SECS:-3600}"

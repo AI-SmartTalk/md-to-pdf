@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>md-to-pdf — PDF document engine</title>
-<meta name="description" content="PDF generation service: Markdown, HTML and Tera templates to PDF, PNG preview, merge, watermark and password protection. Guides, API reference and test console included.">
+<title>Developers · AI SmartTalk Documents</title>
+<meta name="description" content="The developer section of AI SmartTalk Documents: guides, API reference, test console and API keys for the document engine.">
 <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
 <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
 <link rel="stylesheet" href="/static/app.css">
@@ -13,37 +13,72 @@
 
 <a class="skip-link" href="#app" data-i18n="chrome.skip">Skip to content</a>
 
-<!-- ═══════════════════════════ topbar ═══════════════════════════ -->
+<!-- ═══════════════════════════ barre du site ═══════════════════════════
+     Reprise trait pour trait de `templates/site/base.html` : même logo, même
+     libellé, mêmes entrées, même bouton d'action, même bascule de thème, même
+     sélecteur de langue. Un visiteur qui clique « Développeurs » doit rester
+     chez lui, pas changer d'application.
+
+     Les adresses du site public dépendent de la langue (`/tools` ou `/outils`) :
+     elles sont réécrites au démarrage et à chaque changement de langue, d'après
+     l'attribut `data-site`. Voir `syncSiteLinks()` dans app.js. -->
 <header class="topbar">
-  <a class="brand" href="#/">
+  <a class="brand" href="/" data-site="home">
     <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true">
       <path d="M6 2h8l5 5v15H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
       <path d="M14 2v5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
       <path d="M9 13h6M9 17h6M9 9h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
     </svg>
-    <span>md-to-pdf</span>
-    <span class="ver" id="brandVersion">—</span>
+    <span>AI SmartTalk <strong>Documents</strong></span>
+    <!-- La version reste : dans un outil de développeur, savoir contre quel
+         moteur on teste évite un ticket. Elle est discrète, et son infobulle
+         dit de quoi elle est la version. -->
+    <span class="ver" id="brandVersion" title="md-to-pdf">—</span>
   </a>
 
-  <nav class="topnav" id="topnav" aria-label="Main navigation">
-    <a href="#/" data-route="home" data-i18n="nav.home">Home</a>
-    <a href="#/guides" data-route="guides" data-i18n="nav.guides">Guides</a>
-    <a href="#/api" data-route="api" data-i18n="nav.api">API reference</a>
-    <a href="#/console" data-route="console" data-i18n="nav.console">Console</a>
-    <a href="#/acces" data-route="acces" data-i18n="nav.acces">Access</a>
+  <nav class="topnav sitenav" data-i18n-aria="chrome.sitenav.aria" aria-label="Main navigation">
+    <a href="/tools" data-site="tools" data-i18n="nav.tools">All tools</a>
+    <a href="/pricing" data-site="pricing" data-i18n="nav.pricing">Pricing</a>
+    <!-- « Développeurs », c'est ici : le lien ne recharge pas la page, il
+         ramène à la vue par défaut de la section. -->
+    <a href="#/api" aria-current="page" data-i18n="nav.dev">Developers</a>
   </nav>
 
   <div class="topbar-right">
+    <div class="segmented lang-switch" id="langSwitch" role="group" data-i18n-aria="chrome.lang.aria" aria-label="Language">
+      <button data-lang="en" type="button">EN</button>
+      <button data-lang="fr" type="button">FR</button>
+    </div>
+
+    <button id="themeToggle" class="icon-btn" data-i18n-aria="chrome.theme.aria" data-i18n-title="chrome.theme.aria" aria-label="Toggle light / dark theme" title="Toggle light / dark theme">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path id="themeIcon" fill="currentColor" d="M12 3a9 9 0 109 9 7 7 0 01-9-9z"/></svg>
+    </button>
+
+    <a class="btn primary sm" href="#/acces" data-i18n="nav.pro">Pro access</a>
+  </div>
+</header>
+
+<!-- ═══════════════ navigation secondaire de la section ═══════════════
+     Les écrans de la console vivent sous la barre du site, jamais à sa place :
+     ce sont des sections d'une application, pas les onglets d'une autre. Les
+     outils propres à la console — recherche, santé du service, clé — les
+     accompagnent ici plutôt que d'encombrer la barre commune. -->
+<div class="subbar">
+  <a class="subbar-back" href="/" data-site="home" data-i18n="nav.back">← Back to the site</a>
+
+  <nav class="topnav subnav" id="topnav" data-i18n-aria="chrome.subnav.aria" aria-label="Developer sections">
+    <a href="#/guides" data-route="guides" data-i18n="nav.guides">Guides</a>
+    <a href="#/api" data-route="api" data-i18n="nav.api">API reference</a>
+    <a href="#/console" data-route="console" data-i18n="nav.console">Console</a>
+    <a href="#/acces" data-route="acces" data-i18n="nav.acces">API keys</a>
+  </nav>
+
+  <div class="subbar-right">
     <button class="cmdk-hint" id="cmdkBtn" data-i18n-aria="chrome.search.aria" aria-label="Search an endpoint or a guide">
       <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       <span data-i18n="chrome.search">Search</span>
       <kbd>⌘K</kbd>
     </button>
-
-    <div class="segmented lang-switch" id="langSwitch" role="group" data-i18n-aria="chrome.lang.aria" aria-label="Language">
-      <button data-lang="en" type="button">EN</button>
-      <button data-lang="fr" type="button">FR</button>
-    </div>
 
     <button class="health" id="healthPill" data-i18n-title="chrome.health.title" title="Service status — click to test again">
       <span class="dot" id="healthDot"></span>
@@ -57,12 +92,8 @@
       </svg>
       <span class="need-key" id="keyAlert" hidden></span>
     </button>
-
-    <button id="themeToggle" class="icon-btn" data-i18n-aria="chrome.theme.aria" data-i18n-title="chrome.theme.aria" aria-label="Toggle light / dark theme" title="Toggle light / dark theme">
-      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path id="themeIcon" fill="currentColor" d="M12 3a9 9 0 109 9 7 7 0 01-9-9z"/></svg>
-    </button>
   </div>
-</header>
+</div>
 
 <!-- API key and base URL, shared by every view -->
 <div class="popover" id="settingsPanel" hidden>
@@ -97,164 +128,17 @@
 
 <main id="app" tabindex="-1">
 
-<!-- ═══════════════════════════ home ═══════════════════════════ -->
-<section class="view scrolls" id="view-home" data-i18n-aria="nav.home" aria-label="Home">
-  <div class="hero">
-    <div class="hero-glow" aria-hidden="true"></div>
-    <div class="wrap">
-      <div>
-        <p class="eyebrow" data-i18n="home.eyebrow">AI SmartTalk internal service · Rust · pandoc · WeasyPrint</p>
-        <h1 data-i18n="home.title">A document engine<br><span class="grad">for our products</span></h1>
-        <p class="lede" data-i18n="home.lede">
-          Markdown, HTML or Tera templates in. Paginated PDF, PNG preview, merge,
-          watermark and AES-256 encryption out. One JSON API, one container.
-        </p>
-        <p class="lede small" data-i18n="home.lede.small">
-          The API serves AI SmartTalk teams and products: every call needs a token.
-          <a href="#/acces">Request access</a>.
-        </p>
-
-        <div class="hero-cta">
-          <a class="btn primary lg" href="#/console" data-i18n="home.cta.console">Open the console</a>
-          <a class="btn lg" href="#/guides" data-i18n="home.cta.guides">Read the guides</a>
-        </div>
-
-        <div class="hero-stats">
-          <div class="stat"><span class="stat-value" id="statVersion">—</span><span class="stat-label" data-i18n="home.stat.version">version</span></div>
-          <div class="stat"><span class="stat-value" id="statEndpoints">—</span><span class="stat-label" data-i18n="home.stat.endpoints">endpoints</span></div>
-          <div class="stat"><span class="stat-value" id="statEngines">—</span><span class="stat-label" data-i18n="home.stat.engines">PDF engines</span></div>
-          <div class="stat"><span class="stat-value" id="statStatus">—</span><span class="stat-label" data-i18n="home.stat.status">status</span></div>
-        </div>
-      </div>
-
-      <div class="pipeline" aria-hidden="true">
-        <div class="pipe-card in">
-          <div class="pipe-head"><span class="chip" data-i18n="home.pipe.in">input</span> document.md</div>
-<pre class="pipe-body"><span class="tok-h"># Report 2026</span>
-
-Revenue is <span class="tok-b">up</span>.
-
-<span class="tok-c">{{CENSOR}}</span>
-
-| Quarter | Rev. |
-|---------|------|
-| Q1      | 1.2M |</pre>
-        </div>
-
-        <div class="pipe-arrow">
-          <span class="pipe-engine">pandoc + weasyprint</span>
-          <svg viewBox="0 0 120 24" width="110" height="22"><path d="M2 12h100m0 0l-8-6m8 6l-8 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-
-        <div class="pipe-card out">
-          <div class="pipe-head"><span class="chip" data-i18n="home.pipe.out">output</span> document.pdf</div>
-          <div class="page">
-            <div class="page-h"></div>
-            <div class="page-l"></div>
-            <div class="page-l short"></div>
-            <div class="page-blur" data-i18n="home.pipe.premium">premium content</div>
-            <div class="page-l"></div>
-            <div class="page-l short"></div>
-            <div class="page-num">1 / 4</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="home-section">
-    <div class="wrap">
-      <header class="section-head">
-        <h2 data-i18n="home.features.title">What the service can do</h2>
-        <p data-i18n="home.features.lede"><span id="endpointCount">—</span> endpoints, one contract: binary PDF by default, a download URL when you ask for the file to be saved.</p>
-      </header>
-      <div class="card-grid" id="featureCards"></div>
-    </div>
-  </div>
-
-  <div class="home-section">
-    <div class="wrap">
-      <header class="section-head">
-        <h2 data-i18n="home.verdict.title">A document, its verdict, and its proof</h2>
-        <p data-i18n="home.verdict.lede">Most engines hand you a file and leave you to discover the split table. This one grades what it produced, shows it, and can seal it.</p>
-      </header>
-      <div class="card-grid">
-        <article class="card">
-          <h3 data-i18n="home.verdict.c1.title">It grades its own pagination</h3>
-          <p data-i18n="home.verdict.c1.body"><code>autolayout</code> re-renders until overflow, blank pages and orphan headings are gone, then returns a score out of 100 and every remaining issue with its page and its bounding box.</p>
-        </article>
-        <article class="card">
-          <h3 data-i18n="home.verdict.c2.title">It shows the pages</h3>
-          <p data-i18n="home.verdict.c2.body"><code>POST /api/preview</code> returns the pages as PNG — one page, a range, or a contact sheet. An agent that writes markdown blind can finally see what it wrote.</p>
-        </article>
-        <article class="card">
-          <h3 data-i18n="home.verdict.c3.title">It compares two versions</h3>
-          <p data-i18n="home.verdict.c3.body"><code>POST /api/diff</code> answers with a pixel verdict, page by page. A renderer change that moves a single heading no longer passes for identical.</p>
-        </article>
-      </div>
-    </div>
-  </div>
-
-  <div class="home-section tinted">
-    <div class="wrap">
-      <header class="section-head">
-        <h2 data-i18n="home.quick.title">Thirty seconds to the first PDF</h2>
-        <p data-i18n="home.quick.lede">No SDK: HTTP and JSON, plus your token in the <code>X-API-Key</code> header.</p>
-      </header>
-
-      <div class="quick">
-        <div>
-          <div class="tabs" id="quickTabs" role="tablist" data-i18n-aria="home.quick.tabs.aria" aria-label="Code examples">
-            <button role="tab" class="active" data-lang="curl" aria-selected="true">curl</button>
-            <button role="tab" data-lang="js" aria-selected="false">JavaScript</button>
-            <button role="tab" data-lang="python" aria-selected="false">Python</button>
-            <button role="tab" data-lang="health" aria-selected="false" data-i18n="home.quick.notoken">No token</button>
-          </div>
-          <div class="code-wrap scroll">
-            <button class="copy-btn" data-copy="#quickCode" data-i18n="guides.copy">copy</button>
-            <pre id="quickCode"></pre>
-          </div>
-        </div>
-
-        <div class="quick-notes">
-          <div class="quick-note">
-            <h4 data-i18n="home.quick.n1.title">Binary response by default</h4>
-            <p data-i18n="home.quick.n1.body">Without <code>client_id</code>/<code>pdf_name</code>, the response body is the PDF itself.</p>
-          </div>
-          <div class="quick-note">
-            <h4 data-i18n="home.quick.n2.title">Server-side save</h4>
-            <p data-i18n="home.quick.n2.body">With both fields, the response becomes <code>{"download_url": …}</code> and the file stays served by the service.</p>
-          </div>
-          <div class="quick-note">
-            <h4 data-i18n="home.quick.n3.title">Token required</h4>
-            <p data-i18n="home.quick.n3.body">Every <code>/api/*</code> needs <code>X-API-Key</code>. Only <code>/api/health</code> and <code>/download</code> stay open. <a href="#/acces">Get a token</a>.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="wrap">
-    <div class="home-foot">
-      <div data-i18n="home.foot">
-        <strong>md-to-pdf</strong> — fork maintained by
-        <a href="https://aismarttalk.tech" target="_blank" rel="noopener">AI SmartTalk</a>,
-        after the original project by
-        <a href="https://github.com/Spawnia/md-to-pdf" target="_blank" rel="noopener">Spawnia</a>.
-      </div>
-      <div class="links">
-        <a href="#/guides" data-i18n="nav.guides">Guides</a>
-        <!-- L'URL du site public dépend de la langue : elle vit donc dans le
-             catalogue, avec son libellé. -->
-        <span data-i18n="home.foot.tools"><a href="/tools">AI SmartTalk Documents</a></span>
-        <a href="#/acces" data-i18n="home.foot.acces">request access</a>
-        <a href="/static/editor.html" data-i18n="home.foot.editor">markdown editor</a>
-        <a href="/static/swagger.yaml" download>swagger.yaml</a>
-        <a href="https://github.com/AI-SmartTalk/md-to-pdf" target="_blank" rel="noopener">GitHub</a>
-      </div>
-    </div>
-  </div>
-</section>
+<!-- ═══════════════════════ réceptacles hérités ═══════════════════════
+     L'accueil de la console a disparu : son rôle — dire ce que le service sait
+     faire — est tenu, mieux, par `/`. `docs.js` continue pourtant d'y écrire ses
+     cartes d'endpoint et son exemple de démarrage ; retirer ces deux nœuds
+     ferait échouer son initialisation, et `docs.js` n'est pas à nous. Ils sont
+     donc gardés, vides et hors de l'affichage, jusqu'à ce que `docs.js` cesse
+     de les alimenter. -->
+<div id="legacyHome" hidden aria-hidden="true">
+  <div id="featureCards"></div>
+  <pre id="quickCode"></pre>
+</div>
 
 <!-- ═══════════════════════════ guides ═══════════════════════════ -->
 <section class="view" id="view-guides" data-i18n-aria="guides.aria" aria-label="Guides">
@@ -388,19 +272,20 @@ Revenue is <span class="tok-b">up</span>.
 <section class="view scrolls" id="view-acces" data-i18n-aria="nav.acces" aria-label="Access">
   <div class="acces-inner">
     <header class="section-head">
-      <p class="eyebrow" data-i18n="acces.eyebrow">Internal service</p>
-      <h2 data-i18n="acces.title">Getting access</h2>
+      <p class="eyebrow" data-i18n="acces.eyebrow">API keys</p>
+      <h2 data-i18n="acces.title">Getting a key</h2>
       <p data-i18n="acces.lede">
-        md-to-pdf runs for AI SmartTalk products and teams. It is not open self-service:
-        every integration gets its own token.
+        The public tools need no key: they run without an account. A key is only for
+        the API — it is created from your personal space, and the tiers are set out on
+        <a href="/pricing">the pricing page</a>.
       </p>
     </header>
 
     <div class="acces-grid">
       <div class="acces-card">
         <span class="step">1</span>
-        <h3 data-i18n="acces.s1.title">Ask for a token</h3>
-        <p data-i18n="acces.s1.body">One mail with the project and the expected volume. Answer within one working day.</p>
+        <h3 data-i18n="acces.s1.title">Create a key</h3>
+        <p data-i18n="acces.s1.body">Keys are issued from your personal space — under construction. Until it opens, ask by mail: the project and the expected volume, answered within one working day.</p>
         <a class="btn primary" id="mailtoBtn" href="mailto:contact+mdtopdf@aismarttalk.tech?subject=md-to-pdf%20access&amp;body=Hello%2C%0A%0AProject%3A%20%0AIntended%20use%3A%20%0AEstimated%20volume%3A%20%0A%0AThanks%21">contact+mdtopdf@aismarttalk.tech</a>
         <button class="btn sm ghost" id="copyMailBtn" data-i18n="acces.s1.copy">Copy the address</button>
       </div>
@@ -420,7 +305,7 @@ Revenue is <span class="tok-b">up</span>.
         <span class="step">3</span>
         <h3 data-i18n="acces.s3.title">Test, then integrate</h3>
         <p data-i18n="acces.s3.body">The console sends real requests with your token and hands you back the equivalent <code>curl</code>.</p>
-        <a class="btn" href="#/console" data-i18n="home.cta.console">Open the console</a>
+        <a class="btn" href="#/console" data-i18n="nav.console.open">Open the console</a>
         <a class="btn ghost sm" href="#/api" data-i18n="acces.s3.ref">See the reference</a>
       </div>
     </div>

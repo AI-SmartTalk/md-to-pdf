@@ -33,3 +33,12 @@ docker-compose.override.yml
 # Fichiers déposés par les appelants : des données personnelles à durée de vie
 # courte. Elles n'ont jamais rien à faire dans un dépôt.
 /public/assets/
+
+# Comptes, clés d'API hachées et registre de qualité. C'est la donnée la plus sensible
+# que le service détienne : un commit accidentel publierait des adresses e-mail et des
+# empreintes de mots de passe.
+/public/accounts/
+
+# Les sessions ouvertes. Chaque fichier porte un jeton qui ouvre un compte : commité,
+# il ne fuite pas une trace, il fuite un accès.
+/public/sessions/

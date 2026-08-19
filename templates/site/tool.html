@@ -168,7 +168,7 @@
 
     <ul class="trust-bar compact">
       <li>{{ icons::trust(name="no-watermark") }}<span>{% if lang == "fr" %}Sans filigrane{% else %}No watermark{% endif %}</span></li>
-      <li>{{ icons::trust(name="clock") }}<span>{% if lang == "fr" %}Effacé après {{ retention_hours }} h{% else %}Deleted after {{ retention_hours }} h{% endif %}</span></li>
+      <li>{{ icons::trust(name="clock") }}<span>{% if lang == "fr" %}Effacé après <span data-role="retention-hours" data-member-hours="{{ member_retention_hours }}">{{ retention_hours }}</span> h{% else %}Deleted after <span data-role="retention-hours" data-member-hours="{{ member_retention_hours }}">{{ retention_hours }}</span> h{% endif %}</span></li>
       <li>{{ icons::trust(name="flag") }}<span>{% if lang == "fr" %}Hébergé en France{% else %}Hosted in France{% endif %}</span></li>
     </ul>
 
@@ -221,10 +221,10 @@
       <p class="kicker">{% if lang == "fr" %}Vos fichiers{% else %}Your files{% endif %}</p>
       <p>
         {%- if lang == "fr" -%}
-        Supprimés au bout de {{ retention_hours }} heures. Aucun entraînement de modèle,
+        Supprimés au bout de <span data-role="retention-hours" data-member-hours="{{ member_retention_hours }}">{{ retention_hours }}</span> heures. Aucun entraînement de modèle,
         aucune lecture humaine, hébergement en France.
         {%- else -%}
-        Deleted after {{ retention_hours }} hours. No model training, no human reading,
+        Deleted after <span data-role="retention-hours" data-member-hours="{{ member_retention_hours }}">{{ retention_hours }}</span> hours. No model training, no human reading,
         hosted in France.
         {%- endif -%}
       </p>
@@ -233,7 +233,7 @@
     <div class="aside-card">
       <p class="kicker">{% if lang == "fr" %}Par l'API{% else %}Through the API{% endif %}</p>
       <p><code>POST {{ tool.endpoint | safe }}</code></p>
-      <p class="notice"><a href="/console#/api">{% if lang == "fr" %}Référence complète{% else %}Full reference{% endif %}</a></p>
+      <p class="notice"><a href="/dev#/api">{% if lang == "fr" %}Référence complète{% else %}Full reference{% endif %}</a></p>
     </div>
 
     {% if related %}

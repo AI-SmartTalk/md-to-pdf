@@ -64,7 +64,7 @@ pub async fn pages(
     validate(&req)?;
 
     let (produced, response) = exec::as_owner(key.0, exec::offload(move || run(req))).await?;
-    helpers::deliver_tool(produced, response).await
+    helpers::deliver_tool(produced, response, "pages").await
 }
 
 /// All the blocking work. Public and free of Rocket: the asynchronous job dispatcher calls

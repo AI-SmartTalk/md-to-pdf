@@ -1,0 +1,129 @@
+{# La connexion.
+
+   Une page de retour, pas une page de vente : deux champs, aucune longueur imposée — le
+   mot de passe qui existe est celui qui existe — et le chemin vers l'inscription juste en
+   dessous, parce que la moitié des gens qui arrivent ici n'ont pas encore de compte. #}
+{% extends "base.html" %}
+{% import "icons.html" as icons %}
+
+{% block head_extra %}
+<meta name="robots" content="noindex, follow">
+<script src="/static/outils/account.js" defer></script>
+{% endblock head_extra %}
+
+{% block content %}
+<div class="wrap">
+
+<section class="hero hero-short">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <h1>{% if lang == "fr" %}Content de vous revoir{% else %}Good to see you again{% endif %}</h1>
+  <p class="lede">
+    {%- if lang == "fr" -%}
+    Retrouvez vos documents, le verdict de chaque opération et vos clés d'API.
+    {%- else -%}
+    Find your documents, the verdict of every operation and your API keys.
+    {%- endif -%}
+  </p>
+</section>
+
+<div class="tool-layout">
+  <div class="account-col">
+
+    <form class="tool-panel" data-account="signin" data-next="{{ workspace | safe }}" novalidate>
+      <div class="params">
+        <div class="field">
+          <label for="account-email">{% if lang == "fr" %}Adresse e-mail{% else %}E-mail address{% endif %}</label>
+          <input id="account-email" name="email" type="email" autocomplete="email"
+                 autocapitalize="off" autocorrect="off" spellcheck="false" required
+                 placeholder="{% if lang == 'fr' %}vous@exemple.fr{% else %}you@example.com{% endif %}">
+        </div>
+
+        <div class="field">
+          <label for="account-password">{% if lang == "fr" %}Mot de passe{% else %}Password{% endif %}</label>
+          {# `current-password`, et non `new-password` : c'est ce qui décide si un
+             gestionnaire propose un mot de passe existant ou en invente un. #}
+          <input id="account-password" name="password" type="password"
+                 autocomplete="current-password" required>
+        </div>
+
+        <div class="field inline">
+          <input id="account-reveal" type="checkbox" data-role="reveal">
+          <label for="account-reveal">{% if lang == "fr" %}Afficher le mot de passe{% else %}Show password{% endif %}</label>
+        </div>
+      </div>
+
+      <div class="alert" role="alert" aria-live="assertive" hidden data-role="error">
+        <span class="alert-title" data-role="error-title"></span>
+        <span class="alert-details" data-role="error-details"></span>
+        <a href="{{ other_page | safe }}" data-role="error-link" data-carry-suite hidden>
+          {%- if lang == "fr" -%}Créer un compte{%- else -%}Create an account{%- endif -%}
+        </a>
+      </div>
+
+      <div class="run-row">
+        <button type="submit" class="btn primary lg" data-role="submit">
+          {%- if lang == "fr" -%}Se connecter{%- else -%}Sign in{%- endif -%}
+        </button>
+        <span class="status" hidden data-role="status">
+          <span class="spinner" aria-hidden="true"></span>
+          <span data-role="status-text"></span>
+        </span>
+      </div>
+
+      <p class="notice">
+        {{ icons::trust(name="shield") }}
+        <span>
+          {%- if lang == "fr" -%}
+          Votre mot de passe n'est jamais conservé en clair, et la session reste dans ce
+          navigateur.
+          {%- else -%}
+          Your password is never stored in the clear, and the session stays in this
+          browser.
+          {%- endif -%}
+        </span>
+      </p>
+    </form>
+
+    <p class="account-alt">
+      {%- if lang == "fr" -%}
+      Pas encore de compte ? <a href="{{ other_page | safe }}" data-carry-suite>En créer un</a> — c'est
+      gratuit et sans carte bancaire.
+      {%- else -%}
+      No account yet? <a href="{{ other_page | safe }}" data-carry-suite>Create one</a> — it is free
+      and needs no card.
+      {%- endif -%}
+    </p>
+  </div>
+
+  <aside class="tool-aside">
+    <div class="aside-card">
+      <h2>{% if lang == "fr" %}Pas de compte, pas de mur{% else %}No account, no wall{% endif %}</h2>
+      <p>
+        {%- if lang == "fr" -%}
+        Les outils fonctionnent sans se connecter, sans filigrane et sans limite de tâches.
+        Le compte sert à garder une trace, pas à débloquer une porte.
+        {%- else -%}
+        The tools work without signing in, without a watermark and without a task limit.
+        The account is there to keep a record, not to unlock a door.
+        {%- endif -%}
+      </p>
+      <p><a href="{{ home | safe }}">{% if lang == "fr" %}Revenir aux outils{% else %}Back to the tools{% endif %}</a></p>
+    </div>
+
+    <div class="aside-card">
+      <h2>{% if lang == "fr" %}Mot de passe oublié{% else %}Forgotten password{% endif %}</h2>
+      <p>
+        {%- if lang == "fr" -%}
+        La réinitialisation par e-mail n'est pas encore en place. Écrivez-nous et nous
+        rouvrirons l'accès à la main.
+        {%- else -%}
+        E-mail reset is not in place yet. Write to us and we will reopen the account by
+        hand.
+        {%- endif -%}
+      </p>
+    </div>
+  </aside>
+</div>
+
+</div>
+{% endblock content %}

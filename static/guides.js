@@ -92,18 +92,18 @@ const GUIDES = [
     icon: "M13 2L3 14h7l-1 8 10-12h-7z",
     title: { en: "First call in three minutes", fr: "Premier appel en trois minutes" },
     lede: {
-      en: "No SDK, no build step: HTTP, JSON, and a token in a header.",
-      fr: "Aucun SDK, aucune étape de build : de l'HTTP, du JSON, et un token dans un en-tête.",
+      en: "No SDK, no build step: HTTP, JSON, and a key in a header.",
+      fr: "Aucun SDK, aucune étape de build : de l'HTTP, du JSON, et une clé dans un en-tête.",
     },
     blocks: [
       ["h", { en: "Authenticate", fr: "S'authentifier" }],
       ["p", {
-        en: 'Every <code>/api/*</code> route needs your token, as <code>X-API-Key</code> or <code>Authorization: Bearer</code>. Two routes stay open: <code>GET /api/health</code> (the container probe) and <code>GET /download/…</code> (fetching a PDF that was already produced).',
-        fr: 'Toutes les routes <code>/api/*</code> demandent votre token, en <code>X-API-Key</code> ou en <code>Authorization: Bearer</code>. Deux routes restent ouvertes : <code>GET /api/health</code> (la sonde du conteneur) et <code>GET /download/…</code> (récupérer un PDF déjà produit).',
+        en: 'Every <code>/api/*</code> route needs your key, as <code>X-API-Key</code> or <code>Authorization: Bearer</code>. Two routes stay open: <code>GET /api/health</code> (the container probe) and <code>GET /download/…</code> (fetching a PDF that was already produced). The public tools at <a href="/tools">AI SmartTalk Documents</a> need no key at all.',
+        fr: 'Toutes les routes <code>/api/*</code> demandent votre clé, en <code>X-API-Key</code> ou en <code>Authorization: Bearer</code>. Deux routes restent ouvertes : <code>GET /api/health</code> (la sonde du conteneur) et <code>GET /download/…</code> (récupérer un PDF déjà produit). Les outils publics d\'<a href="/outils">AI SmartTalk Documents</a> ne demandent aucune clé.',
       }],
       ["code", "shell", {
-        en: "# The token is given to you by the team — never hard-coded in a repository\nexport MDTOPDF_KEY='your-token'\n\ncurl -s $BASE/api/health\n# {\"status\":\"ok\",\"version\":\"0.2.0\",\"engines\":[\"weasyprint\",\"wkhtmltopdf\",\"pdflatex\"]}",
-        fr: "# Le token vous est fourni par l'équipe — jamais en dur dans un dépôt\nexport MDTOPDF_KEY='votre-token'\n\ncurl -s $BASE/api/health\n# {\"status\":\"ok\",\"version\":\"0.2.0\",\"engines\":[\"weasyprint\",\"wkhtmltopdf\",\"pdflatex\"]}",
+        en: "# Your key comes from your personal space — never hard-coded in a repository\nexport MDTOPDF_KEY='your-key'\n\ncurl -s $BASE/api/health\n# {\"status\":\"ok\",\"version\":\"0.2.0\",\"engines\":[\"weasyprint\",\"wkhtmltopdf\",\"pdflatex\"]}",
+        fr: "# Votre clé vient de votre espace personnel — jamais en dur dans un dépôt\nexport MDTOPDF_KEY='votre-cle'\n\ncurl -s $BASE/api/health\n# {\"status\":\"ok\",\"version\":\"0.2.0\",\"engines\":[\"weasyprint\",\"wkhtmltopdf\",\"pdflatex\"]}",
       }],
 
       ["h", { en: "Get a PDF back", fr: "Récupérer un PDF" }],

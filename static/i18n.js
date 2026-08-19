@@ -104,7 +104,7 @@ const UI = {
   "nav.guides": { en: "Guides", fr: "Guides" },
   "nav.api": { en: "API reference", fr: "Référence API" },
   "nav.console": { en: "Console", fr: "Console" },
-  "nav.acces": { en: "Access", fr: "Accès" },
+  "nav.acces": { en: "API keys", fr: "Clés d'API" },
 
   "chrome.skip": { en: "Skip to content", fr: "Aller au contenu" },
   "chrome.search": { en: "Search", fr: "Rechercher" },
@@ -119,8 +119,8 @@ const UI = {
 
   // ─────────────────────────── settings popover ───────────────────────────
   "settings.title": { en: "API key", fr: "Clé d'API" },
-  "settings.token": { en: "token", fr: "token" },
-  "settings.token.ph": { en: "paste your token", fr: "collez votre token" },
+  "settings.token": { en: "key", fr: "clé" },
+  "settings.token.ph": { en: "paste your key", fr: "collez votre clé" },
   "settings.paste": { en: "Paste", fr: "Coller" },
   "settings.paste.title": { en: "Paste from the clipboard", fr: "Coller depuis le presse-papier" },
   "settings.verify": { en: "Verify the key", fr: "Vérifier la clé" },
@@ -128,36 +128,38 @@ const UI = {
   "settings.baseurl": { en: "base URL", fr: "base URL" },
   "settings.ping": { en: "Test the service", fr: "Tester le service" },
   "settings.note": {
-    en: 'Token and base URL stay in this browser (<code>localStorage</code>) and are never copied into the code examples. No token? <a href="#/acces">Ask for one</a>.',
-    fr: 'Token et base URL restent dans ce navigateur (<code>localStorage</code>) et ne sont jamais recopiés dans les exemples de code. Pas de token ? <a href="#/acces">Demandez-en un</a>.',
+    en: 'Key and base URL stay in this browser (<code>localStorage</code>) and are never copied into the code examples. No key yet? <a href="#/acces">Get one</a>.',
+    fr: 'Clé et base URL restent dans ce navigateur (<code>localStorage</code>) et ne sont jamais recopiés dans les exemples de code. Pas encore de clé ? <a href="#/acces">Obtenez-en une</a>.',
   },
 
-  // ─────────────────────────── access / token runtime ───────────────────────────
-  "key.none": { en: "no token stored", fr: "aucun token enregistré" },
-  "key.unverified": { en: "token stored — not verified", fr: "token enregistré — non vérifié" },
-  "key.saved": { en: "Token stored in this browser", fr: "Token enregistré dans ce navigateur" },
-  "key.cleared": { en: "token cleared", fr: "token effacé" },
-  "key.needed": { en: "enter a token first", fr: "renseignez d'abord un token" },
+  // ─────────────────────────── access / key runtime ───────────────────────────
+  "key.none": { en: "no key stored", fr: "aucune clé enregistrée" },
+  "key.unverified": { en: "key stored — not verified", fr: "clé enregistrée — non vérifiée" },
+  "key.saved": { en: "Key stored in this browser", fr: "Clé enregistrée dans ce navigateur" },
+  "key.cleared": { en: "key cleared", fr: "clé effacée" },
+  "key.needed": { en: "enter a key first", fr: "renseignez d'abord une clé" },
   "key.checking": { en: "checking on ", fr: "vérification sur " },
-  "key.refused": { en: " — token refused by ", fr: " — token refusé par " },
-  "key.valid": { en: "✓ token valid on ", fr: "✓ token valide sur " },
+  "key.refused": { en: " — key refused by ", fr: " — clé refusée par " },
+  "key.valid": { en: "✓ key valid on ", fr: "✓ clé valide sur " },
   "key.error": { en: " — error returned by ", fr: " — erreur renvoyée par " },
   "key.unreachable": { en: "service unreachable: ", fr: "service injoignable : " },
-  "key.401": { en: "401 — token missing or refused by ", fr: "401 — token absent ou refusé par " },
-  "key.401.toast": { en: " — token missing or refused.", fr: " — token absent ou refusé." },
+  "key.401": { en: "401 — key missing or refused by ", fr: "401 — clé absente ou refusée par " },
+  "key.401.toast": { en: " — key missing or refused.", fr: " — clé absente ou refusée." },
   "key.clipboard": { en: "clipboard unavailable — paste by hand", fr: "presse-papier inaccessible — collez à la main" },
   "key.mail.copied": { en: "Address copied", fr: "Adresse copiée" },
 
   // ─────────────────────────── home ───────────────────────────
-  "home.eyebrow": { en: "AI SmartTalk internal service · Rust · pandoc · WeasyPrint", fr: "Service interne AI SmartTalk · Rust · pandoc · WeasyPrint" },
-  "home.title": { en: "A document engine<br><span class=\"grad\">for our products</span>", fr: "Un moteur de documents<br><span class=\"grad\">pour nos produits</span>" },
+  "home.eyebrow": { en: "AI SmartTalk Documents · Rust · pandoc · WeasyPrint", fr: "AI SmartTalk Documents · Rust · pandoc · WeasyPrint" },
+  "home.title": { en: "A document engine<br><span class=\"grad\">for your products</span>", fr: "Un moteur de documents<br><span class=\"grad\">pour vos produits</span>" },
   "home.lede": {
     en: "Markdown, HTML or Tera templates in. Paginated PDF, PNG preview, merge, watermark and AES-256 encryption out. One JSON API, one container.",
     fr: "Markdown, HTML ou templates Tera en entrée. PDF paginé, preview PNG, fusion, filigrane et chiffrement AES-256 en sortie. Une seule API JSON, un seul conteneur.",
   },
+  // Le lien vers les tarifs sort de la console : il est absolu, et le site
+  // public a une adresse par langue.
   "home.lede.small": {
-    en: 'The API serves AI SmartTalk teams and products: every call needs a token. <a href="#/acces">Request access</a>.',
-    fr: 'L\'API est réservée aux équipes et projets AI SmartTalk : chaque appel demande un token. <a href="#/acces">Demander un accès</a>.',
+    en: 'The public tools run without a key. The API needs one: see <a href="#/acces">how to get a key</a> and <a href="/pricing">the tiers</a>.',
+    fr: 'Les outils publics fonctionnent sans clé. L\'API en demande une : voir <a href="#/acces">comment obtenir une clé</a> et <a href="/tarifs">les paliers</a>.',
   },
   "home.cta.console": { en: "Open the console", fr: "Ouvrir la console" },
   "home.cta.guides": { en: "Read the guides", fr: "Lire les guides" },
@@ -195,11 +197,11 @@ const UI = {
   },
   "home.quick.title": { en: "Thirty seconds to the first PDF", fr: "Démarrage en trente secondes" },
   "home.quick.lede": {
-    en: "No SDK: HTTP and JSON, plus your token in the <code>X-API-Key</code> header.",
-    fr: "Aucun SDK : de l'HTTP et du JSON, plus votre token dans l'en-tête <code>X-API-Key</code>.",
+    en: "No SDK: HTTP and JSON, plus your key in the <code>X-API-Key</code> header.",
+    fr: "Aucun SDK : de l'HTTP et du JSON, plus votre clé dans l'en-tête <code>X-API-Key</code>.",
   },
   "home.quick.tabs.aria": { en: "Code examples", fr: "Exemples de code" },
-  "home.quick.notoken": { en: "No token", fr: "Sans token" },
+  "home.quick.notoken": { en: "No key", fr: "Sans clé" },
   "home.quick.n1.title": { en: "Binary response by default", fr: "Réponse binaire par défaut" },
   "home.quick.n1.body": {
     en: "Without <code>client_id</code>/<code>pdf_name</code>, the response body is the PDF itself.",
@@ -210,16 +212,16 @@ const UI = {
     en: 'With both fields, the response becomes <code>{"download_url": …}</code> and the file stays served by the service.',
     fr: 'Avec les deux champs, la réponse devient <code>{"download_url": …}</code> et le fichier reste servi par le service.',
   },
-  "home.quick.n3.title": { en: "Token required", fr: "Token obligatoire" },
+  "home.quick.n3.title": { en: "Key required", fr: "Clé obligatoire" },
   "home.quick.n3.body": {
-    en: 'Every <code>/api/*</code> needs <code>X-API-Key</code> (or <code>Authorization: Bearer</code>). Only <code>/api/health</code> and <code>/download</code> stay open. <a href="#/acces">Get a token</a>.',
-    fr: 'Tous les <code>/api/*</code> exigent <code>X-API-Key</code> (ou <code>Authorization: Bearer</code>). Seuls <code>/api/health</code> et <code>/download</code> restent ouverts. <a href="#/acces">Obtenir un token</a>.',
+    en: 'Every <code>/api/*</code> needs <code>X-API-Key</code> (or <code>Authorization: Bearer</code>). Only <code>/api/health</code> and <code>/download</code> stay open. <a href="#/acces">Get a key</a>.',
+    fr: 'Tous les <code>/api/*</code> exigent <code>X-API-Key</code> (ou <code>Authorization: Bearer</code>). Seuls <code>/api/health</code> et <code>/download</code> restent ouverts. <a href="#/acces">Obtenir une clé</a>.',
   },
   "home.foot": {
     en: '<strong>md-to-pdf</strong> — fork maintained by <a href="https://aismarttalk.tech" target="_blank" rel="noopener">AI SmartTalk</a>, after the original project by <a href="https://github.com/Spawnia/md-to-pdf" target="_blank" rel="noopener">Spawnia</a>.',
     fr: '<strong>md-to-pdf</strong> — fork maintenu par <a href="https://aismarttalk.tech" target="_blank" rel="noopener">AI SmartTalk</a>, d\'après le projet original de <a href="https://github.com/Spawnia/md-to-pdf" target="_blank" rel="noopener">Spawnia</a>.',
   },
-  "home.foot.acces": { en: "request access", fr: "demander un accès" },
+  "home.foot.acces": { en: "get a key", fr: "obtenir une clé" },
   // Le site public a une adresse par langue : le lien entier vit donc ici.
   "home.foot.tools": {
     en: '<a href="/tools">AI SmartTalk Documents</a>',
@@ -242,8 +244,8 @@ const UI = {
   "api.request": { en: "Request", fr: "Requête" },
   "api.response": { en: "Response", fr: "Réponse" },
   "api.responses": { en: "Responses", fr: "Réponses" },
-  "api.auth.free": { en: "🔓 no token", fr: "🔓 sans token" },
-  "api.auth.token": { en: "🔐 token required · X-API-Key", fr: "🔐 token requis · X-API-Key" },
+  "api.auth.free": { en: "🔓 no key", fr: "🔓 sans clé" },
+  "api.auth.token": { en: "🔐 key required · X-API-Key", fr: "🔐 clé requise · X-API-Key" },
   "api.nomatch": { en: "No endpoint matches.", fr: "Aucun endpoint ne correspond." },
   "api.pathcopied": { en: "Path copied", fr: "Chemin copié" },
 
@@ -258,11 +260,11 @@ const UI = {
   "console.reset": { en: "Reset the form", fr: "Réinitialiser le formulaire" },
   "console.reset.done": { en: "Form reset", fr: "Formulaire réinitialisé" },
   "console.banner": {
-    en: "<strong>No token stored.</strong> The <code>/api/*</code> endpoints will answer 401.",
-    fr: "<strong>Aucun token enregistré.</strong> Les endpoints <code>/api/*</code> répondront 401.",
+    en: "<strong>No key stored.</strong> The <code>/api/*</code> endpoints will answer 401.",
+    fr: "<strong>Aucune clé enregistrée.</strong> Les endpoints <code>/api/*</code> répondront 401.",
   },
-  "console.banner.enter": { en: "Enter the token", fr: "Saisir le token" },
-  "console.banner.ask": { en: "Ask for one", fr: "En demander un" },
+  "console.banner.enter": { en: "Enter the key", fr: "Saisir la clé" },
+  "console.banner.ask": { en: "Get a key", fr: "Obtenir une clé" },
   "console.send": { en: "Send", fr: "Envoyer" },
   "console.curl": { en: "Copy the curl", fr: "Copier le curl" },
   "console.curl.copied": { en: "curl command copied", fr: "Commande curl copiée" },
@@ -310,31 +312,37 @@ const UI = {
   "console.download.file": { en: "⤓ download the file — ", fr: "⤓ télécharger le fichier — " },
 
   // ─────────────────────────── access view ───────────────────────────
-  "acces.eyebrow": { en: "Internal service", fr: "Service interne" },
-  "acces.title": { en: "Getting access", fr: "Obtenir un accès" },
+  // La vue est la page des clés : elle dit d'abord que les outils publics n'en
+  // demandent aucune, puis d'où vient une clé. L'adresse mail reste, mais comme
+  // recours tant que l'espace personnel n'est pas ouvert.
+  "acces.eyebrow": { en: "API keys", fr: "Clés d'API" },
+  "acces.title": { en: "Getting a key", fr: "Obtenir une clé" },
   "acces.lede": {
-    en: "md-to-pdf runs for AI SmartTalk products and teams. It is not open self-service: every integration gets its own token.",
-    fr: "md-to-pdf tourne pour les produits et les équipes AI SmartTalk. Il n'est pas ouvert en libre-service : chaque intégration reçoit son propre token.",
+    en: 'The public tools need no key: they run without an account. A key is only for the API — it is created from your personal space, and the tiers are set out on <a href="/pricing">the pricing page</a>.',
+    fr: 'Les outils publics ne demandent aucune clé : ils fonctionnent sans compte. Une clé ne sert qu\'à l\'API — elle se crée depuis votre espace personnel, et les paliers sont détaillés sur <a href="/tarifs">la page des tarifs</a>.',
   },
-  "acces.s1.title": { en: "Ask for a token", fr: "Demandez un token" },
-  "acces.s1.body": { en: "One mail with the project and the expected volume. Answer within one working day.", fr: "Un mail avec le projet concerné et le volume attendu. Réponse sous un jour ouvré." },
+  "acces.s1.title": { en: "Create a key", fr: "Créez une clé" },
+  "acces.s1.body": {
+    en: 'Keys are issued from your personal space, <a href="/app/cles">/app/cles</a> — under construction. Until it opens, ask by mail: the project and the expected volume, answered within one working day.',
+    fr: 'Les clés se créent depuis votre espace personnel, <a href="/app/cles">/app/cles</a> — en construction. En attendant son ouverture, demandez par mail : le projet et le volume attendu, réponse sous un jour ouvré.',
+  },
   "acces.s1.copy": { en: "Copy the address", fr: "Copier l'adresse" },
-  "acces.s2.title": { en: "Store it here", fr: "Enregistrez-le ici" },
-  "acces.s2.body": { en: "The token stays in this browser and is used by every console request.", fr: "Le token reste dans ce navigateur et sert à toutes les requêtes de la console." },
+  "acces.s2.title": { en: "Store it here", fr: "Enregistrez-la ici" },
+  "acces.s2.body": { en: "The key stays in this browser and is used by every console request.", fr: "La clé reste dans ce navigateur et sert à toutes les requêtes de la console." },
   "acces.s2.save": { en: "Save", fr: "Enregistrer" },
   "acces.s3.title": { en: "Test, then integrate", fr: "Testez, puis intégrez" },
   "acces.s3.body": {
-    en: "The console sends real requests with your token and hands you back the equivalent <code>curl</code>.",
-    fr: "La console envoie de vraies requêtes avec votre token et vous rend le <code>curl</code> équivalent.",
+    en: "The console sends real requests with your key and hands you back the equivalent <code>curl</code>.",
+    fr: "La console envoie de vraies requêtes avec votre clé et vous rend le <code>curl</code> équivalent.",
   },
   "acces.s3.ref": { en: "See the reference", fr: "Voir la référence" },
   "acces.note1": {
-    en: "<strong>Where the token goes.</strong> <code>X-API-Key</code> header or <code>Authorization: Bearer</code> on every <code>/api/*</code>. Only <code>/api/health</code> and <code>/download/&lt;client_id&gt;/&lt;pdf_name&gt;</code> answer without authentication.",
-    fr: "<strong>Où passe le token.</strong> En-tête <code>X-API-Key</code> ou <code>Authorization: Bearer</code> sur tous les <code>/api/*</code>. Seuls <code>/api/health</code> et <code>/download/&lt;client_id&gt;/&lt;pdf_name&gt;</code> répondent sans authentification.",
+    en: "<strong>Where the key goes.</strong> <code>X-API-Key</code> header or <code>Authorization: Bearer</code> on every <code>/api/*</code>. Only <code>/api/health</code> and <code>/download/&lt;client_id&gt;/&lt;pdf_name&gt;</code> answer without authentication.",
+    fr: "<strong>Où passe la clé.</strong> En-tête <code>X-API-Key</code> ou <code>Authorization: Bearer</code> sur tous les <code>/api/*</code>. Seuls <code>/api/health</code> et <code>/download/&lt;client_id&gt;/&lt;pdf_name&gt;</code> répondent sans authentification.",
   },
   "acces.note2": {
-    en: "<strong>One token per integration.</strong> Do not commit it and do not put it in front-end code: it grants full access to the engine. If it leaks, write to the same address and we replace it.",
-    fr: "<strong>Un token par intégration.</strong> Ne le committez pas et ne le mettez pas dans du code front : il donne un accès complet au moteur. En cas de fuite, écrivez à la même adresse, on le remplace.",
+    en: "<strong>One key per integration.</strong> Do not commit it and do not put it in front-end code: it grants full access to the engine. Revoking and replacing a key will happen from your personal space; until then, write to the address above.",
+    fr: "<strong>Une clé par intégration.</strong> Ne la committez pas et ne la mettez pas dans du code front : elle donne un accès complet au moteur. La révocation et le remplacement se feront depuis votre espace personnel ; d'ici là, écrivez à l'adresse ci-dessus.",
   },
 
   // ─────────────────────────── palette ───────────────────────────
@@ -354,7 +362,7 @@ const UI = {
   "palette.cmd.guides": { en: "Guides", fr: "Guides" },
   "palette.cmd.api": { en: "API reference", fr: "Référence API" },
   "palette.cmd.console": { en: "Test console", fr: "Console de test" },
-  "palette.cmd.acces": { en: "Request access", fr: "Demander un accès" },
+  "palette.cmd.acces": { en: "Get an API key", fr: "Obtenir une clé d'API" },
   "palette.cmd.editor": { en: "Markdown editor", fr: "Éditeur markdown" },
 
   // ─────────────────────────── guides shell ───────────────────────────
@@ -377,5 +385,5 @@ const UI = {
   "title.guides": { en: "Guides — md-to-pdf", fr: "Guides — md-to-pdf" },
   "title.api": { en: "API reference — md-to-pdf", fr: "Référence API — md-to-pdf" },
   "title.console": { en: "Console — md-to-pdf", fr: "Console — md-to-pdf" },
-  "title.acces": { en: "Access — md-to-pdf", fr: "Accès — md-to-pdf" },
+  "title.acces": { en: "API keys — md-to-pdf", fr: "Clés d'API — md-to-pdf" },
 };

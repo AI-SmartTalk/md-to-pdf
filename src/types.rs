@@ -241,6 +241,21 @@ pub struct ToolResponse {
     pub verdict: Option<Verdict>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warnings: Option<Vec<String>>,
+    /// Account the work belongs to, when a member's key paid for it.
+    ///
+    /// Resolved in `helpers::finish_tool`, which runs on the worker thread where the owner
+    /// of the request is known, and consumed in `helpers::deliver_tool`, which is the first
+    /// place the *complete* operation exists — verdict included. Never serialised: it is
+    /// how the quality record gets written, not something a caller asked for.
+    #[serde(skip)]
+    pub account: Option<String>,
+    /// What the caller's own document was called, for the quality record.
+    ///
+    /// Never serialised: the caller knows what they sent. It exists so the record reads
+    /// "contrat-cadre.pdf" rather than "compressed.pdf", which is the difference between a
+    /// history and ten identical rows.
+    #[serde(skip)]
+    pub source_name: Option<String>,
 }
 
 // ------------ Verdict ------------
@@ -430,6 +445,10 @@ pub enum AppError {
     Unauthorized(String),
     /// No render slot within the queue timeout: the client should come back later
     TooManyRequests(String),
+    /// The request was well-formed but the world says no — an address already claimed.
+    /// Kept apart from `BadRequest` so a sign-up form can offer to sign in instead of
+    /// having to read the prose of an error message to guess what happened.
+    Conflict(String),
     /// A service we depend on (Mermaid Studio, log420, ...) failed or timed out
     Upstream {
         service: String,
@@ -461,6 +480,7 @@ impl AppError {
             AppError::Timeout(_) => "timeout",
             AppError::Unauthorized(_) => "unauthorized",
             AppError::TooManyRequests(_) => "too_many_requests",
+            AppError::Conflict(_) => "conflict",
             AppError::Upstream { .. } => "upstream",
         }
     }
@@ -484,6 +504,7 @@ impl<'r> Responder<'r, 'static> for AppError {
             AppError::TemplateError(msg) => (Status::BadRequest, "Template error".to_string(), msg),
             AppError::Timeout(msg) => (Status::GatewayTimeout, "Timeout".to_string(), msg),
             AppError::Unauthorized(msg) => (Status::Unauthorized, "Unauthorized".to_string(), msg),
+            AppError::Conflict(msg) => (Status::Conflict, "Conflict".to_string(), msg),
             AppError::TooManyRequests(msg) => {
                 // Tell the caller when a retry has a chance instead of letting it hammer us
                 retry_after = Some(retry_after_secs());
@@ -564,6 +585,7 @@ impl From<AppError> for ConvertError {
             AppError::TemplateError(msg) => ConvertError::Message(Status::BadRequest, msg),
             AppError::Timeout(msg) => ConvertError::Message(Status::GatewayTimeout, msg),
             AppError::Unauthorized(msg) => ConvertError::Message(Status::Unauthorized, msg),
+            AppError::Conflict(msg) => ConvertError::Message(Status::Conflict, msg),
             AppError::TooManyRequests(msg) => ConvertError::Message(Status::TooManyRequests, msg),
             AppError::Upstream { service, details } => ConvertError::Message(
                 Status::BadGateway,

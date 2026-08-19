@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% import "icons.html" as icons %}
+
+{% block head_extra %}
+{# Trois fiches, chacune pour une raison précise :
+   — Article dit qu'il s'agit d'un texte de fond, daté et signé, et non d'une page d'outil ;
+   — BreadcrumbList affiche le chemin sous le résultat, ce qui augmente le taux de clic ;
+   — les deux portent la même URL canonique, pour qu'aucune variante ne se dédouble. #}
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Article",
+ "headline":{{ guide.title | json_encode | safe }},
+ "description":{{ guide.meta_description | json_encode | safe }},
+ "url":"{{ canonical | safe }}",
+ "mainEntityOfPage":{"@type":"WebPage","@id":"{{ canonical | safe }}"},
+ "inLanguage":"{{ lang }}",
+ "articleSection":{{ guide.group | json_encode | safe }},
+ "datePublished":"{{ last_modified }}",
+ "dateModified":"{{ last_modified }}",
+ "author":{"@type":"Organization","name":"AI SmartTalk","url":"https://aismarttalk.tech"},
+ "publisher":{"@type":"Organization","name":"AI SmartTalk",
+              "logo":{"@type":"ImageObject","url":"{{ base | safe }}/static/favicon.ico"}},
+ "isPartOf":{"@type":"CollectionPage","name":"Guides","url":"{{ base | safe }}{{ guides_root | safe }}"}}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[
+ {"@type":"ListItem","position":1,"name":{% if lang == "fr" %}"Accueil"{% else %}"Home"{% endif %},"item":"{{ base | safe }}{{ home | safe }}"},
+ {"@type":"ListItem","position":2,"name":"Guides","item":"{{ base | safe }}{{ guides_root | safe }}"},
+ {"@type":"ListItem","position":3,"name":{{ guide.title | json_encode | safe }},"item":"{{ canonical | safe }}"}]}
+</script>
+{% endblock head_extra %}
+
+{% block content %}
+<div class="wrap">
+
+<nav class="breadcrumb" aria-label="{% if lang == 'fr' %}Fil d'Ariane{% else %}Breadcrumb{% endif %}">
+  <a href="{{ home | safe }}">{% if lang == "fr" %}Accueil{% else %}Home{% endif %}</a>
+  <span aria-hidden="true">›</span>
+  <a href="{{ guides_root | safe }}">Guides</a>
+  <span aria-hidden="true">›</span>
+  <span>{{ guide.title }}</span>
+</nav>
+
+<section class="tool-hero">
+  <span class="tag">{{ guide.group }}</span>
+  <h1>{{ guide.title }}</h1>
+  <p class="lede">{{ guide.lede }}</p>
+</section>
+
+<div class="tool-layout">
+  <article>
+    <div class="prose">
+      {% for block in guide.blocks %}
+
+      {%- if block.kind == "h" -%}
+      <h2>{{ block.text }}</h2>
+
+      {%- elif block.kind == "p" -%}
+      {# Le contenu porte son propre balisage — <code>, <b>, liens entre guides — écrit
+         par nous et extrait de guides.js : il est inséré tel quel, pas échappé. #}
+      <p>{{ block.html | safe }}</p>
+
+      {%- elif block.kind == "code" -%}
+      <pre class="dev-snippet"{% if block.lang %} data-lang="{{ block.lang }}"{% endif %}>{{ block.code }}</pre>
+
+      {%- elif block.kind == "table" -%}
+      <div class="table-scroll">
+        <table>
+          <thead><tr>{% for cell in block.head %}<th>{{ cell }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for row in block.rows %}
+            <tr>{% for cell in row %}<td>{{ cell | safe }}</td>{% endfor %}</tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {%- elif block.kind == "note" -%}
+        {% if block.level == "warn" %}
+        <div class="alert">
+          <p class="alert-title">{% if lang == "fr" %}À savoir{% else %}Worth knowing{% endif %}</p>
+          <div>{{ block.html | safe }}</div>
+        </div>
+        {% else %}
+        <div class="aside-card">{{ block.html | safe }}</div>
+        {% endif %}
+
+      {%- elif block.kind == "cards" -%}
+      <div class="tool-grid">
+        {% for card in block.cards %}
+        <div class="tool-card">
+          <h4>{{ card.title }}</h4>
+          <p>{{ card.html | safe }}</p>
+        </div>
+        {% endfor %}
+      </div>
+
+      {%- elif block.kind == "try" -%}
+      {# Le pont vers la pratique. Quand l'endpoint a une page d'outil publique, on y va :
+         c'est gratuit, sans compte, et c'est le chemin qu'un lecteur veut. Sinon la console
+         reste le seul endroit où cet endpoint s'appelle. #}
+      <p>
+        {%- if block.tool -%}
+        <a class="btn primary sm" href="{{ root | safe }}/{{ block.tool }}">{{ block.label }} →</a>
+        {%- else -%}
+        <a class="btn sm" href="/dev#/console/{{ block.target }}">{{ block.label }} →</a>
+        {%- endif -%}
+      </p>
+
+      {%- elif block.kind == "themes" -%}
+      {# La galerie des thèmes interroge /api/themes en direct : elle n'a de sens que dans
+         la console, qui porte la clé. Ici, un lien plutôt qu'une capture qui mentira. #}
+      <p class="notice">
+        <a href="/dev#/guides/themes">
+          {%- if lang == "fr" -%}
+          Voir les kits installés sur ce déploiement, aperçus compris
+          {%- else -%}
+          See the kits installed on this deployment, previews included
+          {%- endif -%}
+        </a>
+      </p>
+      {%- endif -%}
+
+      {% endfor %}
+    </div>
+
+    {% if previous or next %}
+    <section class="section">
+      <h2>{% if lang == "fr" %}Suite de la lecture{% else %}Keep reading{% endif %}</h2>
+      <div class="tool-grid">
+        {% if previous %}
+        <a class="tool-card" href="{{ guides_root | safe }}/{{ previous.slug }}">
+          <h4>← {{ previous.title }}</h4>
+          <p>{{ previous.lede }}</p>
+        </a>
+        {% endif %}
+        {% if next %}
+        <a class="tool-card" href="{{ guides_root | safe }}/{{ next.slug }}">
+          <h4>{{ next.title }} →</h4>
+          <p>{{ next.lede }}</p>
+        </a>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if tools %}
+    {# Le maillage que ce guide doit à son sujet : la page d'outil qui exécute ce qu'il
+       explique, gratuite et sans compte. #}
+    <section class="section">
+      <h2>{% if lang == "fr" %}Les outils dont parle ce guide{% else %}The tools this guide covers{% endif %}</h2>
+      <div class="tool-grid">
+        {% for tool in tools %}
+        <a class="tool-card" href="{{ root | safe }}/{{ tool.slug }}">
+          <span class="tool-card-icon">{{ icons::tool(name=tool.icon | default(value="")) }}</span>
+          <h4>{{ tool.label | default(value=tool.h1) }}</h4>
+          <p>{{ tool.meta_description }}</p>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+  </article>
+
+  <aside class="tool-aside">
+    <div class="aside-card">
+      <p class="kicker">{% if lang == "fr" %}Tous les guides{% else %}All the guides{% endif %}</p>
+      <p><a href="{{ guides_root | safe }}">{% if lang == "fr" %}Revenir au sommaire{% else %}Back to the index{% endif %}</a></p>
+    </div>
+
+    {% if tools %}
+    <div class="aside-card">
+      <p class="kicker">{% if lang == "fr" %}À essayer{% else %}Try it{% endif %}</p>
+      <ul class="footer-links">
+        {% for tool in tools %}<li><a href="{{ root | safe }}/{{ tool.slug }}">{{ tool.label | default(value=tool.h1) }}</a></li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="aside-card">
+      <p class="kicker">{% if lang == "fr" %}Par l'API{% else %}Through the API{% endif %}</p>
+      <p class="notice"><a href="/dev#/api">{% if lang == "fr" %}Référence complète{% else %}Full reference{% endif %}</a></p>
+      <p class="notice"><a href="/static/swagger.yaml">OpenAPI</a></p>
+    </div>
+  </aside>
+</div>
+</div>
+{% endblock content %}

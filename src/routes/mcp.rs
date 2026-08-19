@@ -447,6 +447,10 @@ async fn render(args: Value) -> Result<Vec<Value>, AppError> {
     })
     .await?;
 
+    // The agent path keeps the same quality record as the human one: work done through MCP
+    // belongs to the account whose key drove it, and shows up in the same list.
+    crate::history::record(&produced.response, "markdown-to-pdf");
+
     let mut result = to_value(&produced.response)?;
     if let Some(report) = produced.layout {
         result["layout"] = to_value(&report)?;
@@ -1198,6 +1202,7 @@ fn failure(err: AppError) -> Value {
         | AppError::Timeout(message)
         | AppError::Unauthorized(message)
         | AppError::TooManyRequests(message) => message,
+        AppError::Conflict(message) => message,
         AppError::ProcessFailed { message, stderr } => {
             if stderr.is_empty() {
                 message

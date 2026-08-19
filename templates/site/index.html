@@ -68,7 +68,7 @@
     {# ── La réassurance, juste sous le dépôt, à l'endroit où l'on hésite ── #}
     <ul class="trust-bar">
       <li>{{ icons::trust(name="no-watermark") }}<span>{% if lang == "fr" %}Aucun filigrane, jamais{% else %}No watermark, ever{% endif %}</span></li>
-      <li>{{ icons::trust(name="clock") }}<span>{% if lang == "fr" %}Fichiers effacés après {{ retention_hours }} h{% else %}Files deleted after {{ retention_hours }} h{% endif %}</span></li>
+      <li>{{ icons::trust(name="clock") }}<span>{% if lang == "fr" %}Fichiers effacés après <span data-role="retention-hours" data-member-hours="{{ member_retention_hours }}">{{ retention_hours }}</span> h{% else %}Files deleted after <span data-role="retention-hours" data-member-hours="{{ member_retention_hours }}">{{ retention_hours }}</span> h{% endif %}</span></li>
       <li>{{ icons::trust(name="flag") }}<span>{% if lang == "fr" %}Hébergé en France{% else %}Hosted in France{% endif %}</span></li>
       <li>{{ icons::trust(name="shield") }}<span>{% if lang == "fr" %}Aucun entraînement de modèle{% else %}No model training{% endif %}</span></li>
     </ul>
@@ -140,8 +140,8 @@
           {%- endif -%}
         </p>
         <p class="dev-links">
-          <a class="btn" href="/console#/api">{% if lang == "fr" %}Référence de l'API{% else %}API reference{% endif %}</a>
-          <a class="btn ghost" href="/console#/console">{% if lang == "fr" %}Console de test{% else %}Test console{% endif %}</a>
+          <a class="btn" href="/dev#/api">{% if lang == "fr" %}Référence de l'API{% else %}API reference{% endif %}</a>
+          <a class="btn ghost" href="/dev#/console">{% if lang == "fr" %}Console de test{% else %}Test console{% endif %}</a>
         </p>
       </div>
       <pre class="dev-snippet"><code>curl -X POST {{ base | safe }}/api/compress \

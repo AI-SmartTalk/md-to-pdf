@@ -61,7 +61,7 @@ pub async fn office_to_pdf(
     asset_id(&req.file)?;
 
     let (produced, response) = exec::as_owner(key.0, exec::offload(move || run(req))).await?;
-    helpers::deliver_tool(produced, response).await
+    helpers::deliver_tool(produced, response, "office-to-pdf").await
 }
 
 /// All the blocking work. Public and free of Rocket: the async job dispatcher calls it
@@ -117,7 +117,7 @@ pub async fn pdf_to_office(
 
     let (produced, response) =
         exec::as_owner(key.0, exec::offload(move || run_pdf_to_office(req))).await?;
-    helpers::deliver_tool(produced, response).await
+    helpers::deliver_tool(produced, response, "pdf-to-office").await
 }
 
 /// All the blocking work. Public and free of Rocket: the async job dispatcher calls it

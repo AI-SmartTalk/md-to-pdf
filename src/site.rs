@@ -306,6 +306,32 @@ impl Lang {
         }
     }
 
+    /// The account pages, in this language.
+    ///
+    /// The English half of the site used to link to `/connexion`, `/inscription` and the
+    /// French workspace: an English visitor who clicked "Sign in" landed on a page written
+    /// entirely in French, at the exact moment we ask them for a password.
+    pub fn signin(self) -> &'static str {
+        match self {
+            Lang::Fr => "/connexion",
+            Lang::En => "/signin",
+        }
+    }
+
+    pub fn signup(self) -> &'static str {
+        match self {
+            Lang::Fr => "/inscription",
+            Lang::En => "/signup",
+        }
+    }
+
+    pub fn workspace(self) -> &'static str {
+        match self {
+            Lang::Fr => "/app",
+            Lang::En => "/en/app",
+        }
+    }
+
     pub fn other(self) -> Lang {
         match self {
             Lang::Fr => Lang::En,
@@ -427,7 +453,7 @@ pub fn plans(lang: Lang) -> Vec<Plan> {
                 "Request access"
             }
             .to_string(),
-            cta_href: "/console#/acces".to_string(),
+            cta_href: "/dev#/acces".to_string(),
             featured: true,
         },
         Plan {
@@ -467,7 +493,7 @@ pub fn plans(lang: Lang) -> Vec<Plan> {
                 ]
             }),
             cta: if fr { "Nous contacter" } else { "Talk to us" }.to_string(),
-            cta_href: "/console#/acces".to_string(),
+            cta_href: "/dev#/acces".to_string(),
             featured: false,
         },
         Plan {
@@ -510,7 +536,7 @@ pub fn plans(lang: Lang) -> Vec<Plan> {
                 "Read the docs"
             }
             .to_string(),
-            cta_href: "/console#/api".to_string(),
+            cta_href: "/dev#/api".to_string(),
             featured: false,
         },
     ]
@@ -573,6 +599,9 @@ pub fn base_context(lang: Lang) -> tera::Context {
     context.insert("home", lang.home());
     context.insert("root", lang.tools());
     context.insert("pricing", lang.pricing());
+    context.insert("signin", lang.signin());
+    context.insert("signup", lang.signup());
+    context.insert("workspace", lang.workspace());
     context.insert("other_lang", lang.other().code());
     context.insert("other_home", lang.other().home());
     context.insert("other_root", lang.other().tools());
@@ -581,6 +610,12 @@ pub fn base_context(lang: Lang) -> tera::Context {
     context.insert(
         "retention_hours",
         &(crate::config::config().asset_ttl.as_secs() / 3600),
+    );
+    // Both numbers come from the config so that a page can never quote a retention the
+    // service does not actually apply — which it did, for a while, on the sign-up page.
+    context.insert(
+        "member_retention_hours",
+        &(crate::config::config().asset_ttl_member.as_secs() / 3600),
     );
     context.insert("max_mb", &crate::config::config().asset_max_mb);
     context

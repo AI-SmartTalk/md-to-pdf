@@ -92,6 +92,9 @@ where
         let _budget = helpers::Budget::start(config().render_deadline);
         // Anything this job stores belongs to the key that asked for it
         let _owner = owner.as_deref().map(crate::assets::owned_by);
+        // Blocking threads are pooled: whatever the previous job was working on must not
+        // end up named in this one's record.
+        crate::assets::forget_source_name();
         f()
     })
     .await;
@@ -104,6 +107,50 @@ where
             error!("Render task did not complete: {}", err);
             Err(AppError::ProcessFailed {
                 message: "Rendering task failed".to_string(),
+                stderr: err.to_string(),
+            })
+        }
+    }
+}
+
+/// Run a blocking *computation* off the async executor, without taking a render slot.
+///
+/// Hashing a password is deliberately slow — six hundred thousand PBKDF2 rounds — so it
+/// cannot run on an async worker. But it spawns no process and touches no renderer, and
+/// putting it in the render queue was measurably wrong: under load, signing in was refused
+/// with "the service is saturated" because the service was busy compressing somebody's PDF,
+/// and a burst of sign-ins could equally starve the renderers. Two kinds of work, two
+/// queues.
+///
+/// Still bounded, and by the same width: unbounded PBKDF2 is its own denial of service.
+pub async fn offload_cpu<F, T>(f: F) -> Result<T, AppError>
+where
+    F: FnOnce() -> Result<T, AppError> + Send + 'static,
+    T: Send + 'static,
+{
+    static CPU: OnceLock<Arc<Semaphore>> = OnceLock::new();
+    let semaphore = CPU.get_or_init(|| Arc::new(Semaphore::new(config().max_concurrency)));
+
+    let permit = match timeout(config().queue_timeout, semaphore.clone().acquire_owned()).await {
+        Ok(Ok(permit)) => permit,
+        _ => {
+            return Err(AppError::TooManyRequests(
+                "Too many sign-ins at once: try again in a moment".to_string(),
+            ))
+        }
+    };
+
+    match spawn_blocking(move || {
+        let _permit = permit;
+        f()
+    })
+    .await
+    {
+        Ok(result) => result,
+        Err(err) => {
+            error!("Password task did not complete: {}", err);
+            Err(AppError::ProcessFailed {
+                message: "Could not process the credentials".to_string(),
                 stderr: err.to_string(),
             })
         }

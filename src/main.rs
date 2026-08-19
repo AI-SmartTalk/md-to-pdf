@@ -4,6 +4,7 @@ extern crate rocket;
 #[macro_use]
 extern crate log;
 
+mod accounts;
 mod assets;
 mod attest;
 mod auth;
@@ -15,6 +16,7 @@ mod charts;
 mod config;
 mod exec;
 mod helpers;
+mod history;
 mod jobs;
 mod layout;
 mod mermaid;
@@ -48,6 +50,10 @@ fn rocket() -> _ {
 
     // Uploaded files live here, and whatever a previous run left behind is dropped now
     assets::init();
+
+    // Accounts, sessions and the key index. First durable state this service has ever
+    // held — see the note at the top of `accounts.rs` for why it is files and not a base.
+    accounts::init();
 
     // Catalogues and templates of the public tool pages: a malformed catalogue must show
     // up in the boot log, not on the first visitor's screen
@@ -102,6 +108,20 @@ fn rocket() -> _ {
                 routes::site::index_en_moved,
                 // The integrator console, unchanged, at its own address
                 routes::site::console,
+                routes::site::console_moved,
+                // Le compte : s'inscrire, se connecter, et son espace de travail
+                routes::account_pages::signin_fr,
+                routes::account_pages::signin_en,
+                routes::account_pages::signup_fr,
+                routes::account_pages::signup_en,
+                routes::workspace::workspace_fr,
+                routes::workspace::workspace_en,
+                // Les douze guides, enfin indexables : c'est le seul contenu de fond du
+                // produit, et il vivait derrière un lien de pied de page.
+                routes::guides::index_fr,
+                routes::guides::index_en,
+                routes::guides::guide_fr,
+                routes::guides::guide_en,
                 routes::site::sitemap,
                 routes::site::robots,
                 routes::site::og_image,
@@ -162,6 +182,17 @@ fn rocket() -> _ {
                 routes::attest::attest,
                 routes::attest::verify,
                 routes::jobs::submit,
+                // Accounts: signing up, signing in, and minting your own keys
+                routes::auth::signup,
+                routes::auth::login,
+                routes::auth::logout,
+                routes::auth::me,
+                routes::auth::create_key,
+                routes::auth::list_keys,
+                routes::auth::revoke_key,
+                routes::auth::usage,
+                routes::auth::history,
+                routes::auth::clear_history,
             ],
         )
         .register(

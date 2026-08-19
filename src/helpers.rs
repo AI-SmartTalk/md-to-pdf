@@ -755,9 +755,17 @@ pub fn finish_tool(
         ToolOutput::Binary => None,
     };
 
+    // Who this work belongs to can only be read here, on the worker thread that carries the
+    // owner scope. The record itself is written later, in `deliver_tool`, because the verdict
+    // — the only reason the record is worth keeping — is not attached to the response until
+    // after this function has returned.
+    let account = crate::accounts::account_for_owner(&crate::assets::current_owner_name());
+
     Ok(ToolResponse {
         download_url,
         asset,
+        account,
+        source_name: crate::assets::current_source_name(),
         ..Default::default()
     })
 }
@@ -767,8 +775,14 @@ pub fn finish_tool(
 pub async fn deliver_tool(
     produced: tempfile::TempPath,
     response: ToolResponse,
+    tool: &str,
 ) -> Result<rocket::Either<rocket::fs::NamedFile, rocket::serde::json::Json<ToolResponse>>, AppError>
 {
+    // The quality record is written here because this is the one place that sees the whole
+    // operation: the file, the page count, and the verdict the route attached after
+    // `finish_tool` returned. Writing it earlier is what made every entry verdictless.
+    crate::history::record(&response, tool);
+
     let wants_json =
         response.download_url.is_some() || response.asset.is_some() || response.assets.is_some();
 
@@ -837,7 +851,14 @@ pub fn resolve_pdf_path(url: &str) -> Result<PathBuf, AppError> {
 /// adding a function rather than changing one.
 pub fn resolve_source(reference: &str) -> Result<PathBuf, AppError> {
     match crate::assets::strip_scheme(reference) {
-        Some(id) => crate::assets::path(id),
+        Some(id) => {
+            // The one place every tool passes through with the *caller's* name still in
+            // hand — see `assets::note_source_name` for why the record needs it.
+            if let Ok(meta) = crate::assets::meta(id) {
+                crate::assets::note_source_name(&meta.name);
+            }
+            crate::assets::path(id)
+        }
         None => resolve_pdf_path(reference),
     }
 }

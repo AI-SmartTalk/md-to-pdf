@@ -401,6 +401,53 @@ fn current_owner() -> Option<String> {
     CURRENT_OWNER.with(|slot| slot.borrow().clone())
 }
 
+thread_local! {
+    /// Name of the document this job was asked to work on
+    static SOURCE_NAME: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Remember what the caller's document was called.
+///
+/// The quality record is meant to read "contrat-cadre.pdf, compressed, text intact". It was
+/// reading "compressed.pdf" on every line, because the only name reaching it was the one the
+/// tool gives its *output* — so ten operations produced ten indistinguishable rows, in the
+/// one page this product hangs its argument on.
+///
+/// Noted in `helpers::resolve_source`, which every tool goes through to turn a reference into
+/// a path, so no route has to remember anything.
+pub fn note_source_name(name: &str) {
+    SOURCE_NAME.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        // The first document wins: merging six files is still one operation, and naming it
+        // after the last one read would be arbitrary.
+        if slot.is_none() {
+            *slot = Some(name.to_string());
+        }
+    });
+}
+
+pub fn current_source_name() -> Option<String> {
+    SOURCE_NAME.with(|slot| slot.borrow().clone())
+}
+
+/// Forget it, at the start of every blocking job.
+///
+/// Blocking threads are pooled and reused, so a name left behind would be attached to
+/// somebody else's operation — which in a record about *their* documents is worse than no
+/// name at all.
+pub fn forget_source_name() {
+    SOURCE_NAME.with(|slot| *slot.borrow_mut() = None);
+}
+
+/// Name the work in flight is attributed to, or an empty string outside any scope.
+///
+/// Exposed for the quality record, which needs to know whose operation it is writing down
+/// without every tool having to be told.
+pub fn current_owner_name() -> String {
+    current_owner().unwrap_or_default()
+}
+
 /// Move an already-written temporary file into the asset store.
 ///
 /// Blocking work — page counting spawns pdfinfo — so it belongs on a render slot, never on
@@ -474,7 +521,14 @@ pub fn store_as(
     };
 
     let now = now_unix();
-    let expires_unix = now + config().asset_ttl.as_secs();
+    // A member's files are kept longer than an anonymous visitor's. That difference is the
+    // one thing the sign-up page offers in exchange for an address, so it is decided here,
+    // from the owner already attached to the work, and never from anything a caller sends.
+    let ttl = match owner.and_then(crate::accounts::account_for_owner) {
+        Some(_) => config().asset_ttl_member,
+        None => config().asset_ttl,
+    };
+    let expires_unix = now + ttl.as_secs();
     let meta = AssetMeta {
         id: id.clone(),
         name,
@@ -737,9 +791,10 @@ pub fn start_sweeper() {
     });
 
     info!(
-        "Asset sweeper: every {}s, dropping uploads past their {}s retention",
+        "Asset sweeper: every {}s, dropping uploads past their retention ({}s anonymous, {}s for a member)",
         period.as_secs(),
-        config().asset_ttl.as_secs()
+        config().asset_ttl.as_secs(),
+        config().asset_ttl_member.as_secs()
     );
 }
 
