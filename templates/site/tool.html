@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}{{ tool.title }}{% endblock title %}
+{% block description %}{{ tool.meta_description }}{% endblock description %}
+
+{% block head_extra %}
+{# The FAQ block is the one piece of structured data worth carrying: it is what puts a
+   direct answer in a results page, which is how a visitor arrives already convinced. #}
+{% if tool.faq %}
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+{% for item in tool.faq %}{"@type":"Question","name":{{ item.q | json_encode | replace(from="<", to="\u003c") | safe }},"acceptedAnswer":{"@type":"Answer","text":{{ item.a | json_encode | replace(from="<", to="\u003c") | safe }}}}{% if not loop.last %},{% endif %}
+{% endfor %}]}
+</script>
+{% endif %}
+{% endblock head_extra %}
+
+{% block content %}
+<div class="wrap">
+<nav class="breadcrumb" aria-label="{% if lang == 'fr' %}Fil d'Ariane{% else %}Breadcrumb{% endif %}">
+  <a href="{{ root }}">{% if lang == "fr" %}Outils{% else %}Tools{% endif %}</a>
+  <span aria-hidden="true">›</span>
+  <span>{{ tool.h1 }}</span>
+</nav>
+
+<div class="tool-layout">
+  <div>
+    <div class="hero">
+      <h1>{{ tool.h1 }}</h1>
+      <p class="lede">{{ tool.lede }}</p>
+    </div>
+
+    {# Everything the client needs to drive this tool is declared here and nowhere else:
+       one implementation in app.js serves every page. #}
+    <section class="tool-panel"
+             data-tool
+             data-endpoint="{{ tool.endpoint }}"
+             data-accept="{{ tool.accept }}"
+             data-file-param="{{ tool.file_param | default(value='pdf') }}"
+             data-output="{{ tool.output | default(value='asset') }}"
+             data-max-mb="{{ max_mb }}"
+             data-retention-hours="{{ retention_hours }}"
+             {% if tool.multiple %}data-multiple data-min-files="2"{% endif %}>
+
+      <label class="dropzone" data-role="drop">
+        <input type="file" data-role="input" {% if tool.multiple %}multiple{% endif %}
+               accept="{{ tool.accept }}">
+        <strong>
+          {%- if lang == "fr" -%}
+          Déposez {% if tool.multiple %}vos fichiers{% else %}votre fichier{% endif %} ici
+          {%- else -%}
+          Drop your file{% if tool.multiple %}s{% endif %} here
+          {%- endif -%}
+        </strong>
+        <span>
+          {%- if lang == "fr" -%}
+          ou cliquez pour choisir · {{ max_mb }} Mo maximum
+          {%- else -%}
+          or click to choose · {{ max_mb }} MB maximum
+          {%- endif -%}
+        </span>
+      </label>
+
+      {% if tool.params %}
+      <div class="params">
+        {# The widget follows the *shape* of the parameter, not its name: anything with
+           `options` becomes a chooser, and `data-type` still comes from the declared type
+           so a rotation angle is sent as the number the route deserialises, not as a
+           string. A single option is not a choice — it is a constant the endpoint needs,
+           so it is carried hidden rather than shown as a select with nothing to select. #}
+        {% for param in tool.params %}
+        {% set kind = param.type | default(value="string") %}
+        {% if param.options | length == 1 %}
+        <input type="hidden" data-param="{{ param.name }}"
+               data-type="{% if kind == 'select' %}string{% else %}{{ kind }}{% endif %}"
+               data-required value="{{ param.options.0.0 }}">
+        {% else %}
+        <div class="field">
+          {% if kind == "boolean" %}
+            <label>
+              <input type="checkbox" data-param="{{ param.name }}" data-type="boolean"
+                     {% if param.default %}checked{% endif %}>
+              {{ param.label }}
+            </label>
+          {% elif param.options %}
+            <label for="p-{{ param.name }}">{{ param.label }}</label>
+            <select id="p-{{ param.name }}" data-param="{{ param.name }}"
+                    data-type="{% if kind == 'select' %}string{% else %}{{ kind }}{% endif %}"
+                    {% if param.required %}data-required{% endif %}>
+              {% for option in param.options %}
+              <option value="{{ option.0 }}"{% if param.default and option.0 == param.default %} selected{% endif %}>{{ option.1 }}</option>
+              {% endfor %}
+            </select>
+          {% elif kind == "text" %}
+            <label for="p-{{ param.name }}">{{ param.label }}</label>
+            <textarea id="p-{{ param.name }}" rows="8" data-param="{{ param.name }}" data-type="string"
+                      {% if param.placeholder %}placeholder="{{ param.placeholder }}"{% endif %}
+                      {% if param.required %}data-required{% endif %}>{% if param.default %}{{ param.default }}{% endif %}</textarea>
+          {% elif kind == "number" %}
+            <label for="p-{{ param.name }}">{{ param.label }}</label>
+            <input id="p-{{ param.name }}" type="number" data-param="{{ param.name }}" data-type="number"
+                   {% if param.default %}value="{{ param.default }}"{% endif %}
+                   {% if param.placeholder %}placeholder="{{ param.placeholder }}"{% endif %}
+                   {% if param.required %}data-required{% endif %}>
+          {% else %}
+            <label for="p-{{ param.name }}">{{ param.label }}</label>
+            <input id="p-{{ param.name }}" type="{% if param.name == "password" %}password{% else %}text{% endif %}"
+                   data-param="{{ param.name }}" data-type="{{ kind }}"
+                   {% if param.default %}value="{{ param.default }}"{% endif %}
+                   {% if param.placeholder %}placeholder="{{ param.placeholder }}"{% endif %}
+                   {% if param.required %}data-required{% endif %}>
+          {% endif %}
+          {% if param.help %}<p class="notice">{{ param.help }}</p>{% endif %}
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="run-row">
+        <button type="button" class="btn primary" data-role="run">{{ tool.h1 }}</button>
+      </div>
+
+      {% if tool.related %}
+      <div class="chain" data-role="chain" hidden>
+        <p class="chain-title">
+          {%- if lang == "fr" -%}
+          Enchaîner sans redéposer le fichier
+          {%- else -%}
+          Chain another tool without re-uploading
+          {%- endif -%}
+        </p>
+        <div class="chain-links">
+          {% for other in related %}
+          <a data-chain href="{{ root }}/{{ other.slug }}">{{ other.h1 }}</a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </section>
+
+    {% if tool.steps %}
+    <section class="section prose">
+      <h2>{% if lang == "fr" %}Comment ça marche{% else %}How it works{% endif %}</h2>
+      <ol>
+        {% for step in tool.steps %}<li>{{ step }}</li>{% endfor %}
+      </ol>
+    </section>
+    {% endif %}
+
+    {% if tool.faq %}
+    <section class="section faq">
+      <h2>{% if lang == "fr" %}Questions fréquentes{% else %}Frequently asked{% endif %}</h2>
+      {% for item in tool.faq %}
+      <details>
+        <summary>{{ item.q }}</summary>
+        <p>{{ item.a }}</p>
+      </details>
+      {% endfor %}
+    </section>
+    {% endif %}
+  </div>
+
+  <aside class="tool-aside">
+    {% if tool.verdict_says %}
+    <div class="aside-card">
+      <p class="kicker">{% if lang == "fr" %}Le verdict{% else %}The verdict{% endif %}</p>
+      <p>{{ tool.verdict_says }}</p>
+      <p class="notice">
+        {%- if lang == "fr" -%}
+        Aucun autre service ne vous dit ce que l'opération a coûté. Celui-ci le mesure et
+        vous le rend.
+        {%- else -%}
+        No other service tells you what the operation cost. This one measures it and hands
+        it back.
+        {%- endif -%}
+      </p>
+    </div>
+    {% endif %}
+
+    <div class="aside-card">
+      <p class="kicker">{% if lang == "fr" %}Vos fichiers{% else %}Your files{% endif %}</p>
+      <p>
+        {%- if lang == "fr" -%}
+        Supprimés au bout de {{ retention_hours }} heures. Aucun entraînement de modèle,
+        aucune lecture humaine, hébergement souverain.
+        {%- else -%}
+        Deleted after {{ retention_hours }} hours. No model training, no human reading,
+        sovereign hosting.
+        {%- endif -%}
+      </p>
+    </div>
+
+    <div class="aside-card">
+      <p class="kicker">{% if lang == "fr" %}Par l'API{% else %}Through the API{% endif %}</p>
+      <p><code>POST {{ tool.endpoint }}</code></p>
+      <p class="notice">
+        <a href="/#/api">{% if lang == "fr" %}Référence complète{% else %}Full reference{% endif %}</a>
+      </p>
+    </div>
+
+    {% if related %}
+    <div class="aside-card">
+      <p class="kicker">{% if lang == "fr" %}Voir aussi{% else %}See also{% endif %}</p>
+      <ul>
+        {% for other in related %}<li><a href="{{ root }}/{{ other.slug }}">{{ other.h1 }}</a></li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </aside>
+</div>
+</div>
+{% endblock content %}

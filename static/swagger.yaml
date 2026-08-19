@@ -19,11 +19,52 @@ info:
     `client_id` et `pdf_name` servent à construire un chemin sur disque : ils doivent être
     des noms simples (`[A-Za-z0-9._-]`, 128 caractères max, ne commençant pas par un point).
 
+    ## Deux façons de désigner un PDF
+
+    Partout où un corps de requête attend un PDF — `pdf`, `before`, `after`, les entrées de
+    `pdfs` — **deux formes sont acceptées** :
+
+    | Référence | Origine |
+    |-----------|---------|
+    | `/download/{client_id}/{nom}.pdf` | un PDF que ce service a produit et sauvegardé |
+    | `asset://as_…` | un fichier déposé par l'appelant via `POST /api/files` |
+
+    La première n'a pas changé et ne changera pas. La seconde est ce qui rend les outils
+    utilisables sur un document que le service n'a pas fabriqué lui-même.
+
+    ## Sortie des outils
+
+    Les endpoints ajoutés avec l'ingestion répondent un `ToolResponse` et connaissent trois
+    destinations, les mêmes partout :
+
+    | Corps de la requête | Réponse |
+    |---------------------|---------|
+    | ni `client_id`/`pdf_name` ni `output` | le fichier binaire |
+    | `client_id` + `pdf_name` | `{ "download_url": "…" }` |
+    | `"output": "asset"` | `{ "asset": { … } }`, pour enchaîner un outil sur le précédent sans repasser par le réseau |
+
+    ## Le verdict
+
+    Chaque outil qui **transforme** un document rend un `verdict` : un statut, un score sur
+    100 et les contrôles qui l'ont produit. Un verdict ne bloque jamais une réponse, il
+    informe. Seul `/api/compose` transforme des contraintes en échec explicite.
+
+    ## Travaux asynchrones
+
+    Les traitements qui peuvent dépasser le budget de temps d'une requête se soumettent à
+    `POST /api/jobs` et se suivent sur `GET /api/jobs/{id}`. L'URL de suivi fait foi ; le
+    `callback_url` optionnel est une courtoisie envoyée une fois, jamais réessayée.
+
     ## Authentification
 
     Si la variable d'environnement `API_KEY` est définie côté serveur, tous les endpoints
     `/api/*` (sauf `/api/health`, sonde du conteneur) exigent l'en-tête `X-API-Key` ou
     `Authorization: Bearer <clé>`. Si elle n'est pas définie, l'API est ouverte.
+
+    `API_KEY` se lit de deux façons : une valeur seule (`API_KEY=s3cr3t`) est la clé unique
+    d'hier, une liste (`API_KEY=core=s3cr3t,zapier=t0k3n`) donne une clé nommée par
+    intégration. Le nom part dans les journaux, dans les métriques et dans le compteur de
+    quota (`API_QUOTA_PER_MINUTE`, 429 avec `Retry-After` au dépassement).
 
     ## Corrélation des requêtes
 
@@ -53,6 +94,10 @@ security:
   - BearerToken: []
 
 tags:
+  - name: Files
+    description: Dépôt de fichiers, référencés ensuite par `asset://`
+  - name: Jobs
+    description: Travaux asynchrones
   - name: Convert
     description: Conversion Markdown → PDF
   - name: Render
@@ -75,6 +120,32 @@ tags:
     description: Audit de mise en page d'un PDF existant
   - name: Diff
     description: Comparaison visuelle de deux PDFs
+  - name: Pages
+    description: Organisation des pages d'un PDF existant
+  - name: Crop
+    description: Rognage des pages d'un PDF existant
+  - name: Compress
+    description: Compression d'un PDF, avec le verdict de ce qu'elle a coûté
+  - name: Repair
+    description: Réparation d'un PDF illisible
+  - name: Unlock
+    description: Retrait d'une protection dont l'appelant détient le mot de passe
+  - name: Rasterize
+    description: PDF → images PNG ou JPEG
+  - name: Images
+    description: Images → PDF
+  - name: Office
+    description: Office → PDF et PDF → Office
+  - name: OCR
+    description: Couche texte sur un document numérisé
+  - name: Extract
+    description: PDF → Markdown, texte brut ou blocs JSON
+  - name: PDFA
+    description: Conversion vers PDF/A
+  - name: Compose
+    description: Document rendu sous contraintes, avec le journal des passes
+  - name: Attest
+    description: Attestation signée d'un document, et sa vérification
   - name: Themes
     description: Kits de marque livrés avec le service
   - name: Health
@@ -96,6 +167,10 @@ paths:
         Vérifie que le service est opérationnel et retourne la version ainsi que les moteurs
         PDF réellement installés dans l'image. `status` vaut `degraded` si pandoc ou
         weasyprint sont absents. Endpoint jamais authentifié (utilisé par le healthcheck).
+
+        `capabilities` nomme les familles d'endpoints dont le binaire externe est présent :
+        une image construite sans Ghostscript répond 200 à toutes les sondes et 500 à toute
+        compression, et c'est le seul moyen de distinguer les deux déploiements.
       operationId: health
       security: []
       responses:
@@ -112,6 +187,235 @@ paths:
                   - weasyprint
                   - wkhtmltopdf
                   - pdflatex
+                capabilities:
+                  - compress
+                  - pdfa
+                  - ocr
+                  - office
+                  - images-to-pdf
+                  - pages
+
+  # ───────────────────────────────────────────────
+  # Files  (ingestion)
+  # ───────────────────────────────────────────────
+  /api/files:
+    post:
+      tags: [Files]
+      summary: Déposer un ou plusieurs fichiers
+      description: |
+        Reçoit des octets et rend une poignée opaque. Tout endpoint qui consomme un PDF
+        accepte ensuite `asset://{id}` là où il acceptait un chemin `/download/…`.
+
+        Le champ multipart `file` est **répétable** : `-F file=@a.pdf -F file=@b.pdf`
+        dépose deux fichiers en une requête.
+
+        Le type est lu **dans les octets**, jamais dans l'extension : un `.pdf` qui commence
+        par `PK` est un zip, et il est stocké comme tel. Un fichier qu'aucun outil ne sait
+        traiter est accepté avec le type `unknown`.
+
+        Plafonds : `ASSET_MAX_MB` (100 Mo par défaut) et, pour un PDF, `ASSET_MAX_PAGES`
+        (2 000 pages). Rétention : `ASSET_TTL_SECS`, 2 h par défaut, après quoi le fichier
+        est introuvable — l'expiration est vérifiée à chaque lecture, pas seulement par le
+        balayage.
+      operationId: uploadFiles
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: array
+                  description: Champ répétable, un par fichier déposé
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        "201":
+          description: Fichiers stockés
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AssetMeta"
+              example:
+                files:
+                  - id: "as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+                    name: "contrat.pdf"
+                    kind: pdf
+                    bytes: 184203
+                    pages: 12
+                    created_at: "2026-08-19T12:02:11Z"
+                    expires_at: "2026-08-19T14:02:11Z"
+                    expires_unix: 1787148131
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/files/{id}:
+    get:
+      tags: [Files]
+      summary: Récupérer un fichier déposé
+      description: Rend les octets stockés, avec le `Content-Type` du type détecté.
+      operationId: fetchFile
+      parameters:
+        - $ref: "#/components/parameters/AssetId"
+      responses:
+        "200":
+          description: Le fichier
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags: [Files]
+      summary: Oublier un fichier avant son expiration
+      description: |
+        Supprime le fichier et ses métadonnées immédiatement. Répond 204 sans corps : il ne
+        reste rien à décrire.
+      operationId: deleteFile
+      parameters:
+        - $ref: "#/components/parameters/AssetId"
+      responses:
+        "204":
+          description: Fichier supprimé
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/files/{id}/meta:
+    get:
+      tags: [Files]
+      summary: Métadonnées d'un fichier déposé
+      description: Ce que la réponse au dépôt disait, relu depuis le magasin.
+      operationId: fileMeta
+      parameters:
+        - $ref: "#/components/parameters/AssetId"
+      responses:
+        "200":
+          description: Métadonnées
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetMeta"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ───────────────────────────────────────────────
+  # Jobs  (travaux asynchrones)
+  # ───────────────────────────────────────────────
+  /api/jobs:
+    post:
+      tags: [Jobs]
+      summary: Soumettre un travail asynchrone
+      description: |
+        Prend le nom d'un endpoint et le corps que cet endpoint aurait reçu, et rend
+        immédiatement une poignée. Le travail passe par la même file et le même budget de
+        temps qu'un rendu synchrone : c'est une couche d'état, pas un second chemin
+        d'exécution.
+
+        Endpoints acceptés : `compress`, `ocr`, `pdfa`, `office-to-pdf`, `pdf-to-office`,
+        `pages`, `rasterize`, `repair`, `images-to-pdf`. Les opérations courtes restent
+        synchrones. `/api/ocr`, `api/ocr` et `ocr` désignent la même chose.
+
+        La destination du résultat est forcée à `asset` quand le corps ne nomme pas
+        `client_id` + `pdf_name` : un travail asynchrone n'a pas de socket où écrire un
+        fichier, et un `done` sans rien à récupérer ne servirait personne.
+
+        `callback_url` est vérifiée par le garde anti-SSRF avant que le travail n'existe.
+        Le POST est envoyé **une fois**, signé par `X-Signature`, jamais réessayé : l'URL de
+        suivi reste la source de vérité.
+      operationId: submitJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobRequest"
+            example:
+              endpoint: "/api/ocr"
+              body:
+                pdf: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+                languages: [fra, eng]
+              callback_url: "https://exemple.tld/hooks/pdf"
+      responses:
+        "202":
+          description: Travail accepté
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobView"
+              example:
+                job_id: "job_3d1f8a7c0b25e4964f18ad3c07be92d1"
+                status: queued
+                kind: ocr
+                created_at: "2026-08-19T12:02:11Z"
+                updated_at: "2026-08-19T12:02:11Z"
+                poll_url: "/api/jobs/job_3d1f8a7c0b25e4964f18ad3c07be92d1"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/jobs/{id}:
+    get:
+      tags: [Jobs]
+      summary: État d'un travail
+      description: |
+        `queued`, `running`, `done` ou `failed`. Le résultat d'un travail terminé est le
+        `ToolResponse` que l'endpoint synchrone aurait rendu.
+
+        Le registre est en mémoire et le dossier est oublié au bout de `JOB_TTL_SECS`
+        (1 h par défaut) : passé ce délai, la réponse est 404.
+      operationId: jobStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "job_3d1f8a7c0b25e4964f18ad3c07be92d1"
+      responses:
+        "200":
+          description: État du travail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobView"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   # ───────────────────────────────────────────────
   # Convert  (Markdown → PDF)
@@ -354,7 +658,8 @@ paths:
       description: |
         Fusionne N fichiers PDF précédemment sauvegardés en un seul document.
 
-        Les chemins PDF doivent être des URLs de type `/download/{client_id}/{pdf_name}`.
+        Chaque entrée est un chemin `/download/{client_id}/{pdf_name}` **ou** une référence
+        `asset://as_…` d'un fichier déposé — les deux formes se mélangent dans la même liste.
         Minimum **2 PDFs** requis.
 
         Comme les autres endpoints : JSON `download_url` si `client_id` + `pdf_name` sont
@@ -408,7 +713,7 @@ paths:
       description: |
         Ajoute un watermark texte semi-transparent en overlay sur un PDF existant.
 
-        Le PDF source doit être référencé via son chemin `/download/…`.
+        Le PDF source est un chemin `/download/…` **ou** une référence `asset://as_…`.
       operationId: watermark
       requestBody:
         required: true
@@ -457,7 +762,7 @@ paths:
       description: |
         Chiffre un PDF existant avec un mot de passe (AES 256 bits via qpdf).
 
-        Le PDF source doit être référencé via son chemin `/download/…`.
+        Le PDF source est un chemin `/download/…` **ou** une référence `asset://as_…`.
       operationId: protect
       requestBody:
         required: true
@@ -574,8 +879,7 @@ paths:
               required: [pdf]
               properties:
                 pdf:
-                  type: string
-                  example: "/download/client-123/rapport.pdf"
+                  $ref: "#/components/schemas/PdfSource"
       responses:
         "200":
           description: Rapport de mise en page
@@ -623,6 +927,786 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DiffResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Pages  (organiser, découper, pivoter)
+  # ───────────────────────────────────────────────
+  /api/pages:
+    post:
+      tags: [Pages]
+      summary: Extraire, supprimer, réordonner, pivoter ou découper des pages
+      description: |
+        Une route, un verbe `op`. Toutes les opérations sont une sélection de pages, et la
+        sélection est stricte : une page que le document n'a pas est une erreur 400, jamais
+        un PDF silencieusement plus court.
+
+        | `op` | Champ requis | Effet |
+        |------|--------------|-------|
+        | `extract` | `pages` | ne garde que les pages nommées |
+        | `delete` | `pages` | retire les pages nommées ; en retirer toutes est refusé |
+        | `reorder` | `order` | `order` doit lister **chaque** page du document |
+        | `rotate` | `angle` | quart de tour : 90, 180, 270 ou leur négatif ; `pages` vaut `all` par défaut |
+        | `split` | — | découpe le document ; `pages` donne les points de coupe, sinon `every` donne le nombre de pages par fichier (1 par défaut) |
+
+        Syntaxe de `pages` et de `order` : `1,3,5-9`, `2-`, `all`, `odd`, `even`.
+
+        `split` répond toujours en JSON : chaque partie est un asset dans `assets`, et
+        `pages` porte le nombre de pages du document découpé. Au plus 500 parties.
+      operationId: organizePages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PagesRequest"
+            examples:
+              extract:
+                summary: Extraire les pages 1 et 4 à 6
+                value:
+                  pdf: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+                  op: extract
+                  pages: "1,4-6"
+              rotate:
+                summary: Pivoter les pages paires d'un quart de tour
+                value:
+                  pdf: "/download/client-123/rapport.pdf"
+                  op: rotate
+                  pages: even
+                  angle: 90
+              split:
+                summary: Un fichier toutes les deux pages
+                value:
+                  pdf: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+                  op: split
+                  every: 2
+      responses:
+        "200":
+          $ref: "#/components/responses/ToolResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  /api/pages/number:
+    post:
+      tags: [Pages]
+      summary: Numéroter les pages d'un PDF existant
+      description: |
+        Les numéros sont dessinés sur un PDF transparent de la même géométrie et du même
+        nombre de pages, que `qpdf --overlay` appose. La géométrie est lue dans la source :
+        un calque construit pour de l'A4 arriverait mis à l'échelle et décentré sur une page
+        letter ou paysage.
+
+        `format` est du texte, pas du HTML : les seuls jetons connus sont `{page}` et
+        `{pages}`.
+      operationId: numberPages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NumberPagesRequest"
+            example:
+              pdf: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+              format: "{page} / {pages}"
+              position: bottom-right
+              from_page: 2
+              start: 1
+      responses:
+        "200":
+          $ref: "#/components/responses/ToolResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Crop
+  # ───────────────────────────────────────────────
+  /api/crop:
+    post:
+      tags: [Crop]
+      summary: Rogner les pages d'un PDF
+      description: |
+        Réécrit la CropBox des pages visées, soit sur la boîte donnée, soit — mode `auto`,
+        celui par défaut — sur la boîte englobante du texte que Poppler voit, augmentée de
+        `margin`.
+
+        Une page dont le contenu ne peut pas être mesuré **garde sa boîte** : rogner sur du
+        vide rendrait un document aux pages blanches. Quand aucune page n'a pu être rognée,
+        la source est renvoyée telle quelle avec un avertissement.
+      operationId: crop
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CropRequest"
+            examples:
+              auto:
+                summary: Rogner sur le contenu, 12 pt de marge
+                value:
+                  pdf: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+              explicit:
+                summary: Boîte explicite, en points PostScript
+                value:
+                  pdf: "/download/client-123/rapport.pdf"
+                  box: [40, 60, 555, 780]
+                  pages: "2-5"
+      responses:
+        "200":
+          $ref: "#/components/responses/ToolResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Compress
+  # ───────────────────────────────────────────────
+  /api/compress:
+    post:
+      tags: [Compress]
+      summary: Compresser un PDF, et dire ce que ça a coûté
+      description: |
+        Ghostscript en `-dSAFER`, quatre niveaux, et la facture attachée : le `verdict`
+        compare le nombre de pages et le nombre de caractères extractibles avant et après.
+        Un scan poussé en `screen` revient quatre fois plus léger et n'est plus cherchable ;
+        c'est exactement ce que le verdict nomme.
+
+        Une compression qui produit un fichier **plus gros** est une compression ratée : la
+        source est alors renvoyée telle quelle, et le verdict le dit.
+      operationId: compress
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompressRequest"
+            example:
+              pdf: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+              level: ebook
+              output: asset
+      responses:
+        "200":
+          $ref: "#/components/responses/ToolResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Repair
+  # ───────────────────────────────────────────────
+  /api/repair:
+    post:
+      tags: [Repair]
+      summary: Réparer un PDF illisible
+      description: |
+        Deux passes, dans cet ordre. `qpdf --qdf` reconstruit les tables de références en
+        gardant chaque objet tel qu'il a été écrit. Si qpdf n'y arrive pas, Ghostscript
+        décode le document et en écrit un neuf — ce qui coûte la structure : annotations,
+        champs de formulaire, pièces jointes. La méthode employée est dans le `verdict`, et
+        la perte de structure dans `warnings`.
+
+        Un fichier dont aucune des deux passes ne tire une seule page est refusé en 400 :
+        rendre un PDF vide serait pire, l'appelant l'archiverait.
+      operationId: repair
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepairRequest"
+            example:
+              pdf: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+      responses:
+        "200":
+          $ref: "#/components/responses/ToolResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Unlock
+  # ───────────────────────────────────────────────
+  /api/unlock:
+    post:
+      tags: [Unlock]
+      summary: Retirer une protection dont vous avez le mot de passe
+      description: |
+        `qpdf --decrypt` avec le mot de passe **fourni**, et rien d'autre. Cet endpoint ne
+        cherche jamais un mot de passe : un `password` vide est refusé en 400. C'est la
+        ligne entre un outil légitime et un outil de contournement, et elle est tracée
+        volontairement.
+
+        Le mot de passe passe par un fichier d'arguments : il n'apparaît jamais dans la
+        liste des processus de la machine.
+      operationId: unlock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnlockRequest"
+            example:
+              pdf: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+              password: "secret123"
+      responses:
+        "200":
+          $ref: "#/components/responses/ToolResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Rasterize  (PDF → PNG / JPEG)
+  # ───────────────────────────────────────────────
+  /api/rasterize:
+    post:
+      tags: [Rasterize]
+      summary: PDF → images
+      description: |
+        `pdftoppm` sur un document que le service n'a pas rendu lui-même — l'équivalent de
+        `/api/preview` pour un fichier déposé.
+
+        Une seule page suit les trois destinations habituelles. **Plusieurs pages répondent
+        toujours en JSON**, une entrée par page dans `assets` : plusieurs images ne peuvent
+        pas partager une URL de téléchargement, et l'avertissement le dit quand `client_id`
+        et `pdf_name` ont été ignorés.
+
+        Le plafond de pages par appel est `PDF_PREVIEW_MAX_PAGES` (20 par défaut) ; au-delà
+        la réponse est écourtée et `warnings` le signale. Un plafond de pixels borne aussi
+        la combinaison d'un dpi élevé et de nombreuses pages.
+      operationId: rasterize
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RasterizeRequest"
+            example:
+              pdf: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+              pages: "1-4"
+              dpi: 150
+              format: png
+      responses:
+        "200":
+          description: |
+            L'image produite, ou le JSON `ToolResponse` quand une destination a été demandée
+            ou que plusieurs pages ont été rendues.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Images → PDF
+  # ───────────────────────────────────────────────
+  /api/images-to-pdf:
+    post:
+      tags: [Images]
+      summary: Images → un PDF
+      description: |
+        `img2pdf` embarque les données JPEG et PNG telles quelles, sans ré-encodage. L'ordre
+        du tableau `images` est l'ordre des pages : c'est le contrat, et c'est la seule
+        chose que l'appelant ne peut pas corriger après coup.
+
+        Les entrées sont **exclusivement** des références `asset://` : le type est lu dans
+        les octets, un fichier qui n'est pas une image est refusé en 400 quel que soit son
+        nom. Au plus 200 images par appel.
+      operationId: imagesToPdf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImagesToPdfRequest"
+            example:
+              images:
+                - "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+                - "asset://as_1b7d5e0c9a48f236d51e7c02b8a9f4d6"
+              paper_size: A4
+              orientation: portrait
+              fit: contain
+              margin: 24
+      responses:
+        "200":
+          $ref: "#/components/responses/ToolResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Office → PDF
+  # ───────────────────────────────────────────────
+  /api/office-to-pdf:
+    post:
+      tags: [Office]
+      summary: Word, Excel, PowerPoint, ODF → PDF
+      description: |
+        LibreOffice headless, dans un profil utilisateur jetable, sans macro ni réseau. Le
+        document porte sa propre structure : la mise en page est celle que son auteur a
+        écrite.
+
+        `file` est une référence `asset://` — cette direction part toujours d'un fichier
+        déposé. Un asset qui n'est pas un document bureautique est refusé en 400.
+      operationId: officeToPdf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OfficeToPdfRequest"
+            example:
+              file: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+              output: asset
+      responses:
+        "200":
+          $ref: "#/components/responses/ToolResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # PDF → Office
+  # ───────────────────────────────────────────────
+  /api/pdf-to-office:
+    post:
+      tags: [Office]
+      summary: PDF → Word, Excel ou PowerPoint
+      description: |
+        Une **reconstruction**, pas une conversion : un PDF contient des glyphes à des
+        coordonnées, pas des paragraphes, des tableaux et des styles — ceux-là sont devinés.
+        Le service le dit dans `warnings` et le mesure dans le `verdict`, en re-rendant le
+        document produit pour compter ce qui a survécu.
+
+        `pages` décrit le document **lu**, puisque le fichier produit n'est pas un PDF. Un
+        fichier enregistré via `client_id` + `pdf_name` porte l'extension `.pdf` imposée par
+        le magasin de téléchargement : `"output":"asset"` le rend sous son vrai nom.
+      operationId: pdfToOffice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PdfToOfficeRequest"
+            example:
+              pdf: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+              to: docx
+              output: asset
+      responses:
+        "200":
+          description: |
+            Le document produit, ou le JSON `ToolResponse` quand une destination a été
+            demandée.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # OCR
+  # ───────────────────────────────────────────────
+  /api/ocr:
+    post:
+      tags: [OCR]
+      summary: Donner une couche texte à un document numérisé
+      description: |
+        `ocrmypdf`, et le sidecar relu page par page : une page qui est ressortie vide est
+        **nommée** dans le verdict au lieu de voyager silencieusement dans un fichier qui a
+        l'air correct.
+
+        Tout ce qui suit en dépend : `/api/redact` rend `redactions: []` et `/api/extract`
+        un document vide quand les pages sont des images de texte.
+
+        Plafond de 300 pages par requête (et jamais plus que `ASSET_MAX_PAGES`) : au-delà,
+        découper avec `/api/pages` puis traiter chaque partie. Vu le coût, préférer
+        `POST /api/jobs`.
+      operationId: ocr
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OcrRequest"
+            example:
+              pdf: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+              languages: [fra, eng]
+              mode: auto
+              pdfa: false
+      responses:
+        "200":
+          $ref: "#/components/responses/ToolResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Extract  (PDF → Markdown / texte / JSON)
+  # ───────────────────────────────────────────────
+  /api/extract:
+    post:
+      tags: [Extract]
+      summary: PDF → Markdown, texte ou blocs JSON
+      description: |
+        Les titres, les listes et les tableaux sont **inférés** de la forme que rend
+        `pdftotext -layout`. Chaque heuristique s'abstient quand elle n'est pas sûre : un
+        paragraphe promu à tort en titre est pire qu'un titre laissé en paragraphe, parce
+        que l'appelant n'a aucun moyen de savoir que la structure a été inventée.
+
+        Réponse toujours JSON. Au plus 400 000 caractères par appel ; au-delà, `truncated`
+        est vrai et `warnings` dit à quelle page reprendre avec `pages`.
+
+        Un document sans couche texte ressort quasi vide — c'est ce que `warnings` signale,
+        et c'est à ce moment que `/api/ocr` sert.
+      operationId: extract
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExtractRequest"
+            example:
+              pdf: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+              format: markdown
+              pages: "1-10"
+      responses:
+        "200":
+          description: Texte extrait
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # PDF/A
+  # ───────────────────────────────────────────────
+  /api/pdfa:
+    post:
+      tags: [PDFA]
+      summary: Convertir vers PDF/A
+      description: |
+        Ghostscript est un **producteur** PDF/A, pas un validateur : rien dans cette image
+        ne prouve que le résultat passe veraPDF, et le verdict le dit en toutes lettres. Ce
+        qui est vérifiable l'est : les pages sont toujours là, le fichier porte bien
+        l'identification PDF/A demandée, et chaque ajustement rapporté par Ghostscript —
+        une annotation retirée, une transparence aplatie — revient dans `warnings`.
+      operationId: toPdfa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PdfaRequest"
+            example:
+              pdf: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+              variant: "pdf/a-2b"
+      responses:
+        "200":
+          $ref: "#/components/responses/ToolResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Compose  (le contrat de document)
+  # ───────────────────────────────────────────────
+  /api/compose:
+    post:
+      tags: [Compose]
+      summary: Rendre un document sous contraintes
+      description: |
+        L'appelant pose des **contraintes**, pas une demande de rendu : au plus quatre
+        pages, aucun tableau coupé, un score de mise en page minimal. Le service rend,
+        audite, corrige, re-rend, jusqu'à satisfaire le contrat ou épuiser ses passes — puis
+        répond avec le document **et** le journal des passes.
+
+        Entièrement déterministe : aucun LLM, aucun appel sortant.
+
+        Exactement une source parmi `markdown`, `html` et `template`. `options.autolayout`
+        est forcé : demander un contrat, c'est demander l'audit.
+
+        Un contrat non tenu **ne fait pas échouer la requête** : le meilleur document produit
+        est rendu, `verdict` vaut `unmet` et `unmet` nomme ce qui reste cassé. C'est le seul
+        endroit où des contraintes deviennent un échec explicite, et c'est un échec qu'on
+        lit dans le corps de la réponse.
+
+        `max_passes` vaut 3 par défaut, 5 au plus. `"attest": true` scelle le résultat avec
+        une attestation signée, dans le champ `attestation`.
+      operationId: compose
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComposeRequest"
+            example:
+              markdown: "# Note de synthèse\n\nTexte du document.\n"
+              options:
+                theme: report
+              constraints:
+                max_pages: 4
+                no_split_tables: true
+                min_layout_score: 90
+              client_id: "client-123"
+              pdf_name: "note-synthese"
+      responses:
+        "200":
+          description: |
+            Le PDF binaire, ou le JSON `ComposeResponse` quand `client_id` + `pdf_name` ou
+            `"output":"asset"` ont été demandés.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComposeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  # ───────────────────────────────────────────────
+  # Attest / Verify  (la preuve)
+  # ───────────────────────────────────────────────
+  /api/attest:
+    post:
+      tags: [Attest]
+      summary: Délivrer l'attestation d'un document
+      description: |
+        Un petit enregistrement signé : ce qui a été rendu, à partir de quoi, par quel
+        moteur, avec quelle charte, et ce que le résultat pèse. Il revient sous deux formes,
+        la ligne scellée `v1.<payload>.<signature>` — utilisable telle quelle dans un
+        en-tête — et les mêmes informations lisibles dans `claims`.
+
+        Ce que ça prouve est étroit et se dit simplement : que ce fichier est, octet pour
+        octet, celui que ce déploiement a émis, et que les métadonnées qui l'accompagnent
+        n'ont pas été retouchées. Ça ne dit rien de qui l'a demandé, et **ce n'est pas une
+        signature légale**.
+
+        L'attestation est autoportante : la vérifier demande le fichier et cette chaîne,
+        jamais une consultation dans une base qu'il faudrait ensuite garder, sauvegarder et
+        finir par laisser fuir.
+      operationId: attest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttestRequest"
+            example:
+              pdf: "/download/client-123/rapport.pdf"
+              engine: weasyprint
+              theme: "report@1"
+              operations: [convert, redact]
+      responses:
+        "200":
+          description: Attestation scellée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttestResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "504":
+          $ref: "#/components/responses/Timeout"
+
+  /api/verify:
+    post:
+      tags: [Attest]
+      summary: Vérifier une attestation contre un document
+      description: |
+        Quatre verdicts, et les deux échecs sont distingués volontairement. `forged` : la
+        signature ne correspond pas à la clé de ce déploiement — l'enregistrement a été
+        altéré, ou il vient d'ailleurs. `altered` : la signature est bonne mais le document
+        n'a plus le même hash — l'enregistrement est authentique et c'est le **fichier** qui
+        a été modifié. Ce sont deux incidents différents, et un « invalide » unique cacherait
+        lequel s'est produit.
+
+        Une attestation illisible ou d'une autre version répond `unreadable`. La requête
+        elle-même réussit dans les quatre cas : le verdict est dans le corps.
+      operationId: verifyAttestation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyRequest"
+            example:
+              pdf: "/download/client-123/rapport.pdf"
+              attestation: "v1.eyJ2ZXJzaW9uIjox….a3f1…"
+      responses:
+        "200":
+          description: Résultat de la vérification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Verification"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -841,8 +1925,41 @@ components:
       description: |
         Même clé que `X-API-Key`, transmise via `Authorization: Bearer <clé>`.
 
+  # ─── Paramètres réutilisables ─────────────────
+  parameters:
+    AssetId:
+      name: id
+      in: path
+      required: true
+      description: "`as_` suivi de 32 caractères hexadécimaux"
+      schema:
+        type: string
+      example: "as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+
   # ─── Schemas ──────────────────────────────────
   schemas:
+
+    PdfSource:
+      type: string
+      description: |
+        Référence d'un PDF, sous **l'une des deux formes acceptées** :
+
+        - `/download/{client_id}/{nom}.pdf` — un PDF que ce service a produit et sauvegardé ;
+        - `asset://as_…` — un fichier déposé via `POST /api/files`.
+
+        La première forme est celle d'hier, inchangée. La seconde est ce qui rend l'endpoint
+        utilisable sur un document que le service n'a pas fabriqué.
+      example: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+
+    ToolOutput:
+      type: string
+      enum: [binary, asset]
+      default: binary
+      description: |
+        Où mettre le résultat. Absent, le fichier binaire revient dans le corps.
+        `asset` le garde dans le service et renvoie sa fiche, pour enchaîner un outil sur le
+        précédent sans repasser par le réseau. `client_id` + `pdf_name` restent prioritaires
+        pour obtenir une `download_url`.
 
     PdfEngine:
       type: string
@@ -1074,12 +2191,15 @@ components:
         pdfs:
           type: array
           items:
-            type: string
+            $ref: "#/components/schemas/PdfSource"
           minItems: 2
-          description: Liste des chemins PDF à fusionner (format `/download/{client_id}/{name}`)
+          description: |
+            PDFs à fusionner, dans l'ordre. Chaque entrée est un chemin
+            `/download/{client_id}/{nom}.pdf` **ou** une référence `asset://as_…`, et les
+            deux formes peuvent se mélanger dans la même liste.
           example:
             - "/download/client-123/doc1.pdf"
-            - "/download/client-123/doc2.pdf"
+            - "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
         client_id:
           type: string
         pdf_name:
@@ -1090,8 +2210,7 @@ components:
       required: [pdf, text]
       properties:
         pdf:
-          type: string
-          description: Chemin du PDF source (format `/download/{client_id}/{name}`)
+          $ref: "#/components/schemas/PdfSource"
         text:
           type: string
           description: Texte du watermark
@@ -1117,8 +2236,7 @@ components:
       required: [pdf, password]
       properties:
         pdf:
-          type: string
-          description: Chemin du PDF source (format `/download/{client_id}/{name}`)
+          $ref: "#/components/schemas/PdfSource"
         password:
           type: string
           description: Mot de passe pour le chiffrement AES-256
@@ -1160,8 +2278,7 @@ components:
       description: Au moins un de `patterns` ou `entities` doit être fourni.
       properties:
         pdf:
-          type: string
-          description: Chemin `/download/…` du PDF source
+          $ref: "#/components/schemas/PdfSource"
         patterns:
           type: array
           description: |
@@ -1225,11 +2342,15 @@ components:
       required: [before, after]
       properties:
         before:
-          type: string
-          description: Chemin `/download/…` de la version de référence
+          allOf:
+            - $ref: "#/components/schemas/PdfSource"
+          description: |
+            Version de référence. Chemin `/download/…` **ou** référence `asset://as_…`.
         after:
-          type: string
-          description: Chemin `/download/…` de la version à contrôler
+          allOf:
+            - $ref: "#/components/schemas/PdfSource"
+          description: |
+            Version à contrôler. Chemin `/download/…` **ou** référence `asset://as_…`.
         dpi:
           type: integer
           minimum: 36
@@ -1444,6 +2565,816 @@ components:
                 items:
                   type: number
 
+    # ─── Assets et travaux ──────────────────────
+
+    AssetMeta:
+      type: object
+      description: |
+        Ce que le service sait d'un fichier déposé. Délibérément petit : un identifiant, un
+        type lu dans les octets, une taille, un nombre de pages et une expiration. Pas une
+        carte de bibliothèque.
+      properties:
+        id:
+          type: string
+          description: "`as_` suivi de 32 caractères hexadécimaux"
+          example: "as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+        name:
+          type: string
+          description: |
+            Nom d'origine, nettoyé pour l'affichage seul — il ne sert jamais à construire un
+            chemin.
+          example: "contrat.pdf"
+        kind:
+          type: string
+          description: |
+            Type déterminé par les premiers octets. `unknown` est stocké mais aucun outil ne
+            l'accepte.
+          enum:
+            [pdf, png, jpeg, gif, webp, tiff, docx, xlsx, pptx, odt, ods, odp,
+             ole, html, markdown, text, csv, unknown]
+        bytes:
+          type: integer
+          format: int64
+        pages:
+          type: integer
+          description: Présent quand le type a des pages et qu'elles ont pu être comptées
+        created_at:
+          type: string
+          example: "2026-08-19T12:02:11Z"
+        expires_at:
+          type: string
+          example: "2026-08-19T14:02:11Z"
+        expires_unix:
+          type: integer
+          format: int64
+          description: La même échéance en secondes Unix, pour la purge
+
+    JobRequest:
+      type: object
+      required: [endpoint, body]
+      properties:
+        endpoint:
+          type: string
+          description: |
+            L'endpoint à exécuter : `/api/ocr`, `api/ocr` et `ocr` désignent la même chose.
+          enum:
+            [compress, ocr, pdfa, office-to-pdf, pdf-to-office, pages, rasterize,
+             repair, images-to-pdf]
+        body:
+          type: object
+          additionalProperties: true
+          description: Le corps que cet endpoint aurait reçu
+        callback_url:
+          type: string
+          description: |
+            URL http(s) notifiée une fois le travail terminé, signée par `X-Signature`.
+            Vérifiée par le garde anti-SSRF au moment de la soumission. Un seul envoi, aucun
+            réessai : l'URL de suivi reste la source de vérité.
+
+    JobView:
+      type: object
+      properties:
+        job_id:
+          type: string
+          example: "job_3d1f8a7c0b25e4964f18ad3c07be92d1"
+        status:
+          type: string
+          enum: [queued, running, done, failed]
+        kind:
+          type: string
+          description: L'endpoint qui a produit ce travail
+          example: ocr
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        poll_url:
+          type: string
+          example: "/api/jobs/job_3d1f8a7c0b25e4964f18ad3c07be92d1"
+        result:
+          allOf:
+            - $ref: "#/components/schemas/ToolResponse"
+          description: Présent uniquement quand `status` vaut `done`
+        error:
+          type: string
+          description: Présent uniquement quand `status` vaut `failed`
+
+    # ─── Réponse et verdict des outils ──────────
+
+    ToolResponse:
+      type: object
+      description: |
+        Réponse des endpoints ajoutés avec l'ingestion. Les routes qui les précèdent gardent
+        `ConvertResponse`, au bit près. Chaque champ n'apparaît que quand il s'applique.
+      properties:
+        download_url:
+          type: string
+          description: Présent quand `client_id` et `pdf_name` ont été fournis
+          example: "/download/client-123/rapport.pdf"
+        asset:
+          allOf:
+            - $ref: "#/components/schemas/AssetMeta"
+          description: Présent quand `"output":"asset"` a été demandé
+        assets:
+          type: array
+          description: |
+            Un outil qui produit plusieurs fichiers — `op: split`, une rastérisation de
+            plusieurs pages — met une entrée par fichier ici.
+          items:
+            $ref: "#/components/schemas/AssetMeta"
+        pages:
+          type: integer
+        verdict:
+          $ref: "#/components/schemas/Verdict"
+        warnings:
+          type: array
+          items:
+            type: string
+
+    Verdict:
+      type: object
+      description: |
+        Ce que le service pense de ce qu'il vient de produire. Un verdict **ne fait jamais
+        échouer une réponse** : il informe.
+      properties:
+        status:
+          type: string
+          enum: [ok, warn, fail]
+          description: Le pire statut parmi les contrôles
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: |
+            100 = rien à signaler. Volontairement fruste — un avertissement coûte 10, un
+            échec 35 — parce qu'un score imprévisible est un score auquel personne ne se fie.
+        summary:
+          type: string
+          description: Une phrase sur laquelle un humain peut agir
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Check"
+
+    Check:
+      type: object
+      properties:
+        name:
+          type: string
+          description: "Identifiant stable : `page-count`, `text-preserved`, `ocr-confidence`…"
+        status:
+          type: string
+          enum: [ok, warn, fail]
+        detail:
+          type: string
+        page:
+          type: integer
+          description: Page 1-indexée, quand le contrôle porte sur une page en particulier
+
+    # ─── Corps des outils ───────────────────────
+
+    PagesRequest:
+      type: object
+      required: [pdf, op]
+      properties:
+        pdf:
+          $ref: "#/components/schemas/PdfSource"
+        op:
+          type: string
+          enum: [extract, delete, reorder, rotate, split]
+        pages:
+          type: string
+          description: |
+            Sélection de pages : `1,3,5-9`, `2-`, `all`, `odd`, `even`. Requise pour
+            `extract` et `delete`, vaut `all` pour `rotate`, donne les points de coupe pour
+            `split`.
+          example: "1,4-6"
+        order:
+          type: string
+          description: |
+            Nouvel ordre complet, pour `reorder` : il doit lister **chaque** page du
+            document.
+          example: "3,1,2"
+        angle:
+          type: integer
+          enum: [90, 180, 270, -90, -180, -270]
+          description: Rotation, requise pour `rotate`
+        every:
+          type: integer
+          minimum: 1
+          default: 1
+          description: |
+            Pages par fichier, pour `split`. Ignoré — avec un avertissement — quand `pages`
+            donne les points de coupe.
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+        output:
+          $ref: "#/components/schemas/ToolOutput"
+
+    NumberPagesRequest:
+      type: object
+      required: [pdf]
+      properties:
+        pdf:
+          $ref: "#/components/schemas/PdfSource"
+        format:
+          type: string
+          default: "{page}"
+          maxLength: 64
+          description: |
+            Texte simple, jamais du HTML. Seuls jetons connus : `{page}` et `{pages}`.
+          example: "{page} / {pages}"
+        position:
+          type: string
+          enum: [bottom-center, bottom-left, bottom-right, top-center, top-left, top-right]
+          default: bottom-center
+        start:
+          type: integer
+          default: 1
+          minimum: 0
+          maximum: 1000000
+          description: Numéro affiché sur la première page numérotée
+        from_page:
+          type: integer
+          default: 1
+          minimum: 1
+          description: Première page qui reçoit un numéro (la première page du document est 1)
+        font_size:
+          type: number
+          format: float
+          default: 10
+          minimum: 4
+          maximum: 72
+        margin:
+          type: string
+          default: "1.5cm"
+          description: Distance aux bords, en `pt`, `mm`, `cm`, `in` ou `px`
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+        output:
+          $ref: "#/components/schemas/ToolOutput"
+
+    CropRequest:
+      type: object
+      required: [pdf]
+      properties:
+        pdf:
+          $ref: "#/components/schemas/PdfSource"
+        box:
+          oneOf:
+            - type: array
+              description: "`[gauche, bas, droite, haut]` en points PostScript"
+              minItems: 4
+              maxItems: 4
+              items:
+                type: number
+            - type: string
+              enum: [auto]
+          description: |
+            Absent vaut `"auto"` : l'appelant qui ne connaît pas la géométrie veut qu'elle
+            soit calculée. Une boîte qui dépasse la page est ramenée à la page, avec un
+            avertissement.
+        margin:
+          type: number
+          format: double
+          default: 12
+          maximum: 500
+          description: Blanc conservé autour du contenu détecté, en mode `auto`
+        pages:
+          type: string
+          description: "`all`, `3`, `2-5` ou `1,4,7-9`. Les pages non visées gardent leur boîte."
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+        output:
+          $ref: "#/components/schemas/ToolOutput"
+
+    CompressRequest:
+      type: object
+      required: [pdf]
+      properties:
+        pdf:
+          $ref: "#/components/schemas/PdfSource"
+        level:
+          type: string
+          enum: [screen, ebook, printer, prepress]
+          default: ebook
+          description: |
+            Préréglage Ghostscript. Refuser une valeur inconnue est délibéré :
+            `-dPDFSETTINGS` accepte n'importe quelle chaîne et ignore silencieusement celles
+            qu'il ne connaît pas, donc une faute de frappe reviendrait en fichier jamais
+            compressé.
+        dpi:
+          type: integer
+          minimum: 36
+          maximum: 1200
+          description: |
+            Résolution de rééchantillonnage des images. Absent, celle du préréglage
+            s'applique.
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+        output:
+          $ref: "#/components/schemas/ToolOutput"
+
+    RepairRequest:
+      type: object
+      required: [pdf]
+      properties:
+        pdf:
+          $ref: "#/components/schemas/PdfSource"
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+        output:
+          $ref: "#/components/schemas/ToolOutput"
+
+    UnlockRequest:
+      type: object
+      required: [pdf, password]
+      properties:
+        pdf:
+          $ref: "#/components/schemas/PdfSource"
+        password:
+          type: string
+          description: |
+            Le mot de passe que vous détenez déjà. Un mot de passe vide est refusé : cet
+            endpoint ne récupère ni ne casse jamais une protection.
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+        output:
+          $ref: "#/components/schemas/ToolOutput"
+
+    RasterizeRequest:
+      type: object
+      required: [pdf]
+      properties:
+        pdf:
+          $ref: "#/components/schemas/PdfSource"
+        pages:
+          type: string
+          description: '`"1"`, `"2-5"` ou `"all"`. Absent : tout le document, jusqu''au plafond.'
+          example: "1-4"
+        dpi:
+          type: integer
+          minimum: 36
+          maximum: 300
+          default: 150
+        format:
+          type: string
+          enum: [png, jpeg]
+          default: png
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+        output:
+          $ref: "#/components/schemas/ToolOutput"
+
+    ImagesToPdfRequest:
+      type: object
+      required: [images]
+      properties:
+        images:
+          type: array
+          minItems: 1
+          maxItems: 200
+          description: |
+            Références `asset://as_…`, une par page, **dans l'ordre des pages**. Seule cette
+            forme est acceptée ici.
+          items:
+            type: string
+        paper_size:
+          type: string
+          enum: [A3, A4, A5, A6, Letter, Legal, Tabloid]
+          default: A4
+          description: Ignoré quand `fit` vaut `actual`
+        orientation:
+          type: string
+          enum: [portrait, landscape, auto]
+          default: portrait
+          description: "`auto` suit l'orientation de chaque image"
+        fit:
+          type: string
+          enum: [contain, actual]
+          default: contain
+          description: "`actual` donne à chaque page la taille de son image"
+        margin:
+          type: number
+          format: double
+          maximum: 144
+          description: Distance entre l'image et le bord de la page, en points
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+        output:
+          $ref: "#/components/schemas/ToolOutput"
+
+    OfficeToPdfRequest:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          description: |
+            Référence `asset://as_…` — cette direction part toujours d'un fichier déposé.
+            Types acceptés : `docx`, `xlsx`, `pptx`, `odt`, `ods`, `odp`, `ole` (.doc, .xls,
+            .ppt) et `csv`.
+          example: "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+        output:
+          $ref: "#/components/schemas/ToolOutput"
+
+    PdfToOfficeRequest:
+      type: object
+      required: [pdf, to]
+      properties:
+        pdf:
+          $ref: "#/components/schemas/PdfSource"
+        to:
+          type: string
+          enum: [docx, xlsx, pptx]
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+        output:
+          $ref: "#/components/schemas/ToolOutput"
+
+    OcrRequest:
+      type: object
+      required: [pdf]
+      properties:
+        pdf:
+          $ref: "#/components/schemas/PdfSource"
+        languages:
+          type: array
+          description: |
+            Uniquement les langues installées dans l'image, dans l'ordre voulu : tesseract
+            lit la première comme langue principale.
+          default: [fra, eng]
+          items:
+            type: string
+            enum: [fra, eng, deu, spa, ita]
+        mode:
+          type: string
+          enum: [auto, force, redo]
+          default: auto
+          description: |
+            `auto` ne traite que les pages sans texte, `force` rastérise et relit tout —
+            perdant la couche texte d'origine —, `redo` remplace une couche issue d'un OCR
+            précédent et garde une couche native.
+        pdfa:
+          type: boolean
+          default: false
+          description: Produire directement un PDF/A, en un seul passage
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+        output:
+          $ref: "#/components/schemas/ToolOutput"
+
+    ExtractRequest:
+      type: object
+      required: [pdf]
+      properties:
+        pdf:
+          $ref: "#/components/schemas/PdfSource"
+        format:
+          type: string
+          enum: [markdown, text, json]
+          default: markdown
+        pages:
+          type: string
+          description: '`"1"`, `"2-5"` ou `"all"`. Absent : tout le document.'
+        layout:
+          type: boolean
+          default: true
+          description: |
+            Conserve la disposition en colonnes de la page. La désactiver donne l'ordre de
+            lecture, au prix de tous les tableaux.
+
+    ExtractResponse:
+      type: object
+      properties:
+        format:
+          type: string
+          description: Renvoyé pour qu'un appelant qui l'a omis sache ce qu'il a reçu
+          enum: [markdown, text, json]
+        pages:
+          type: integer
+          description: Nombre de pages réellement représentées dans `content`
+        content:
+          description: |
+            Une chaîne pour `markdown` et `text`, un tableau de pages de blocs pour `json` —
+            chaque bloc portant un `type` parmi `heading`, `paragraph`, `list` et `table`.
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                  blocks:
+                    type: array
+                    items:
+                      type: object
+        tables:
+          type: array
+          description: |
+            Les tableaux reconnus par l'heuristique de colonnes, donnés bruts pour ne pas
+            avoir à reparser le Markdown.
+          items:
+            type: object
+            properties:
+              page:
+                type: integer
+              rows:
+                type: array
+                items:
+                  type: array
+                  items:
+                    type: string
+        truncated:
+          type: boolean
+          description: Présent quand le plafond de caractères a écourté la réponse
+        warnings:
+          type: array
+          items:
+            type: string
+
+    PdfaRequest:
+      type: object
+      required: [pdf]
+      properties:
+        pdf:
+          $ref: "#/components/schemas/PdfSource"
+        variant:
+          type: string
+          enum: ["pdf/a-1b", "pdf/a-2b", "pdf/a-3b"]
+          default: "pdf/a-2b"
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+        output:
+          $ref: "#/components/schemas/ToolOutput"
+
+    # ─── Contrat de document ────────────────────
+
+    ComposeRequest:
+      type: object
+      description: Exactement une source parmi `markdown`, `html` et `template`.
+      properties:
+        markdown:
+          type: string
+        html:
+          type: string
+        template:
+          type: string
+          description: Template Tera, rendu avec `data`
+        data:
+          type: object
+          additionalProperties: true
+        css:
+          type: string
+          description: CSS de l'appelant, placé avant le CSS correctif des passes
+        engine:
+          $ref: "#/components/schemas/PdfEngine"
+        options:
+          allOf:
+            - $ref: "#/components/schemas/PdfOptions"
+          description: "`autolayout` est forcé : demander un contrat, c'est demander l'audit."
+        header_html:
+          type: string
+        footer_html:
+          type: string
+        header_template:
+          type: string
+        footer_template:
+          type: string
+        constraints:
+          $ref: "#/components/schemas/Constraints"
+        max_passes:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 3
+          description: |
+            Chaque passe est un rendu complet. Un contrat qui en demanderait davantage est
+            un problème de document, pas de mise en page.
+        attest:
+          type: boolean
+          default: false
+          description: Sceller le résultat avec une attestation signée
+        client_id:
+          type: string
+        pdf_name:
+          type: string
+        output:
+          $ref: "#/components/schemas/ToolOutput"
+
+    Constraints:
+      type: object
+      description: |
+        Ce que l'appelant exige du document fini. Tout est optionnel, et une requête sans
+        aucune contrainte est simplement un rendu accompagné de son rapport.
+      properties:
+        max_pages:
+          type: integer
+        min_pages:
+          type: integer
+        no_split_tables:
+          type: boolean
+        no_orphan_headings:
+          type: boolean
+        no_blank_pages:
+          type: boolean
+        no_overflow:
+          type: boolean
+        min_layout_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+    Pass:
+      type: object
+      description: Une passe de rendu, et ce qu'elle a introduit
+      properties:
+        n:
+          type: integer
+          description: Numéro de la passe, à partir de 1
+        score:
+          type: integer
+        pages:
+          type: integer
+        applied:
+          type: array
+          description: Les règles correctives de cette passe, en clair
+          items:
+            type: string
+
+    ComposeResponse:
+      type: object
+      properties:
+        download_url:
+          type: string
+          description: Présent quand `client_id` et `pdf_name` ont été fournis
+        asset:
+          allOf:
+            - $ref: "#/components/schemas/AssetMeta"
+          description: Présent quand `"output":"asset"` a été demandé
+        verdict:
+          type: string
+          enum: [met, unmet]
+          description: "`met` quand chaque contrainte tient, `unmet` sinon"
+        score:
+          type: integer
+        pages:
+          type: integer
+        passes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pass"
+        unmet:
+          type: array
+          description: Les contraintes encore cassées, dans le vocabulaire de l'appelant
+          items:
+            type: string
+          example:
+            - "max_pages: the document is 6 pages, the contract allows 4"
+        layout:
+          $ref: "#/components/schemas/LayoutReport"
+        attestation:
+          type: string
+          description: 'Présent uniquement quand `"attest": true` a été demandé'
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlockWarning"
+
+    # ─── Attestation ────────────────────────────
+
+    AttestRequest:
+      type: object
+      required: [pdf]
+      properties:
+        pdf:
+          $ref: "#/components/schemas/PdfSource"
+        engine:
+          type: string
+        theme:
+          type: string
+          example: "report@1"
+        pdf_variant:
+          type: string
+          example: "pdf/a-2b"
+        source_sha256:
+          type: string
+          description: |
+            SHA-256 du document source, quand l'appelant l'a gardé. 64 caractères
+            hexadécimaux, sinon 400 : la valeur est recopiée telle quelle dans un
+            enregistrement signé.
+          minLength: 64
+          maxLength: 64
+        operations:
+          type: array
+          description: |
+            Opérations appliquées, dans l'ordre. Bornées à 16 entrées de 32 caractères
+            alphanumériques, `-` et `_`.
+          items:
+            type: string
+          example: [convert, redact]
+
+    AttestResponse:
+      type: object
+      properties:
+        attestation:
+          type: string
+          description: "La ligne scellée, sûre en en-tête : `v1.<payload>.<signature>`"
+        claims:
+          $ref: "#/components/schemas/Attestation"
+
+    Attestation:
+      type: object
+      description: L'enregistrement signé, lisible sans le décoder
+      properties:
+        version:
+          type: integer
+          description: Version du format. Une attestation d'une autre version est `unreadable`.
+          example: 1
+        service:
+          type: string
+        issued_at:
+          type: string
+          example: "2026-08-19T12:02:11Z"
+        output_sha256:
+          type: string
+          description: SHA-256 du fichier produit
+        bytes:
+          type: integer
+          format: int64
+        pages:
+          type: integer
+        source_sha256:
+          type: string
+        engine:
+          type: string
+        theme:
+          type: string
+        pdf_variant:
+          type: string
+        layout_score:
+          type: integer
+        operations:
+          type: array
+          items:
+            type: string
+
+    VerifyRequest:
+      type: object
+      required: [pdf, attestation]
+      properties:
+        pdf:
+          $ref: "#/components/schemas/PdfSource"
+        attestation:
+          type: string
+          description: La ligne scellée rendue par `/api/attest`
+
+    Verification:
+      type: object
+      properties:
+        verdict:
+          type: string
+          enum: [valid, altered, forged, unreadable]
+          description: |
+            `valid` : le document est octet pour octet celui qui a été émis.
+            `altered` : l'attestation est authentique, le fichier a changé.
+            `forged` : la signature ne correspond pas à la clé de ce déploiement.
+            `unreadable` : l'attestation n'est pas dans une forme que ce déploiement lit.
+        detail:
+          type: string
+          description: La phrase à montrer à un humain
+        attestation:
+          allOf:
+            - $ref: "#/components/schemas/Attestation"
+          description: Absent quand la signature n'a pas pu être vérifiée
+
     HealthResponse:
       type: object
       properties:
@@ -1458,6 +3389,16 @@ components:
           items:
             type: string
           example: ["weasyprint", "wkhtmltopdf", "pdflatex"]
+        capabilities:
+          type: array
+          description: |
+            Familles d'endpoints dont le binaire externe est présent dans l'image. Absent
+            sur un déploiement antérieur à ce champ : une sonde qui ne lit que `status` n'est
+            pas concernée.
+          items:
+            type: string
+            enum: [compress, pdfa, ocr, office, images-to-pdf, pages]
+          example: ["compress", "pdfa", "ocr", "office", "images-to-pdf", "pages"]
 
     ErrorResponse:
       type: object
@@ -1473,6 +3414,31 @@ components:
 
   # ─── Responses réutilisables ──────────────────
   responses:
+    ToolResult:
+      description: |
+        Le fichier produit, ou le JSON `ToolResponse` quand `client_id` + `pdf_name` ou
+        `"output":"asset"` ont été demandés.
+      content:
+        application/pdf:
+          schema:
+            type: string
+            format: binary
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ToolResponse"
+
+    PayloadTooLarge:
+      description: |
+        Le corps dépasse la limite configurée. Pour `POST /api/files`, c'est `ASSET_MAX_MB`
+        (100 Mo par défaut) ou la limite `file` de Rocket.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Payload too large"
+            details: "The request body exceeds the configured limit"
+
     BadRequest:
       description: Requête invalide
       content:

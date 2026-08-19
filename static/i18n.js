@@ -220,6 +220,11 @@ const UI = {
     fr: '<strong>md-to-pdf</strong> — fork maintenu par <a href="https://aismarttalk.tech" target="_blank" rel="noopener">AI SmartTalk</a>, d\'après le projet original de <a href="https://github.com/Spawnia/md-to-pdf" target="_blank" rel="noopener">Spawnia</a>.',
   },
   "home.foot.acces": { en: "request access", fr: "demander un accès" },
+  // Le site public a une adresse par langue : le lien entier vit donc ici.
+  "home.foot.tools": {
+    en: '<a href="/tools">AI SmartTalk Documents</a>',
+    fr: '<a href="/outils">AI SmartTalk Documents</a>',
+  },
   "home.foot.editor": { en: "markdown editor", fr: "éditeur markdown" },
 
   // ─────────────────────────── API reference ───────────────────────────
@@ -287,9 +292,22 @@ const UI = {
   "console.field.number": { en: "invalid number", fr: "nombre invalide" },
   "console.field": { en: "Field", fr: "Champ" },
   "console.default": { en: "(default)", fr: "(défaut)" },
-  "console.pdfpicker": { en: "— generated PDFs —", fr: "— PDFs générés —" },
+  "console.pdfpicker": { en: "— generated PDFs and uploaded files —", fr: "— PDFs générés et fichiers déposés —" },
+  "console.assetpicker": { en: "— uploaded files —", fr: "— fichiers déposés —" },
   "console.add": { en: "add", fr: "ajouter" },
   "console.use": { en: "use", fr: "utiliser" },
+
+  // ─────────────────────────── console: uploaded files ───────────────────────────
+  "console.assets": { en: "Uploaded files", fr: "Fichiers déposés" },
+  "console.assets.empty": { en: "none yet — send POST /api/files", fr: "aucun pour le moment — envoyez POST /api/files" },
+  "console.assets.drop": { en: "remove from the list", fr: "retirer de la liste" },
+  "console.assets.copied": { en: "asset:// reference copied", fr: "Référence asset:// copiée" },
+  "console.assets.added": {
+    en: "file(s) added — pick them in the source selectors",
+    fr: "fichier(s) ajouté(s) — retrouvez-les dans les sélecteurs de source",
+  },
+  "console.file.none": { en: "Choose at least one file to upload", fr: "Choisissez au moins un fichier à déposer" },
+  "console.download.file": { en: "⤓ download the file — ", fr: "⤓ télécharger le fichier — " },
 
   // ─────────────────────────── access view ───────────────────────────
   "acces.eyebrow": { en: "Internal service", fr: "Service interne" },

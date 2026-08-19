@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}{% if index.title %}{{ index.title }}{% else %}AI SmartTalk Documents{% endif %}{% endblock title %}
+{% block description %}{{ index.meta_description }}{% endblock description %}
+
+{% block content %}
+<section class="hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="kicker">AI SmartTalk Documents</p>
+    <h1>{% if index.h1 %}{{ index.h1 }}{% else %}{% if lang == "fr" %}Vos documents, et ce qu'on en a fait{% else %}Your documents, and what became of them{% endif %}{% endif %}</h1>
+    <p class="lede">{{ index.lede }}</p>
+
+    {% if index.claims %}
+    <ul class="hero-claims">
+      {% for claim in index.claims %}<li><span>{{ claim }}</span></li>{% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>{% if lang == "fr" %}Tous les outils{% else %}Every tool{% endif %}</h2>
+      <p>
+        {%- if lang == "fr" -%}
+        {{ tools | length }} outils. Aucun filigrane, jamais. Fichiers supprimés au bout de
+        {{ retention_hours }} h, {{ max_mb }} Mo par fichier.
+        {%- else -%}
+        {{ tools | length }} tools. No watermark, ever. Files deleted after
+        {{ retention_hours }} h, {{ max_mb }} MB per file.
+        {%- endif -%}
+      </p>
+    </div>
+
+    {# The catalogue groups the tools; grouping them here is what turns a wall of
+       twenty-one cards into something a visitor can scan. A catalogue without groups
+       still renders, as one list. #}
+    {% set_global groups = [] %}
+    {% for tool in tools %}
+      {% if tool.group and tool.group not in groups %}{% set_global groups = groups | concat(with=tool.group) %}{% endif %}
+    {% endfor %}
+
+    {% if groups %}
+    <div class="tool-groups">
+      {% for group in groups %}
+      <section class="tool-group">
+        <h2>{{ group }}</h2>
+        <div class="tool-grid">
+          {% for tool in tools %}{% if tool.group == group %}
+          <a class="tool-card" href="{{ root }}/{{ tool.slug }}">
+            <h3>{{ tool.h1 }}</h3>
+            <p>{{ tool.meta_description }}</p>
+            {% if tool.verdict_says %}<span class="tag">{% if lang == "fr" %}avec verdict{% else %}with a verdict{% endif %}</span>{% endif %}
+          </a>
+          {% endif %}{% endfor %}
+        </div>
+      </section>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="tool-grid">
+      {% for tool in tools %}
+      <a class="tool-card" href="{{ root }}/{{ tool.slug }}">
+        <h3>{{ tool.h1 }}</h3>
+        <p>{{ tool.meta_description }}</p>
+        {% if tool.verdict_says %}<span class="tag">{% if lang == "fr" %}avec verdict{% else %}with a verdict{% endif %}</span>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock content %}

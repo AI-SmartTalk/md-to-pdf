@@ -244,6 +244,9 @@ Revenue is <span class="tok-b">up</span>.
       </div>
       <div class="links">
         <a href="#/guides" data-i18n="nav.guides">Guides</a>
+        <!-- L'URL du site public dépend de la langue : elle vit donc dans le
+             catalogue, avec son libellé. -->
+        <span data-i18n="home.foot.tools"><a href="/tools">AI SmartTalk Documents</a></span>
         <a href="#/acces" data-i18n="home.foot.acces">request access</a>
         <a href="/static/editor.html" data-i18n="home.foot.editor">markdown editor</a>
         <a href="/static/swagger.yaml" download>swagger.yaml</a>
@@ -314,6 +317,11 @@ Revenue is <span class="tok-b">up</span>.
           <span class="count" id="savedCount"></span>
         </div>
         <ul class="saved-list" id="savedList"></ul>
+        <div class="saved-head">
+          <h4 data-i18n="console.assets">Uploaded files</h4>
+          <span class="count" id="assetCount"></span>
+        </div>
+        <ul class="saved-list" id="assetList"></ul>
       </div>
     </nav>
 
