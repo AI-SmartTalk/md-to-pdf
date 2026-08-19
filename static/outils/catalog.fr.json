@@ -1,6 +1,6 @@
 {
   "index": {
-    "title": "AI SmartTalk Documents — outils PDF avec verdict",
+    "title": "Outils PDF gratuits en ligne — compresser, fusionner, convertir | AI SmartTalk",
     "meta_description": "Compresser, fusionner, convertir, océriser, caviarder un PDF. Chaque traitement rend le fichier et le verdict de ce qu'il a coûté au document.",
     "h1": "Vos documents, et ce qu'on en a fait",
     "lede": "Vingt et un outils qui reçoivent un fichier et vous en rendent un autre. La différence tient dans ce qui accompagne le fichier : un verdict, mesuré sur le document livré, qui dit ce que le traitement a préservé et ce qu'il a coûté. Aucun filigrane, jamais. Vos fichiers sont effacés au bout de deux heures.",
@@ -15,7 +15,7 @@
   "tools": [
     {
       "slug": "compresser-pdf",
-      "title": "Compresser un PDF — AI SmartTalk Documents",
+      "title": "Compresser PDF en ligne, gratuit | AI SmartTalk",
       "h1": "Compresser un PDF",
       "meta_description": "Réduisez le poids d'un PDF et sachez ce que ça a coûté : pages conservées, texte encore sélectionnable, poids avant et après.",
       "lede": "La compression est le seul geste qui peut détruire un document sans que rien ne le montre : un scan passé au niveau maximum revient quatre fois plus léger et n'est plus cherchable. Ici, le fichier arrive avec la facture — et si la compression produit un fichier plus gros, c'est l'original qui vous est rendu.",
@@ -89,11 +89,17 @@
         "ocr-pdf",
         "pdf-en-jpg",
         "fusionner-pdf"
-      ]
+      ],
+      "icon": "compress",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Compresser PDF",
+      "alt_slug": "compress-pdf"
     },
     {
       "slug": "fusionner-pdf",
-      "title": "Fusionner des PDF — AI SmartTalk Documents",
+      "title": "Fusionner PDF en ligne, gratuit | AI SmartTalk",
       "h1": "Fusionner des PDF",
       "meta_description": "Assemblez plusieurs PDF en un seul document. L'ordre des pages est l'ordre de dépôt, et rien d'autre.",
       "lede": "Deux fichiers ou vingt, réunis en un seul document. L'ordre de la liste est l'ordre des pages : c'est le contrat, et c'est la seule chose qu'on ne peut plus rattraper après coup.",
@@ -129,11 +135,17 @@
         "organiser-pages-pdf",
         "extraire-pages-pdf",
         "numeroter-pages-pdf"
-      ]
+      ],
+      "icon": "merge",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Fusionner PDF",
+      "alt_slug": "merge-pdf"
     },
     {
       "slug": "diviser-pdf",
-      "title": "Diviser un PDF — AI SmartTalk Documents",
+      "title": "Diviser PDF en ligne, gratuit et sans filigrane | AI SmartTalk",
       "h1": "Diviser un PDF",
       "meta_description": "Découpez un PDF en plusieurs fichiers, par nombre de pages ou aux points de coupe que vous indiquez.",
       "lede": "Un document long devient une série de fichiers courts : un par chapitre, un par facture, un par page. Chaque partie produite annonce son propre nombre de pages, et repart d'ici sans nouveau dépôt si vous voulez enchaîner.",
@@ -198,11 +210,17 @@
         "fusionner-pdf",
         "supprimer-pages-pdf",
         "organiser-pages-pdf"
-      ]
+      ],
+      "icon": "split",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Diviser PDF",
+      "alt_slug": "split-pdf"
     },
     {
       "slug": "extraire-pages-pdf",
-      "title": "Extraire des pages d'un PDF — AI SmartTalk Documents",
+      "title": "Extraire des pages en ligne, gratuit | AI SmartTalk",
       "h1": "Extraire des pages d'un PDF",
       "meta_description": "Sortez une page, une plage ou une sélection d'un PDF, dans un nouveau document. Une page inexistante est refusée, pas ignorée.",
       "lede": "Vous ne gardez que ce que vous nommez. La sélection accepte des numéros, des plages, et les mots-clés « paires » et « impaires » sous leur forme technique — et une page que le document ne contient pas est une erreur, jamais un fichier plus court que prévu.",
@@ -261,11 +279,17 @@
         "diviser-pdf",
         "organiser-pages-pdf",
         "rogner-pdf"
-      ]
+      ],
+      "icon": "extract",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Extraire des pages",
+      "alt_slug": "extract-pdf-pages"
     },
     {
       "slug": "supprimer-pages-pdf",
-      "title": "Supprimer des pages d'un PDF — AI SmartTalk Documents",
+      "title": "Supprimer des pages en ligne, gratuit | AI SmartTalk",
       "h1": "Supprimer des pages d'un PDF",
       "meta_description": "Retirez des pages d'un PDF, par numéro ou par plage. Une suppression qui viderait le document est refusée.",
       "lede": "L'inverse de l'extraction : vous nommez ce qui part, le reste est conservé dans son ordre. Une demande qui ne laisserait aucune page debout est refusée — un document vide serait plus grave qu'une erreur.",
@@ -324,11 +348,17 @@
         "caviarder-pdf",
         "organiser-pages-pdf",
         "diviser-pdf"
-      ]
+      ],
+      "icon": "delete-pages",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Supprimer des pages",
+      "alt_slug": "remove-pdf-pages"
     },
     {
       "slug": "organiser-pages-pdf",
-      "title": "Réorganiser les pages d'un PDF — AI SmartTalk Documents",
+      "title": "Organiser les pages en ligne, gratuit | AI SmartTalk",
       "h1": "Réorganiser les pages d'un PDF",
       "meta_description": "Donnez au document l'ordre de pages que vous voulez. Un ordre incomplet est refusé avant traitement.",
       "lede": "Vous écrivez le nouvel ordre, le document le prend. La règle est stricte à dessein : l'ordre doit lister toutes les pages du document. Un ordre incomplet serait une amputation déguisée en réorganisation.",
@@ -387,11 +417,17 @@
         "pivoter-pdf",
         "fusionner-pdf",
         "diviser-pdf"
-      ]
+      ],
+      "icon": "organize",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Organiser les pages",
+      "alt_slug": "reorder-pdf-pages"
     },
     {
       "slug": "pivoter-pdf",
-      "title": "Pivoter un PDF — AI SmartTalk Documents",
+      "title": "Pivoter PDF en ligne, gratuit et sans filigrane | AI SmartTalk",
       "h1": "Pivoter un PDF",
       "meta_description": "Redressez un document scanné de travers : quart de tour à droite, à gauche ou demi-tour, sur tout ou partie des pages.",
       "lede": "Un scan arrivé couché, une page en paysage au milieu d'un document en portrait. La rotation s'applique à toutes les pages ou à celles que vous nommez, et elle ne connaît que les quarts de tour — c'est tout ce qu'un PDF sait stocker.",
@@ -475,11 +511,17 @@
         "organiser-pages-pdf",
         "reparer-pdf",
         "ocr-pdf"
-      ]
+      ],
+      "icon": "rotate",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Pivoter PDF",
+      "alt_slug": "rotate-pdf"
     },
     {
       "slug": "rogner-pdf",
-      "title": "Rogner un PDF — AI SmartTalk Documents",
+      "title": "Rogner PDF en ligne, gratuit et sans filigrane | AI SmartTalk",
       "h1": "Rogner un PDF",
       "meta_description": "Supprimez les marges d'un PDF, automatiquement d'après le contenu détecté ou selon un cadre que vous donnez en points.",
       "lede": "Un scan avec trois centimètres de blanc autour, un document destiné à une liseuse. Le mode automatique mesure le texte réellement présent et resserre le cadre autour ; une page dont le contenu n'est pas mesurable garde le sien plutôt que de revenir blanche.",
@@ -539,11 +581,17 @@
         "compresser-pdf",
         "pdf-en-jpg",
         "numeroter-pages-pdf"
-      ]
+      ],
+      "icon": "crop",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Rogner PDF",
+      "alt_slug": "crop-pdf"
     },
     {
       "slug": "numeroter-pages-pdf",
-      "title": "Numéroter les pages d'un PDF — AI SmartTalk Documents",
+      "title": "Numéroter les pages en ligne, gratuit | AI SmartTalk",
       "h1": "Numéroter les pages d'un PDF",
       "meta_description": "Ajoutez des numéros de page à un PDF existant : position, format, page de départ et taille de police.",
       "lede": "Un contrat signé ailleurs n'a pas de feuille de style à modifier. Les numéros sont donc dessinés sur un calque transparent, à la géométrie exacte du document, puis apposés — et le verdict vérifie que le calque est resté aligné.",
@@ -648,11 +696,17 @@
         "fusionner-pdf",
         "rogner-pdf",
         "organiser-pages-pdf"
-      ]
+      ],
+      "icon": "number",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Numéroter les pages",
+      "alt_slug": "add-page-numbers"
     },
     {
       "slug": "filigraner-pdf",
-      "title": "Filigraner un PDF — AI SmartTalk Documents",
+      "title": "Filigrane PDF en ligne, gratuit | AI SmartTalk",
       "h1": "Filigraner un PDF",
       "meta_description": "Apposez une mention en filigrane sur toutes les pages d'un PDF : texte, opacité et angle au choix.",
       "lede": "« Confidentiel », « Brouillon », le nom d'un destinataire. La mention est dessinée sur un calque et apposée sur chaque page ; le texte du document, lui, reste sélectionnable et cherchable.",
@@ -712,11 +766,17 @@
         "numeroter-pages-pdf",
         "caviarder-pdf",
         "compresser-pdf"
-      ]
+      ],
+      "icon": "watermark",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Filigrane PDF",
+      "alt_slug": "watermark-pdf"
     },
     {
       "slug": "proteger-pdf",
-      "title": "Protéger un PDF par mot de passe — AI SmartTalk Documents",
+      "title": "Protéger PDF en ligne, gratuit | AI SmartTalk",
       "h1": "Protéger un PDF par mot de passe",
       "meta_description": "Chiffrez un PDF en AES 256 bits. Le mot de passe ne transite jamais par la ligne de commande du serveur.",
       "lede": "Le document est chiffré en AES 256 bits : sans le mot de passe, il ne s'ouvre pas. Le mot de passe est transmis à l'outil de chiffrement par un fichier d'arguments temporaire — il n'apparaît à aucun moment dans la liste des processus de la machine.",
@@ -761,11 +821,17 @@
         "caviarder-pdf",
         "filigraner-pdf",
         "pdf-en-pdfa"
-      ]
+      ],
+      "icon": "lock",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Protéger PDF",
+      "alt_slug": "protect-pdf"
     },
     {
       "slug": "deverrouiller-pdf",
-      "title": "Déverrouiller un PDF — AI SmartTalk Documents",
+      "title": "Déverrouiller PDF en ligne, gratuit | AI SmartTalk",
       "h1": "Déverrouiller un PDF",
       "meta_description": "Retirez le mot de passe d'un PDF dont vous détenez le mot de passe. Aucune protection n'est cassée ici.",
       "lede": "Un document que vous avez le droit d'ouvrir, mais dont le mot de passe vous encombre à chaque consultation. Vous le fournissez, le chiffrement est retiré. Ce service ne récupère ni ne casse aucun mot de passe : sans lui, il n'y a rien à faire.",
@@ -810,11 +876,17 @@
         "reparer-pdf",
         "compresser-pdf",
         "ocr-pdf"
-      ]
+      ],
+      "icon": "unlock",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Déverrouiller PDF",
+      "alt_slug": "unlock-pdf"
     },
     {
       "slug": "reparer-pdf",
-      "title": "Réparer un PDF — AI SmartTalk Documents",
+      "title": "Réparer PDF en ligne, gratuit et sans filigrane | AI SmartTalk",
       "h1": "Réparer un PDF endommagé",
       "meta_description": "Récupérez ce qu'un PDF abîmé contient encore, et sachez par quel chemin : reconstruction ou réécriture complète.",
       "lede": "Un fichier tronqué par un transfert, un PDF que le lecteur refuse d'ouvrir. Deux passes sont tentées dans l'ordre : d'abord la reconstruction des tables de références, qui garde les objets d'origine ; ensuite, seulement si c'est nécessaire, une réécriture complète — qui coûte plus cher, et qui vous est annoncée.",
@@ -850,12 +922,18 @@
         "deverrouiller-pdf",
         "pdf-en-pdfa",
         "ocr-pdf"
-      ]
+      ],
+      "icon": "repair",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Réparer PDF",
+      "alt_slug": "repair-pdf"
     },
     {
       "slug": "ocr-pdf",
-      "title": "Océriser un PDF scanné — AI SmartTalk Documents",
-      "h1": "Océriser un PDF scanné",
+      "title": "OCR PDF en ligne, gratuit et sans filigrane | AI SmartTalk",
+      "h1": "OCR sur un PDF scanné",
       "meta_description": "Ajoutez une couche texte à un PDF scanné, et sachez quelles pages sont revenues illisibles. OCR en cinq langues.",
       "lede": "Un scan est une image de texte : rien ne s'y cherche, rien ne s'y sélectionne. L'océrisation lui rend une couche texte. Et parce qu'un OCR qui échoue sur deux pages rend un fichier d'apparence normale, chaque page est relue et comptée, une par une.",
       "endpoint": "/api/ocr",
@@ -932,7 +1010,7 @@
         "Choisissez la ou les langues du document — c'est le réglage qui pèse le plus sur la qualité.",
         "Lancez l'océrisation, puis lisez le verdict page par page avant de vous fier au résultat."
       ],
-      "verdict_says": "Le verdict relit le texte reconnu et le mesure page par page : combien de pages ont été océrisées, combien portaient déjà du texte et ont été laissées telles quelles, et lesquelles sont revenues avec moins de cinquante caractères — page blanche, photographie, ou scan trop dégradé pour être lu. Ces pages sont nommées une par une, avec leur compte de caractères. Un OCR qui rend un fichier d'apparence normale avec deux pages vides, vous l'apprenez ici, pas six mois plus tard.",
+      "verdict_says": "Le verdict relit le texte reconnu et le mesure page par page : combien de pages ont été traitées par OCR, combien portaient déjà du texte et ont été laissées telles quelles, et lesquelles sont revenues avec moins de cinquante caractères — page blanche, photographie, ou scan trop dégradé pour être lu. Ces pages sont nommées une par une, avec leur compte de caractères. Un OCR qui rend un fichier d'apparence normale avec deux pages vides, vous l'apprenez ici, pas six mois plus tard.",
       "faq": [
         {
           "q": "Quelles langues sont reconnues ?",
@@ -956,11 +1034,17 @@
         "pdf-en-word",
         "compresser-pdf",
         "pdf-en-pdfa"
-      ]
+      ],
+      "icon": "ocr",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "OCR PDF",
+      "alt_slug": "ocr-pdf"
     },
     {
       "slug": "office-en-pdf",
-      "title": "Word, Excel, PowerPoint en PDF — AI SmartTalk Documents",
+      "title": "Office en PDF en ligne, gratuit | AI SmartTalk",
       "h1": "Word, Excel, PowerPoint en PDF",
       "meta_description": "Convertissez un document Word, un classeur Excel ou une présentation PowerPoint en PDF, formats ODF et CSV compris.",
       "lede": "Un document bureautique porte sa propre structure : la conversion en PDF le met en page comme son auteur l'a écrit. Le fichier produit est ensuite relu pour compter ce qui, dans le PDF, reste réellement sélectionnable.",
@@ -1000,11 +1084,24 @@
         "markdown-en-pdf",
         "compresser-pdf",
         "pdf-en-pdfa"
-      ]
+      ],
+      "icon": "office",
+      "accepts": [
+        "docx",
+        "xlsx",
+        "pptx",
+        "odt",
+        "ods",
+        "odp",
+        "ole",
+        "csv"
+      ],
+      "label": "Office en PDF",
+      "alt_slug": "office-to-pdf"
     },
     {
       "slug": "pdf-en-word",
-      "title": "PDF en Word, Excel ou PowerPoint — AI SmartTalk Documents",
+      "title": "PDF en Word en ligne, gratuit et sans filigrane | AI SmartTalk",
       "h1": "PDF en Word, Excel ou PowerPoint",
       "meta_description": "Reconstruisez un document éditable à partir d'un PDF — et sachez quelle part du texte a réellement été retrouvée.",
       "lede": "Un PDF contient des glyphes à des coordonnées, pas des paragraphes, des tableaux et des styles : ceux-là sont devinés. Tout le marché vend ce geste sous le mot « convertir ». Ici, le fichier produit est relu et comparé au PDF de départ, et le résultat de cette comparaison vous est donné.",
@@ -1062,11 +1159,17 @@
         "office-en-pdf",
         "pdf-en-jpg",
         "compresser-pdf"
-      ]
+      ],
+      "icon": "word",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "PDF en Word",
+      "alt_slug": "pdf-to-word"
     },
     {
       "slug": "pdf-en-jpg",
-      "title": "PDF en JPG ou PNG — AI SmartTalk Documents",
+      "title": "PDF en JPG en ligne, gratuit et sans filigrane | AI SmartTalk",
       "h1": "PDF en JPG ou PNG",
       "meta_description": "Convertissez les pages d'un PDF en images JPG ou PNG, à la résolution de votre choix, une image par page.",
       "lede": "Une vignette, une page à afficher dans un visualiseur, une image à donner à un outil qui ne lit pas le PDF. Chaque page devient une image, nommée par son numéro.",
@@ -1134,12 +1237,18 @@
         "compresser-pdf",
         "rogner-pdf",
         "pdf-en-word"
-      ]
+      ],
+      "icon": "image",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "PDF en JPG",
+      "alt_slug": "pdf-to-jpg"
     },
     {
       "slug": "jpg-en-pdf",
-      "title": "JPG en PDF — AI SmartTalk Documents",
-      "h1": "Images en PDF",
+      "title": "JPG en PDF en ligne, gratuit et sans filigrane | AI SmartTalk",
+      "h1": "JPG en PDF",
       "meta_description": "Réunissez des JPG, PNG, GIF, WebP ou TIFF en un seul PDF. L'ordre de dépôt est l'ordre des pages.",
       "lede": "Des photos d'un document, une page signée revenue d'un téléphone, une série de captures. Les images sont intégrées telles quelles, sans ré-encodage — et l'ordre dans lequel vous les déposez est l'ordre des pages.",
       "endpoint": "/api/images-to-pdf",
@@ -1259,11 +1368,21 @@
         "fusionner-pdf",
         "ocr-pdf",
         "compresser-pdf"
-      ]
+      ],
+      "icon": "image-to-doc",
+      "accepts": [
+        "png",
+        "jpeg",
+        "gif",
+        "webp",
+        "tiff"
+      ],
+      "label": "JPG en PDF",
+      "alt_slug": "jpg-to-pdf"
     },
     {
       "slug": "caviarder-pdf",
-      "title": "Caviarder un PDF — AI SmartTalk Documents",
+      "title": "Caviarder PDF en ligne, gratuit | AI SmartTalk",
       "h1": "Caviarder un PDF",
       "meta_description": "Faites disparaître une information d'un PDF : les pages sont reconstruites en image, la couche texte n'existe plus.",
       "lede": "Un rectangle noir posé sur un mot laisse le mot dessous : il se copie, il se cherche, il ressort. Ici, les pages visées sont reconstruites à partir de leurs pixels et la couche texte disparaît avec les chaînes caviardées. C'est irréversible, et c'est le but.",
@@ -1352,11 +1471,17 @@
         "ocr-pdf",
         "supprimer-pages-pdf",
         "filigraner-pdf"
-      ]
+      ],
+      "icon": "redact",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Caviarder PDF",
+      "alt_slug": "redact-pdf"
     },
     {
       "slug": "pdf-en-pdfa",
-      "title": "Convertir un PDF en PDF/A — AI SmartTalk Documents",
+      "title": "PDF en PDF/A en ligne, gratuit | AI SmartTalk",
       "h1": "Convertir un PDF en PDF/A",
       "meta_description": "Produisez un PDF/A-1b, 2b ou 3b pour l'archivage, et sachez exactement ce que la conversion a dû retirer.",
       "lede": "PDF/A est la forme qu'une archive légale accepte : polices intégrées, couleurs indépendantes du périphérique, rien qui dépende de l'extérieur. La conversion retire ce que la norme interdit — et chaque retrait vous est nommé, parce que personne ne devrait le découvrir après le dépôt.",
@@ -1418,11 +1543,17 @@
         "reparer-pdf",
         "office-en-pdf",
         "compresser-pdf"
-      ]
+      ],
+      "icon": "archive",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "PDF en PDF/A",
+      "alt_slug": "pdf-to-pdfa"
     },
     {
       "slug": "markdown-en-pdf",
-      "title": "Markdown en PDF — AI SmartTalk Documents",
+      "title": "Markdown en PDF en ligne, gratuit | AI SmartTalk",
       "h1": "Markdown en PDF",
       "meta_description": "Écrivez en Markdown, obtenez un PDF mis en page : titres, tableaux, sommaire, numéros de page.",
       "lede": "Les autres outils transforment un fichier que vous avez déjà. Celui-ci en fabrique un. Vous écrivez le texte, le moteur le met en page — et il rendra exactement le même PDF la prochaine fois, à partir du même texte.",
@@ -1519,7 +1650,11 @@
         "numeroter-pages-pdf",
         "fusionner-pdf",
         "compresser-pdf"
-      ]
+      ],
+      "icon": "markdown",
+      "accepts": [],
+      "label": "Markdown en PDF",
+      "alt_slug": "markdown-to-pdf"
     }
   ]
 }

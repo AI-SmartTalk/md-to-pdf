@@ -1,6 +1,6 @@
 {
   "index": {
-    "title": "AI SmartTalk Documents — PDF tools that tell you what they did",
+    "title": "Free online PDF tools — compress, merge, convert | AI SmartTalk",
     "meta_description": "Compress, merge, split, convert, sign off on your PDFs. Every tool hands back the document and a verdict on it. Files deleted after 2 hours.",
     "h1": "",
     "lede": "Twenty-one tools that read your file, do the work, and then tell you what it cost: pages kept, text still selectable, what the operation had to give up. You get a document, not just a download.",
@@ -15,7 +15,7 @@
     {
       "slug": "compress-pdf",
       "group": "optimise",
-      "title": "Compress a PDF — AI SmartTalk Documents",
+      "title": "Compress PDF online, free and watermark-free | AI SmartTalk",
       "h1": "Compress a PDF",
       "meta_description": "Shrink a PDF and see exactly what it cost: size before and after, pages kept, text still selectable. A file that grows is refused.",
       "lede": "Ghostscript presets, run in a sandbox, on a file you upload. The difference is what comes back with it: a measurement of what the compression actually did to your document.",
@@ -87,12 +87,18 @@
         "pdf-to-pdfa",
         "ocr-pdf",
         "crop-pdf"
-      ]
+      ],
+      "icon": "compress",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Compress PDF",
+      "alt_slug": "compresser-pdf"
     },
     {
       "slug": "merge-pdf",
       "group": "organise",
-      "title": "Merge PDF files — AI SmartTalk Documents",
+      "title": "Merge PDF online, free and watermark-free | AI SmartTalk",
       "h1": "Merge PDF files",
       "meta_description": "Join several PDFs into one, in the order you set. A file that is not a readable PDF is named and refused before anything is joined.",
       "lede": "Drop two files or twenty; they are joined in the order they appear in the list. Nothing is re-encoded, so every page arrives exactly as it left.",
@@ -131,12 +137,18 @@
         "extract-pdf-pages",
         "reorder-pdf-pages",
         "add-page-numbers"
-      ]
+      ],
+      "icon": "merge",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Merge PDF",
+      "alt_slug": "fusionner-pdf"
     },
     {
       "slug": "split-pdf",
       "group": "organise",
-      "title": "Split a PDF — AI SmartTalk Documents",
+      "title": "Split PDF online, free and watermark-free | AI SmartTalk",
       "h1": "Split a PDF",
       "meta_description": "Cut one PDF into several files, every N pages or at the cut points you name. Each part comes back separately, ready to download.",
       "lede": "One document in, several out. Either a fixed number of pages per file, or the exact points where the cut should fall.",
@@ -203,12 +215,18 @@
         "extract-pdf-pages",
         "remove-pdf-pages",
         "pdf-to-jpg"
-      ]
+      ],
+      "icon": "split",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Split PDF",
+      "alt_slug": "diviser-pdf"
     },
     {
       "slug": "extract-pdf-pages",
       "group": "organise",
-      "title": "Extract pages from a PDF — AI SmartTalk Documents",
+      "title": "Extract pages online, free and watermark-free | AI SmartTalk",
       "h1": "Extract pages from a PDF",
       "meta_description": "Keep only the pages you name — 1,3,5-9, odd, even — in one new document. Ranges are checked against the real page count.",
       "lede": "Name the pages you want to keep; everything else is left behind. The pages come out in document order, whatever order you wrote them in.",
@@ -269,12 +287,18 @@
         "split-pdf",
         "reorder-pdf-pages",
         "merge-pdf"
-      ]
+      ],
+      "icon": "extract",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Extract pages",
+      "alt_slug": "extraire-pages-pdf"
     },
     {
       "slug": "remove-pdf-pages",
       "group": "organise",
-      "title": "Delete pages from a PDF — AI SmartTalk Documents",
+      "title": "Remove pages online, free and watermark-free | AI SmartTalk",
       "h1": "Delete pages from a PDF",
       "meta_description": "Drop the pages you name and keep the rest. A request that would empty the document is refused rather than answered.",
       "lede": "Name the pages to remove; the rest of the document arrives unchanged, in its own order, with nothing re-encoded.",
@@ -335,12 +359,18 @@
         "split-pdf",
         "reorder-pdf-pages",
         "crop-pdf"
-      ]
+      ],
+      "icon": "delete-pages",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Remove pages",
+      "alt_slug": "supprimer-pages-pdf"
     },
     {
       "slug": "reorder-pdf-pages",
       "group": "organise",
-      "title": "Reorder the pages of a PDF — AI SmartTalk Documents",
+      "title": "Organise pages online, free and watermark-free | AI SmartTalk",
       "h1": "Reorder the pages of a PDF",
       "meta_description": "Set a new page order for a PDF. The list has to name every page of the document, so no page can be lost by a typo.",
       "lede": "Write the pages in the order you want them. The document is rebuilt in that order, and nothing else changes.",
@@ -401,12 +431,18 @@
         "remove-pdf-pages",
         "rotate-pdf",
         "merge-pdf"
-      ]
+      ],
+      "icon": "organize",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Organise pages",
+      "alt_slug": "organiser-pages-pdf"
     },
     {
       "slug": "rotate-pdf",
       "group": "organise",
-      "title": "Rotate a PDF — AI SmartTalk Documents",
+      "title": "Rotate PDF online, free and watermark-free | AI SmartTalk",
       "h1": "Rotate a PDF",
       "meta_description": "Turn every page, or only the ones you name, by a quarter turn. Anything that is not a quarter turn is refused before the file is touched.",
       "lede": "A scan that came in sideways is turned in one call, on the whole document or on the pages that need it.",
@@ -474,12 +510,18 @@
         "reorder-pdf-pages",
         "extract-pdf-pages",
         "add-page-numbers"
-      ]
+      ],
+      "icon": "rotate",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Rotate PDF",
+      "alt_slug": "pivoter-pdf"
     },
     {
       "slug": "crop-pdf",
       "group": "edit",
-      "title": "Crop a PDF — AI SmartTalk Documents",
+      "title": "Crop PDF online, free and watermark-free | AI SmartTalk",
       "h1": "Crop a PDF",
       "meta_description": "Trim the margins of a PDF automatically, or to an exact box in points. The verdict names the pages that could not be measured.",
       "lede": "Automatic mode measures where the text actually sits on each page and cuts to it, with a margin. Or give the box yourself, in PostScript points.",
@@ -540,12 +582,18 @@
         "compress-pdf",
         "add-page-numbers",
         "redact-pdf"
-      ]
+      ],
+      "icon": "crop",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Crop PDF",
+      "alt_slug": "rogner-pdf"
     },
     {
       "slug": "add-page-numbers",
       "group": "edit",
-      "title": "Add page numbers to a PDF — AI SmartTalk Documents",
+      "title": "Add page numbers online, free | AI SmartTalk",
       "h1": "Add page numbers to a PDF",
       "meta_description": "Number the pages of an existing PDF, in the position and format you choose, without touching its text layer.",
       "lede": "A numbering layer is rendered and laid over your document. The pages underneath are not rebuilt, so the text stays selectable.",
@@ -652,12 +700,18 @@
         "merge-pdf",
         "crop-pdf",
         "reorder-pdf-pages"
-      ]
+      ],
+      "icon": "number",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Add page numbers",
+      "alt_slug": "numeroter-pages-pdf"
     },
     {
       "slug": "watermark-pdf",
       "group": "edit",
-      "title": "Watermark a PDF — AI SmartTalk Documents",
+      "title": "Watermark PDF online, free and watermark-free | AI SmartTalk",
       "h1": "Watermark a PDF",
       "meta_description": "Lay a diagonal text watermark over every page of a PDF, with the opacity and angle you choose. The text layer stays untouched.",
       "lede": "\"Draft\", \"Confidential\", a client name: the text is rendered as a layer and laid over the document, which is left exactly as it was underneath.",
@@ -718,12 +772,18 @@
         "add-page-numbers",
         "redact-pdf",
         "compress-pdf"
-      ]
+      ],
+      "icon": "watermark",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Watermark PDF",
+      "alt_slug": "filigraner-pdf"
     },
     {
       "slug": "protect-pdf",
       "group": "secure",
-      "title": "Password protect a PDF — AI SmartTalk Documents",
+      "title": "Protect PDF online, free and watermark-free | AI SmartTalk",
       "h1": "Password protect a PDF",
       "meta_description": "Encrypt a PDF with AES-256 and a password of your choosing. The password is never stored and never appears in a process list.",
       "lede": "The document is encrypted by qpdf with 256-bit AES. Without the password it cannot be opened, by us or by anyone else.",
@@ -770,12 +830,18 @@
         "redact-pdf",
         "watermark-pdf",
         "pdf-to-pdfa"
-      ]
+      ],
+      "icon": "lock",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Protect PDF",
+      "alt_slug": "proteger-pdf"
     },
     {
       "slug": "unlock-pdf",
       "group": "secure",
-      "title": "Unlock a PDF — AI SmartTalk Documents",
+      "title": "Unlock PDF online, free and watermark-free | AI SmartTalk",
       "h1": "Unlock a PDF",
       "meta_description": "Remove the password from a PDF you already have the password for. No password is ever guessed, searched for or broken here.",
       "lede": "For a document you can open but that asks for its password every time. You supply the password; the encryption is removed.",
@@ -822,12 +888,18 @@
         "repair-pdf",
         "compress-pdf",
         "pdf-to-word"
-      ]
+      ],
+      "icon": "unlock",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Unlock PDF",
+      "alt_slug": "deverrouiller-pdf"
     },
     {
       "slug": "repair-pdf",
       "group": "optimise",
-      "title": "Repair a damaged PDF — AI SmartTalk Documents",
+      "title": "Repair PDF online, free and watermark-free | AI SmartTalk",
       "h1": "Repair a damaged PDF",
       "meta_description": "Rebuild a PDF that no longer opens. The verdict says which method worked and how many pages were actually recovered.",
       "lede": "Two attempts, in order: rebuild the file's internal tables, and if that fails, rewrite the document entirely. The difference matters, so it is reported.",
@@ -866,12 +938,18 @@
         "unlock-pdf",
         "pdf-to-pdfa",
         "ocr-pdf"
-      ]
+      ],
+      "icon": "repair",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Repair PDF",
+      "alt_slug": "reparer-pdf"
     },
     {
       "slug": "ocr-pdf",
       "group": "optimise",
-      "title": "OCR a scanned PDF — AI SmartTalk Documents",
+      "title": "OCR PDF online, free and watermark-free | AI SmartTalk",
       "h1": "OCR a scanned PDF",
       "meta_description": "Add a searchable text layer to a scanned PDF. The verdict names, page by page, every page that came back unreadable.",
       "lede": "A scan becomes a document you can search, select and copy from. And you are told which pages the recognition struggled with, instead of finding out later.",
@@ -945,12 +1023,18 @@
         "compress-pdf",
         "pdf-to-pdfa",
         "redact-pdf"
-      ]
+      ],
+      "icon": "ocr",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "OCR PDF",
+      "alt_slug": "ocr-pdf"
     },
     {
       "slug": "office-to-pdf",
       "group": "convert",
-      "title": "Word, Excel, PowerPoint to PDF — AI SmartTalk Documents",
+      "title": "Office to PDF online, free and watermark-free | AI SmartTalk",
       "h1": "Word, Excel or PowerPoint to PDF",
       "meta_description": "Convert a Word, Excel, PowerPoint or OpenDocument file to PDF, and see how much selectable text made it across.",
       "lede": "The document is laid out by LibreOffice, in a sandbox with no network and no macros. What comes back is a PDF, and a measurement of its text layer.",
@@ -989,12 +1073,25 @@
         "markdown-to-pdf",
         "pdf-to-pdfa",
         "merge-pdf"
-      ]
+      ],
+      "icon": "office",
+      "accepts": [
+        "docx",
+        "xlsx",
+        "pptx",
+        "odt",
+        "ods",
+        "odp",
+        "ole",
+        "csv"
+      ],
+      "label": "Office to PDF",
+      "alt_slug": "office-en-pdf"
     },
     {
       "slug": "pdf-to-word",
       "group": "convert",
-      "title": "PDF to Word, Excel or PowerPoint — AI SmartTalk Documents",
+      "title": "PDF to Word online, free and watermark-free | AI SmartTalk",
       "h1": "PDF to Word, Excel or PowerPoint",
       "meta_description": "Turn a PDF into an editable document, and get a measurement of how much of the text was actually recovered.",
       "lede": "A PDF holds glyphs at coordinates, not paragraphs and tables — those have to be guessed. This tool says so, and then measures how well the guess went.",
@@ -1055,12 +1152,18 @@
         "office-to-pdf",
         "pdf-to-jpg",
         "repair-pdf"
-      ]
+      ],
+      "icon": "word",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "PDF to Word",
+      "alt_slug": "pdf-en-word"
     },
     {
       "slug": "pdf-to-jpg",
       "group": "convert",
-      "title": "PDF to JPG — AI SmartTalk Documents",
+      "title": "PDF to JPG online, free and watermark-free | AI SmartTalk",
       "h1": "PDF to JPG",
       "meta_description": "Turn the pages of a PDF into PNG or JPEG images, at the resolution you choose, each page as its own file.",
       "lede": "A page to show in a viewer, a thumbnail, an image for something that cannot read PDF. Each page comes back as its own image.",
@@ -1130,12 +1233,18 @@
         "split-pdf",
         "compress-pdf",
         "pdf-to-word"
-      ]
+      ],
+      "icon": "image",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "PDF to JPG",
+      "alt_slug": "pdf-en-jpg"
     },
     {
       "slug": "jpg-to-pdf",
       "group": "convert",
-      "title": "JPG to PDF — AI SmartTalk Documents",
+      "title": "JPG to PDF online, free and watermark-free | AI SmartTalk",
       "h1": "JPG to PDF",
       "meta_description": "Gather JPEG, PNG or TIFF images into a single PDF, one page per image, at the paper size you choose.",
       "lede": "Photographs of a document, screenshots, scans: they become one PDF, in the order of the list, with the images left untouched.",
@@ -1255,12 +1364,22 @@
         "merge-pdf",
         "compress-pdf",
         "ocr-pdf"
-      ]
+      ],
+      "icon": "image-to-doc",
+      "accepts": [
+        "png",
+        "jpeg",
+        "gif",
+        "webp",
+        "tiff"
+      ],
+      "label": "JPG to PDF",
+      "alt_slug": "jpg-en-pdf"
     },
     {
       "slug": "redact-pdf",
       "group": "secure",
-      "title": "Redact a PDF — AI SmartTalk Documents",
+      "title": "Redact PDF online, free and watermark-free | AI SmartTalk",
       "h1": "Redact a PDF",
       "meta_description": "Remove text from a PDF for good: the pages are rebuilt from pixels, so the redacted strings are gone from the file, not hidden.",
       "lede": "A black rectangle drawn over a word leaves the word in the file. This tool rebuilds each page from its pixels, so what was redacted no longer exists in the document.",
@@ -1321,12 +1440,18 @@
         "ocr-pdf",
         "watermark-pdf",
         "crop-pdf"
-      ]
+      ],
+      "icon": "redact",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Redact PDF",
+      "alt_slug": "caviarder-pdf"
     },
     {
       "slug": "pdf-to-pdfa",
       "group": "secure",
-      "title": "PDF to PDF/A — AI SmartTalk Documents",
+      "title": "PDF to PDF/A online, free and watermark-free | AI SmartTalk",
       "h1": "Convert a PDF to PDF/A",
       "meta_description": "Produce the archival form of a PDF, and read every adjustment the conversion had to make before you deposit the file.",
       "lede": "PDF/A is the form a legal archive accepts. The conversion changes things in your document — and every one of those changes is reported.",
@@ -1387,12 +1512,18 @@
         "compress-pdf",
         "repair-pdf",
         "office-to-pdf"
-      ]
+      ],
+      "icon": "archive",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "PDF to PDF/A",
+      "alt_slug": "pdf-en-pdfa"
     },
     {
       "slug": "markdown-to-pdf",
       "group": "create",
-      "title": "Markdown to PDF — AI SmartTalk Documents",
+      "title": "Markdown to PDF online, free and watermark-free | AI SmartTalk",
       "h1": "Markdown to PDF",
       "meta_description": "Produce a laid-out PDF from Markdown: headings, tables, code, charts and diagrams, with a house style and a layout score.",
       "lede": "This is where the service started, and what the others do not do: not transforming a file, but producing a document — from text, with a style, and a report on its layout.",
@@ -1483,7 +1614,11 @@
         "add-page-numbers",
         "watermark-pdf",
         "pdf-to-pdfa"
-      ]
+      ],
+      "icon": "markdown",
+      "accepts": [],
+      "label": "Markdown to PDF",
+      "alt_slug": "markdown-en-pdf"
     }
   ]
 }

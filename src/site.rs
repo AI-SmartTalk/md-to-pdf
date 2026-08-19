@@ -52,6 +52,21 @@ pub struct Tool {
     pub related: Vec<String>,
     #[serde(default)]
     pub group: Option<String>,
+    /// Short name for the card in the grid. `h1` keeps the phrase people search for —
+    /// « Océriser un PDF scanné » — while the card shows what a reader scans in a list.
+    /// Both are needed, and they are not the same string.
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Icon key, resolved against the sprite in `templates/site/icons.html`
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// Slug of the same tool in the other language, for `hreflang` and the language switch
+    #[serde(default)]
+    pub alt_slug: Option<String>,
+    /// File kinds this tool accepts, as `AssetKind::as_str` names them. Used by the home
+    /// page to propose the right tools once it has read a dropped file's bytes.
+    #[serde(default)]
+    pub accepts: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,6 +122,12 @@ pub struct Site {
     pub fr: Catalog,
     pub en: Catalog,
     tera: Option<Tera>,
+    /// Date the catalogue last changed, `YYYY-MM-DD`, for the sitemap.
+    ///
+    /// Taken from the file rather than from the process start: a `lastmod` that moves on
+    /// every deployment teaches a crawler to ignore the field, which is worse than not
+    /// sending it at all.
+    pub last_modified: String,
 }
 
 static SITE: OnceLock<Site> = OnceLock::new();
@@ -137,6 +158,7 @@ impl Site {
             fr: read_catalog("static/outils/catalog.fr.json"),
             en: read_catalog("static/outils/catalog.en.json"),
             tera: compile_templates(),
+            last_modified: catalogue_date(),
         }
     }
 
@@ -197,6 +219,25 @@ fn read_catalog(path: &str) -> Catalog {
     }
 }
 
+/// Newest modification date among the catalogues, as a date alone: the hour a file was
+/// written says nothing useful to a crawler, and pretending to that precision invites it
+/// to come back for nothing.
+fn catalogue_date() -> String {
+    let newest = [
+        "static/outils/catalog.fr.json",
+        "static/outils/catalog.en.json",
+    ]
+    .iter()
+    .filter_map(|path| fs::metadata(path).ok())
+    .filter_map(|meta| meta.modified().ok())
+    .filter_map(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+    .map(|elapsed| elapsed.as_secs())
+    .max()
+    .unwrap_or_else(crate::assets::now_unix);
+
+    crate::assets::rfc3339(newest).chars().take(10).collect()
+}
+
 fn compile_templates() -> Option<Tera> {
     match Tera::new("templates/site/**/*.html") {
         Ok(tera) => Some(tera),
@@ -236,11 +277,32 @@ impl Lang {
         }
     }
 
-    /// Path prefix this language's pages live under
-    pub fn root(self) -> &'static str {
+    /// Where this language's home page lives.
+    ///
+    /// French is at the root because it is the first market and the root is the address a
+    /// visitor types; giving it to a language rather than to a redirect saves a hop on the
+    /// page that matters most.
+    pub fn home(self) -> &'static str {
+        match self {
+            Lang::Fr => "/",
+            Lang::En => "/en",
+        }
+    }
+
+    /// Path prefix the tool pages live under. Kept in the language of the reader: a French
+    /// URL that reads `/tools/compress-pdf` looks machine-translated, and that costs trust
+    /// on the one page where trust decides.
+    pub fn tools(self) -> &'static str {
         match self {
             Lang::Fr => "/outils",
             Lang::En => "/tools",
+        }
+    }
+
+    pub fn pricing(self) -> &'static str {
+        match self {
+            Lang::Fr => "/tarifs",
+            Lang::En => "/pricing",
         }
     }
 
@@ -252,13 +314,269 @@ impl Lang {
     }
 }
 
+/// Absolute origin the canonical links and the sitemap are built from.
+///
+/// Search engines treat `https://host/x` and `http://host/x` as two pages; a canonical that
+/// is not absolute leaves that ambiguity in place, which is the classic way to split one
+/// page's authority in half.
+pub fn public_base() -> String {
+    std::env::var("PUBLIC_BASE_URL")
+        .unwrap_or_else(|_| "https://pdf.aismarttalk.tech".to_string())
+        .trim_end_matches('/')
+        .to_string()
+}
+
+// ------------ Pricing ------------
+
+/// One tier of the offer. Written here rather than in a catalogue because a price is not
+/// editorial copy: it is a commitment, and it should change with a code review.
+#[derive(Debug, Clone, Serialize)]
+pub struct Plan {
+    pub name: String,
+    pub price: String,
+    pub period: String,
+    pub pitch: String,
+    pub features: Vec<String>,
+    pub cta: String,
+    pub cta_href: String,
+    /// The one tier the eye should land on
+    pub featured: bool,
+}
+
+/// The four tiers of `PLAN-METAMORPHOSE.md` §7.
+///
+/// Two things are stated rather than implied, because they are the offer's whole argument:
+/// no watermark on any tier, and the quality verdict included everywhere. Charging for the
+/// verdict would turn our differentiator into a paywall nobody would ever meet.
+pub fn plans(lang: Lang) -> Vec<Plan> {
+    let fr = lang == Lang::Fr;
+
+    vec![
+        Plan {
+            name: if fr { "Gratuit" } else { "Free" }.to_string(),
+            price: "0 €".to_string(),
+            period: if fr { "pour toujours" } else { "forever" }.to_string(),
+            pitch: if fr {
+                "Tous les outils, sans compte et sans filigrane."
+            } else {
+                "Every tool, no account and no watermark."
+            }
+            .to_string(),
+            features: strings(if fr {
+                &[
+                    "Les 21 outils, sans limite de tâches",
+                    "Fichiers jusqu'à 50 Mo",
+                    "3 fichiers par traitement",
+                    "Le verdict de qualité, toujours",
+                    "Aucun filigrane, jamais",
+                    "Fichiers supprimés au bout d'une heure",
+                ]
+            } else {
+                &[
+                    "All 21 tools, no task limit",
+                    "Files up to 50 MB",
+                    "3 files per operation",
+                    "The quality verdict, always",
+                    "No watermark, ever",
+                    "Files deleted after one hour",
+                ]
+            }),
+            cta: if fr { "Commencer" } else { "Start now" }.to_string(),
+            cta_href: lang.home().to_string(),
+            featured: false,
+        },
+        Plan {
+            name: "Pro".to_string(),
+            price: "5 €".to_string(),
+            period: if fr {
+                "par mois, en annuel"
+            } else {
+                "per month, billed yearly"
+            }
+            .to_string(),
+            pitch: if fr {
+                "Pour qui traite des documents toutes les semaines."
+            } else {
+                "For anyone handling documents every week."
+            }
+            .to_string(),
+            features: strings(if fr {
+                &[
+                    "Taille de fichier illimitée",
+                    "Traitement par lots illimité",
+                    "OCR : 2 000 pages par mois",
+                    "Rapport de qualité détaillé",
+                    "Une charte documentaire",
+                    "Signature électronique",
+                    "Fichiers gardés 7 jours",
+                ]
+            } else {
+                &[
+                    "Unlimited file size",
+                    "Unlimited batch processing",
+                    "OCR: 2,000 pages a month",
+                    "Detailed quality report",
+                    "One document brand kit",
+                    "Electronic signature",
+                    "Files kept for 7 days",
+                ]
+            }),
+            cta: if fr {
+                "Demander un accès"
+            } else {
+                "Request access"
+            }
+            .to_string(),
+            cta_href: "/console#/acces".to_string(),
+            featured: true,
+        },
+        Plan {
+            name: if fr { "Équipe" } else { "Team" }.to_string(),
+            price: "12 €".to_string(),
+            period: if fr {
+                "par utilisateur et par mois"
+            } else {
+                "per user, per month"
+            }
+            .to_string(),
+            pitch: if fr {
+                "Vos documents à votre charte, et la preuve qu'ils viennent de vous."
+            } else {
+                "Your documents in your brand, and the proof they came from you."
+            }
+            .to_string(),
+            features: strings(if fr {
+                &[
+                    "Tout le plan Pro",
+                    "OCR et IA sans limite raisonnable",
+                    "Chartes documentaires illimitées",
+                    "Attestation de provenance signée",
+                    "Le contrat de document (pages, mise en page)",
+                    "Hébergement en France, accord de traitement",
+                    "Fichiers gardés 30 jours",
+                ]
+            } else {
+                &[
+                    "Everything in Pro",
+                    "OCR and AI without a practical limit",
+                    "Unlimited document brand kits",
+                    "Signed provenance attestation",
+                    "The document contract (pages, layout)",
+                    "Hosted in France, data processing agreement",
+                    "Files kept for 30 days",
+                ]
+            }),
+            cta: if fr { "Nous contacter" } else { "Talk to us" }.to_string(),
+            cta_href: "/console#/acces".to_string(),
+            featured: false,
+        },
+        Plan {
+            name: "API".to_string(),
+            price: if fr { "sur mesure" } else { "custom" }.to_string(),
+            period: if fr {
+                "à la page, au fichier"
+            } else {
+                "per page, per file"
+            }
+            .to_string(),
+            pitch: if fr {
+                "Le moteur, ses verdicts et sa preuve, dans vos produits."
+            } else {
+                "The engine, its verdicts and its proof, inside your products."
+            }
+            .to_string(),
+            features: strings(if fr {
+                &[
+                    "43 endpoints, un contrat OpenAPI",
+                    "Serveur MCP natif pour vos agents",
+                    "Travaux asynchrones et rappels signés",
+                    "Clé nommée par intégration, quotas, métriques",
+                    "Attestation et vérification de provenance",
+                    "Rétention configurable",
+                ]
+            } else {
+                &[
+                    "43 endpoints, one OpenAPI contract",
+                    "Native MCP server for your agents",
+                    "Asynchronous jobs and signed callbacks",
+                    "One named key per integration, quotas, metrics",
+                    "Provenance attestation and verification",
+                    "Configurable retention",
+                ]
+            }),
+            cta: if fr {
+                "Voir la documentation"
+            } else {
+                "Read the docs"
+            }
+            .to_string(),
+            cta_href: "/console#/api".to_string(),
+            featured: false,
+        },
+    ]
+}
+
+fn strings(values: &[&str]) -> Vec<String> {
+    values.iter().map(|value| value.to_string()).collect()
+}
+
+/// The page a visitor gets instead of a dead end.
+///
+/// The language is guessed from the path rather than from `Accept-Language`: someone who
+/// landed on `/tools/whatever` was reading English a second ago, and the twenty-one links
+/// this page offers should be in that language.
+pub fn not_found_page(path: &str) -> Result<String, AppError> {
+    let lang = if path.starts_with("/tools") || path.starts_with("/en") || path == "/pricing" {
+        Lang::En
+    } else {
+        Lang::Fr
+    };
+
+    let mut context = base_context(lang);
+    context.insert("page_title", "404");
+    context.insert("page_description", "");
+    context.insert("missing", path);
+    site().render("404.html", &context)
+}
+
+/// Tools of one language, grouped in catalogue order.
+///
+/// The navigation needs them on every page, not just on the home page: a visitor who lands
+/// on a tool page from a search result — which is most of them — must be able to reach the
+/// other twenty without going back to an index they never saw.
+fn nav_groups(lang: Lang) -> Vec<(String, Vec<Tool>)> {
+    let mut groups: Vec<(String, Vec<Tool>)> = Vec::new();
+
+    for tool in &site().catalog(lang).tools {
+        let name = tool.group.clone().unwrap_or_default();
+        match groups.iter_mut().find(|(group, _)| *group == name) {
+            Some((_, tools)) => tools.push(tool.clone()),
+            None => groups.push((name, vec![tool.clone()])),
+        }
+    }
+
+    groups
+}
+
 /// Context every page shares
 pub fn base_context(lang: Lang) -> tera::Context {
     let mut context = tera::Context::new();
+    let groups = nav_groups(lang);
+    context.insert(
+        "nav_groups",
+        &groups
+            .into_iter()
+            .map(|(name, tools)| serde_json::json!({ "name": name, "tools": tools }))
+            .collect::<Vec<_>>(),
+    );
     context.insert("lang", lang.code());
-    context.insert("root", lang.root());
+    context.insert("home", lang.home());
+    context.insert("root", lang.tools());
+    context.insert("pricing", lang.pricing());
     context.insert("other_lang", lang.other().code());
-    context.insert("other_root", lang.other().root());
+    context.insert("other_home", lang.other().home());
+    context.insert("other_root", lang.other().tools());
+    context.insert("base", &public_base());
     context.insert("version", env!("CARGO_PKG_VERSION"));
     context.insert(
         "retention_hours",
@@ -273,11 +591,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_language_knows_its_counterpart_and_its_root() {
-        assert_eq!(Lang::Fr.root(), "/outils");
-        assert_eq!(Lang::En.root(), "/tools");
+    fn a_language_knows_its_counterpart_and_its_paths() {
+        assert_eq!(Lang::Fr.home(), "/");
+        assert_eq!(Lang::En.home(), "/en");
+        assert_eq!(Lang::Fr.tools(), "/outils");
+        assert_eq!(Lang::En.tools(), "/tools");
+        assert_eq!(Lang::Fr.pricing(), "/tarifs");
         assert_eq!(Lang::Fr.other(), Lang::En);
         assert_eq!(Lang::En.other().code(), "fr");
+    }
+
+    /// A trailing slash in the configured base would double up in every canonical
+    #[test]
+    fn the_public_base_never_ends_with_a_slash() {
+        std::env::set_var("PUBLIC_BASE_URL", "https://example.test/");
+        assert_eq!(public_base(), "https://example.test");
+        std::env::remove_var("PUBLIC_BASE_URL");
     }
 
     #[test]

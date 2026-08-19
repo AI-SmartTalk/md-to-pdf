@@ -538,18 +538,57 @@ curl -sH "X-API-Key: $API_KEY" -H 'Content-Type: application/json' \
 Files are referenced, never inlined: a chain of five operations never moves bytes through
 the conversation.
 
-## 🌍 The public tool pages
+## 🌍 The public site
 
-`/outils` (French) and `/tools` (English) are server-rendered from
-`static/outils/catalog.{fr,en}.json` through `templates/site/`. Real URLs, real HTML, a
-`sitemap.xml` and a `robots.txt` that keeps `/download/` out of every index — documents
-produced for identified callers are not public pages.
+| Path | What it serves |
+|---|---|
+| `/` · `/en` | The public home, French and English |
+| `/outils/<slug>` · `/tools/<slug>` | One page per tool, 21 in each language |
+| `/tarifs` · `/pricing` | The offer |
+| **`/console`** | **The integrator console, unchanged** — every view it had, at its own address |
+| `/sitemap.xml` · `/robots.txt` · `/og.png` | What a crawler and a social preview need |
 
-Adding a tool page is a catalogue entry, not a template change: the client
-(`static/outils/app.js`) is driven entirely by `data-*` attributes, so one implementation
-serves all of them. `static/outils/README.md` documents the contract.
+The root used to be the console, which greeted every visitor with
+`SERVICE INTERNE · RUST · PANDOC · WEASYPRINT`. It now belongs to the person who typed the
+domain. `/outils` and `/tools`, the previous home pages, answer 308 rather than serving a
+second copy: two URLs for one page split its authority between them.
 
-The integrator console at `/` is untouched and stays exactly what it was.
+Pages are server-rendered with Tera from `static/outils/catalog.{fr,en}.json`. Adding a tool
+is a catalogue entry, not a template change — the client (`static/outils/app.js`) is driven
+entirely by `data-*` attributes, so one implementation serves all of them.
+`static/outils/README.md` documents the contract.
+
+### Drop first, choose after
+
+The home page takes a file **before** asking what to do with it. The service reads the type
+from the bytes and, for a PDF, whether it carries a text layer — so a scan is offered OCR
+and a heavy document is offered compression, without the visitor having to know which of
+twenty-one tools they need.
+
+Competitors make you pick the tool first. Removing that step is the one UX advantage this
+architecture hands us for free: `POST /api/files` already returned `kind` and `pages`, and
+now returns `has_text` as well.
+
+The file is uploaded once. A suggestion links to `…/<tool>#asset=<id>`, and the tool page
+picks it up already loaded — five operations on one document is one upload, not five.
+
+### What was done for search
+
+Everything on-page, because everything on-page is what a product can control:
+
+- one page per search intent, with the phrase people type in the `<title>` and the `h1`
+- absolute canonicals, and `hreflang` pointing at **the same tool** in the other language
+  rather than at that language's home page
+- `WebApplication`, `SoftwareApplication`, `BreadcrumbList`, `FAQPage` and `Organization`
+  in JSON-LD
+- a sitemap with alternates, `lastmod` and priorities, and a `robots.txt` that keeps
+  `/download/` out of every index
+- a 404 that offers the other twenty tools to a visitor and stays JSON for an integration
+- an `og:image` rendered by this service's own engine, so the social card cannot drift from
+  the brand
+
+Ranking also depends on domain authority and inbound links, which no amount of markup
+replaces. The technical and editorial groundwork is in place; the rest is time.
 
 ```bash
 curl -X POST http://localhost:8000/api/convert \

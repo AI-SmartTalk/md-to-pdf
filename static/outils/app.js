@@ -69,7 +69,8 @@
       "result.title": "Résultat",
       "result.download": "Télécharger",
       "result.downloadAll": "Tout télécharger",
-      "result.pages": "{count} page(s)",
+      "result.page.one": "{count} page",
+      "result.page.many": "{count} pages",
       "result.open": "Ouvrir le fichier produit",
       "result.delete": "Supprimer maintenant",
       "result.retention": "Vos fichiers et ce résultat sont effacés de nos serveurs au bout de {hours} h. Vous pouvez aussi les supprimer tout de suite.",
@@ -111,7 +112,8 @@
       "result.title": "Result",
       "result.download": "Download",
       "result.downloadAll": "Download all",
-      "result.pages": "{count} page(s)",
+      "result.page.one": "{count} page",
+      "result.page.many": "{count} pages",
       "result.open": "Open the produced file",
       "result.delete": "Delete now",
       "result.retention": "Your files and this result are erased from our servers after {hours} h. You can also delete them right now.",
@@ -220,6 +222,13 @@
     return node;
   }
 
+
+  /* Le français et l'anglais accordent le pluriel au même endroit : une seule règle
+     suffit, et « 1 page(s) » est le genre de détail qui fait douter de tout le reste. */
+  function plural(count, oneKey, manyKey) {
+    return t(Math.abs(Number(count)) <= 1 ? oneKey : manyKey, { count: count, n: count });
+  }
+
   function formatBytes(n) {
     if (n == null) return "";
     if (n < 1024) return n + " " + t("bytes.b");
@@ -244,8 +253,14 @@
   function initTheme() {
     let stored = null;
     try { stored = localStorage.getItem(THEME_STORAGE); } catch (e) { /* idem */ }
+    // Le défaut vient du serveur, qui l'a écrit dans `data-theme` : le site public
+    // s'ouvre en clair, la console en sombre. Un choix explicite de l'utilisateur
+    // l'emporte toujours ; la préférence du système ne sert que de dernier recours,
+    // parce qu'un thème sombre sur des documents personnels dit « outil de développeur »
+    // à quelqu'un qui vient juste alléger un PDF.
+    const served = document.documentElement.dataset.theme;
     const prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
-    applyTheme(stored || (prefersLight ? "light" : "dark"));
+    applyTheme(stored || served || (prefersLight ? "light" : "dark"));
 
     $$('[data-role="theme-toggle"]').forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -779,7 +794,7 @@
     const head = el("div", { class: "result-head" }, [
       el("h2", { text: t("result.title") }),
     ]);
-    if (data.pages != null) head.appendChild(el("span", { class: "tag", text: t("result.pages", { count: data.pages }) }));
+    if (data.pages != null) head.appendChild(el("span", { class: "tag", text: plural(data.pages, "result.page.one", "result.page.many") }));
     host.appendChild(head);
 
     if (assets.length) host.appendChild(this.renderFileList(assets));
@@ -793,7 +808,16 @@
     // Le verdict est la raison d'être de ce produit : il vient avant les
     // remarques, et juste après le fichier.
     if (data.verdict) {
-      const card = renderVerdict(data.verdict);
+      // Le client connaît le poids déposé et le poids produit : il compose donc
+      // lui-même une phrase dans la langue de la page, plutôt que d'afficher la
+      // prose anglaise de l'API à quelqu'un venu alléger un PDF.
+      const card = renderVerdict(data.verdict, {
+        pages: data.pages,
+        bytesIn: this.entries && this.entries.length
+          ? this.entries.reduce((sum, e) => sum + (e.file ? e.file.size : (e.asset && e.asset.bytes) || 0), 0)
+          : null,
+        bytesOut: assets.length ? assets[0].bytes : null,
+      });
       if (this.dom.verdict && this.dom.verdict !== host) {
         this.dom.verdict.textContent = "";
         this.dom.verdict.hidden = false;
@@ -829,7 +853,7 @@
 
       return el("li", { class: "result-file" }, [
         el("span", { class: "file-name", text: asset.name || asset.id }),
-        el("span", { class: "file-meta", text: formatBytes(asset.bytes) + (asset.pages ? " · " + t("result.pages", { count: asset.pages }) : "") }),
+        el("span", { class: "file-meta", text: formatBytes(asset.bytes) + (asset.pages ? " · " + plural(asset.pages, "result.page.one", "result.page.many") : "") }),
         button,
       ]);
     }));
@@ -917,7 +941,34 @@
 
      Le nom du contrôle est traduit ici (CHECK_LABELS) ; le `detail` rendu par
      l'API, en anglais, reste affiché juste en dessous. */
-  function renderVerdict(verdict) {
+
+  /* L'accroche du verdict, dans la langue de la page.
+
+     Le service rend un `summary` en anglais — c'est la langue de son API. Ici on
+     préfère recomposer la même information à partir de ce que le navigateur sait
+     déjà : le poids avant, le poids après, le nombre de pages. Des chiffres et
+     deux mots traduits valent mieux qu'une phrase juste mais illisible. */
+  function headline(verdict, ctx, english) {
+    if (english) return verdict.summary || "";
+
+    const bits = [];
+    if (ctx.bytesIn && ctx.bytesOut) {
+      const delta = Math.round((1 - ctx.bytesOut / ctx.bytesIn) * 100);
+      let sizes = formatBytes(ctx.bytesIn) + " → " + formatBytes(ctx.bytesOut);
+      if (delta >= 1) sizes += " (−" + delta + " %)";
+      bits.push(sizes);
+    } else if (ctx.bytesOut) {
+      bits.push(formatBytes(ctx.bytesOut));
+    }
+    if (ctx.pages != null) bits.push(plural(ctx.pages, "result.page.one", "result.page.many"));
+
+    // Rien de chiffré à dire : le résumé de l'API reste le moins mauvais choix.
+    return bits.length ? bits.join(" · ") : verdict.summary || "";
+  }
+
+  function renderVerdict(verdict, context) {
+    const ctx = context || {};
+    const english = (document.documentElement.lang || "fr").slice(0, 2) === "en";
     const status = ["ok", "warn", "fail"].indexOf(verdict.status) >= 0 ? verdict.status : "ok";
     const score = Math.max(0, Math.min(100, Number(verdict.score) || 0));
 
@@ -931,7 +982,13 @@
         ring,
         el("div", { class: "verdict-title" }, [
           el("span", { class: "verdict-status", text: t("verdict." + status) }),
-          el("p", { class: "verdict-summary", text: verdict.summary || "" }),
+          el("p", {
+            class: "verdict-summary",
+            text: headline(verdict, ctx, english),
+            // Le résumé de l'API reste accessible : c'est lui qui fait contrat,
+            // et un développeur qui inspecte la page doit pouvoir le lire.
+            attrs: { title: verdict.summary || null },
+          }),
         ]),
       ]),
     ]);
@@ -947,13 +1004,17 @@
         ]);
         if (check.page != null) name.appendChild(el("span", { class: "check-page", text: t("verdict.page", { page: check.page }) }));
 
-        // Contrôle inconnu et sans détail : le résumé du verdict prend le relais,
-        // pour qu'une ligne ne reste jamais vide de sens.
-        const detail = check.detail || (known ? "" : verdict.summary || "");
+        /* Le `detail` de l'API est en anglais, par contrat : c'est la langue du
+           service, de ses erreurs et de ses journaux. L'afficher tel quel dans une
+           page française donnerait une phrase que le visiteur ne peut pas lire —
+           alors que le libellé traduit et la pastille de couleur disent déjà
+           l'essentiel. On ne le montre donc que si on sait qu'il sera compris, ou
+           s'il n'y a rien d'autre à montrer. Il reste dans l'attribut `title`. */
+        const detail = english || !known ? (check.detail || verdict.summary || "") : "";
 
         return el("li", { class: "verdict-check", attrs: { "data-status": checkStatus, "data-check": check.name || null } }, [
           name,
-          el("p", { class: "check-detail", text: detail }),
+          detail ? el("p", { class: "check-detail", text: detail }) : null,
         ]);
       })));
     }
@@ -989,6 +1050,228 @@
     });
   }
 
+
+  // ═══════════════════════════════════════════════════════ le sélecteur du héros
+
+  /* Ce que les concurrents imposent : choisir l'outil, puis déposer le fichier.
+     Ce qu'on fait ici : déposer d'abord, et laisser le service dire ce que c'est.
+     Il lit le type aux octets (jamais l'extension) et sait si un PDF porte une
+     couche texte — de quoi proposer l'OCR à quelqu'un qui a déposé un scan sans
+     lui demander de savoir ce qu'est un OCR.
+
+     Le fichier est déjà en ligne quand la proposition s'affiche : cliquer mène à
+     l'outil avec `#asset=<id>`, et il n'y a pas de second envoi. */
+
+  const SUGGEST_STRINGS = {
+    fr: {
+      "suggest.title": "Voilà ce qu'on peut en faire",
+      "suggest.one": "{name} · {info}",
+      "suggest.many": "{count} fichiers · {info}",
+      "suggest.scan": "aucun texte détecté : c'est un scan",
+      "suggest.heavy": "fichier lourd",
+      "suggest.page.one": "{n} page",
+      "suggest.page.many": "{n} pages",
+      "why.compressHeavy": "le plus utile ici : il est lourd",
+      "why.ocr": "rendre ce scan cherchable",
+      "why.merge": "les réunir dans l'ordre déposé",
+      "why.office": "convertir en PDF",
+      "why.images": "en faire un seul PDF",
+      "why.plain": "",
+      "suggest.all": "Voir les 21 outils",
+    },
+    en: {
+      "suggest.title": "Here is what we can do with it",
+      "suggest.one": "{name} · {info}",
+      "suggest.many": "{count} files · {info}",
+      "suggest.scan": "no text found: this is a scan",
+      "suggest.heavy": "heavy file",
+      "suggest.page.one": "{n} page",
+      "suggest.page.many": "{n} pages",
+      "why.compressHeavy": "most useful here: it is heavy",
+      "why.ocr": "make this scan searchable",
+      "why.merge": "join them in the order dropped",
+      "why.office": "convert to PDF",
+      "why.images": "turn them into one PDF",
+      "why.plain": "",
+      "suggest.all": "See all 21 tools",
+    },
+  };
+
+  /* Un fichier au-delà de ce poids gagne presque toujours à être compressé : c'est
+     la première chose à proposer, avant même le reste. */
+  const HEAVY_BYTES = 4 * 1024 * 1024;
+
+  function toolIndex() {
+    const node = document.getElementById("tool-index");
+    if (!node) return [];
+    const parsed = parseJson(node.textContent);
+    return Array.isArray(parsed) ? parsed : [];
+  }
+
+  /* L'ordre est tout : la première carte est celle qu'on clique. On classe donc
+     par ce que le fichier EST, pas par ce que le catalogue liste. */
+  function suggestionsFor(metas, tools) {
+    const bySlug = {};
+    tools.forEach((tool) => { bySlug[tool.slug] = tool; });
+
+    const kinds = metas.map((m) => m.kind);
+    const allPdf = kinds.every((k) => k === "pdf");
+    const allImages = kinds.every((k) => ["png", "jpeg", "gif", "webp", "tiff"].indexOf(k) >= 0);
+    const office = metas.find((m) => ["docx", "xlsx", "pptx", "odt", "ods", "odp", "ole", "csv"].indexOf(m.kind) >= 0);
+
+    const picked = [];
+    const add = (slug, why) => {
+      const tool = bySlug[slug];
+      if (tool && !picked.some((p) => p.tool.slug === slug)) picked.push({ tool: tool, why: why });
+    };
+
+    if (metas.length > 1 && allPdf) add(byAccepts(tools, "merge"), t2("why.merge"));
+    if (metas.length > 1 && allImages) add(byAccepts(tools, "image-to-doc"), t2("why.images"));
+    if (office) add(byAccepts(tools, "office"), t2("why.office"));
+
+    if (allPdf) {
+      // Un PDF sans couche texte est un scan : l'OCR passe devant tout le reste,
+      // parce que c'est la seule opération qui rende le document utilisable.
+      if (metas.some((m) => m.has_text === false)) add(byAccepts(tools, "ocr"), t2("why.ocr"));
+      if (metas.some((m) => m.bytes > HEAVY_BYTES)) add(byAccepts(tools, "compress"), t2("why.compressHeavy"));
+      ["compress", "split", "word", "rotate", "number", "lock", "image"].forEach((icon) => {
+        add(byAccepts(tools, icon), "");
+      });
+    } else if (allImages) {
+      add(byAccepts(tools, "image-to-doc"), t2("why.images"));
+    }
+
+    return picked.slice(0, 6);
+  }
+
+  // Les outils sont identifiés par leur icône, qui est stable, plutôt que par un
+  // slug qui change avec la langue.
+  function byAccepts(tools, icon) {
+    const found = tools.filter((tool) => tool.icon === icon);
+    return found.length ? found[0].slug : null;
+  }
+
+  function t2(key) {
+    const lang = (document.documentElement.lang || "fr").slice(0, 2);
+    const table = SUGGEST_STRINGS[lang] || SUGGEST_STRINGS.fr;
+    return table[key] != null ? table[key] : key;
+  }
+
+  function fill(template, vars) {
+    return String(template).replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? vars[k] : m));
+  }
+
+  function Picker(root) {
+    this.root = root;
+    this.toolsRoot = root.dataset.toolsRoot || "/outils";
+    this.maxBytes = Number(root.dataset.maxMb || DEFAULT_MAX_MB) * 1024 * 1024;
+    this.tools = toolIndex();
+
+    this.drop = $('[data-role="drop"]', root);
+    this.input = $('[data-role="input"]', root);
+    this.panel = el("div", { class: "suggest", attrs: { hidden: true } });
+    root.appendChild(this.panel);
+
+    this.status = el("p", { class: "status", attrs: { hidden: true, "aria-live": "polite" } });
+    root.appendChild(this.status);
+    this.error = el("div", { class: "alert", attrs: { hidden: true, role: "alert" } });
+    root.appendChild(this.error);
+
+    this.bind();
+  }
+
+  Picker.prototype.bind = function () {
+    const self = this;
+    if (this.input) this.input.addEventListener("change", () => self.take(Array.from(self.input.files || [])));
+    if (!this.drop) return;
+
+    ["dragenter", "dragover"].forEach((type) => {
+      this.drop.addEventListener(type, (event) => { event.preventDefault(); self.drop.classList.add("is-dragging"); });
+    });
+    ["dragleave", "drop"].forEach((type) => {
+      this.drop.addEventListener(type, () => self.drop.classList.remove("is-dragging"));
+    });
+    this.drop.addEventListener("drop", (event) => {
+      event.preventDefault();
+      self.take(Array.from((event.dataTransfer && event.dataTransfer.files) || []));
+    });
+  };
+
+  Picker.prototype.say = function (message) {
+    this.status.textContent = message;
+    this.status.hidden = !message;
+  };
+
+  Picker.prototype.fail = function (err) {
+    this.say("");
+    this.error.hidden = false;
+    this.error.textContent = (err && err.message) || String(err);
+  };
+
+  Picker.prototype.take = function (files) {
+    const self = this;
+    this.error.hidden = true;
+    this.panel.hidden = true;
+    if (!files.length) return;
+
+    const tooBig = files.filter((file) => file.size > this.maxBytes);
+    if (tooBig.length) {
+      return this.fail(new Error(fill(t("files.tooLarge"), {
+        name: tooBig[0].name, size: formatBytes(tooBig[0].size), max: formatBytes(this.maxBytes),
+      })));
+    }
+
+    this.say(fill(t("status.uploading"), { percent: 0 }));
+    uploadFiles(files, (ratio) => self.say(fill(t("status.uploading"), { percent: Math.round(ratio * 100) })))
+      .then((metas) => { self.say(""); self.show(metas); })
+      .catch((err) => self.fail(err));
+  };
+
+  Picker.prototype.show = function (metas) {
+    const self = this;
+    const picked = suggestionsFor(metas, this.tools);
+    this.panel.textContent = "";
+
+    const first = metas[0];
+    const bits = [];
+    if (first.pages) bits.push(plural(first.pages, "suggest.page.one", "suggest.page.many"));
+    if (first.has_text === false) bits.push(t2("suggest.scan"));
+    if (metas.some((m) => m.bytes > HEAVY_BYTES)) bits.push(t2("suggest.heavy"));
+    const info = bits.join(" · ") || formatBytes(first.bytes);
+
+    this.panel.appendChild(el("div", { class: "suggest-head" }, [
+      el("strong", { text: t2("suggest.title") }),
+      el("span", {
+        text: metas.length > 1
+          ? fill(t2("suggest.many"), { count: metas.length, info: info })
+          : fill(t2("suggest.one"), { name: first.name, info: info }),
+      }),
+    ]));
+
+    const grid = el("div", { class: "suggest-grid" });
+    // Une seule référence d'asset est transmise : les outils multi-fichiers
+    // reprennent la liste complète depuis le stockage local du navigateur.
+    const ids = metas.map((m) => m.id).join(",");
+    picked.forEach((entry, index) => {
+      const href = self.toolsRoot + "/" + entry.tool.slug + "#asset=" + encodeURIComponent(ids);
+      grid.appendChild(el("a", {
+        class: "suggest-card" + (index === 0 ? " is-primary" : ""),
+        attrs: { href: href },
+      }, [
+        el("b", { text: entry.tool.label }),
+        entry.why ? el("em", { text: entry.why }) : null,
+      ]));
+    });
+    this.panel.appendChild(grid);
+
+    this.panel.appendChild(el("p", { class: "notice" }, [
+      el("a", { text: t2("suggest.all"), attrs: { href: "#outils" } }),
+    ]));
+
+    this.panel.hidden = false;
+    this.panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
+
   function init() {
     initTheme();
     initApiKeyFields();
@@ -996,6 +1279,7 @@
     $$("[data-tool]").forEach((root) => {
       if (root.dataset.endpoint) new Tool(root);
     });
+    $$("[data-picker]").forEach((root) => new Picker(root));
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

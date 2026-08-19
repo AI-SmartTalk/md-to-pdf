@@ -1,5 +1,7 @@
 use crate::types::ErrorResponse;
+use rocket::response::content::RawHtml;
 use rocket::serde::json::Json;
+use rocket::Either;
 use rocket::Request;
 
 /// Every error leaving the service is a JSON body with the same shape as AppError's,
@@ -24,9 +26,33 @@ pub fn unauthorized(_: &Request) -> Json<ErrorResponse> {
     )
 }
 
+/// A visitor and an integration are not owed the same 404.
+///
+/// A dead link from a search result is a person who wanted a tool and found nothing: they
+/// get a page that offers the twenty-one others. An API call gets the JSON body every other
+/// error on this service returns. The `Accept` header is what tells the two apart, and a
+/// crawler that asks for HTML gets HTML — which is also what keeps a mistyped URL from
+/// being indexed as a broken JSON document.
 #[catch(404)]
-pub fn not_found(req: &Request) -> Json<ErrorResponse> {
-    error("Not found", &format!("No resource at {}", req.uri()))
+pub fn not_found(req: &Request) -> Either<RawHtml<String>, Json<ErrorResponse>> {
+    let path = req.uri().path().as_str();
+    let wants_html = req
+        .headers()
+        .get_one("Accept")
+        .is_some_and(|accept| accept.contains("text/html"));
+
+    // The API answers JSON whatever the browser asked for: a 404 on /api/files is a
+    // programming answer, not a page.
+    let is_api =
+        path.starts_with("/api") || path.starts_with("/download") || path.starts_with("/mcp");
+
+    if wants_html && !is_api {
+        if let Ok(page) = crate::site::not_found_page(path) {
+            return Either::Left(RawHtml(page));
+        }
+    }
+
+    Either::Right(error("Not found", &format!("No resource at {}", req.uri())))
 }
 
 #[catch(413)]

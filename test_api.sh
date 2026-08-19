@@ -109,6 +109,83 @@ echo "Base URL: $BASE_URL"
 echo
 
 # -----------------------------------------------------------
+# 0. The public site — routing, SEO, and the pages a visitor lands on
+#
+# These assertions exist because an SEO regression is silent: a canonical that
+# disappears, a redirect that becomes a copy, a title that loses its keyword —
+# nothing breaks, the traffic just stops three weeks later.
+# -----------------------------------------------------------
+echo "--- The public site ---"
+
+for path in / /en /tarifs /pricing /outils/compresser-pdf /tools/compress-pdf /console /sitemap.xml /robots.txt /og.png; do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$path")
+  check "GET $path" 200 "$CODE"
+done
+
+# The root belongs to the public; the console kept every one of its views
+curl -s -o "$TMP_DIR/home.html" "$BASE_URL/"
+check_contains "the root is the public site, not the console" "$TMP_DIR/home.html" "AI SmartTalk <strong>Documents</strong>"
+check_absent "and no longer announces the stack to a visitor" "$TMP_DIR/home.html" "SERVICE INTERNE"
+curl -s -o "$TMP_DIR/console.html" "$BASE_URL/console"
+check_contains "the console is intact at its own address" "$TMP_DIR/console.html" 'id="view-console"'
+
+# Where the home pages used to live must redirect, never serve a second copy
+for pair in "/outils 308" "/tools 308"; do
+  set -- $pair
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL$1")
+  check "$1 redirects instead of duplicating" "$2" "$CODE"
+done
+
+# A tool page carries what a search engine needs to rank and display it
+curl -s -o "$TMP_DIR/tool.html" "$BASE_URL/outils/compresser-pdf"
+check_contains "the title leads with the search phrase" "$TMP_DIR/tool.html" "<title>Compresser PDF en ligne"
+check_contains "a canonical, absolute" "$TMP_DIR/tool.html" 'rel="canonical" href="https://'
+check_contains "an alternate pointing at the same tool in English" "$TMP_DIR/tool.html" '/tools/compress-pdf'
+check_contains "structured data saying it is a tool" "$TMP_DIR/tool.html" '"@type":"SoftwareApplication"'
+check_contains "a breadcrumb for the results page" "$TMP_DIR/tool.html" '"@type":"BreadcrumbList"'
+check_contains "questions answered in the page" "$TMP_DIR/tool.html" '"@type":"FAQPage"'
+check_contains "an image for when the link is shared" "$TMP_DIR/tool.html" 'og:image'
+check_absent "and no HTML entity mangling the URLs" "$TMP_DIR/tool.html" 'href="https:&#x2F;'
+
+# The action comes before the prose: the drop zone must precede the explanation
+python3 - "$TMP_DIR/tool.html" <<'PY' && { green "  ✓ the drop zone comes before the how-it-works text"; PASS=$((PASS + 1)); } || { red "  ✗ the explanation still precedes the drop zone"; FAIL=$((FAIL + 1)); }
+import sys
+html = open(sys.argv[1], encoding='utf-8').read()
+drop, steps = html.find('data-role="drop"'), html.find('Comment ça marche')
+sys.exit(0 if drop != -1 and (steps == -1 or drop < steps) else 1)
+PY
+
+# The sitemap is how forty-odd pages get discovered at all
+curl -s -o "$TMP_DIR/sitemap.xml" "$BASE_URL/sitemap.xml"
+check_contains "the sitemap declares its alternates" "$TMP_DIR/sitemap.xml" 'hreflang="en"'
+check_contains "and a modification date" "$TMP_DIR/sitemap.xml" "<lastmod>"
+URLS=$(grep -c "<loc>" "$TMP_DIR/sitemap.xml")
+if [ "$URLS" -ge 44 ]; then
+  green "  ✓ the sitemap lists $URLS URLs"; PASS=$((PASS + 1))
+else
+  red "  ✗ the sitemap lists only $URLS URLs, expected at least 44"; FAIL=$((FAIL + 1))
+fi
+
+# Documents produced for identified callers are not public pages
+curl -s -o "$TMP_DIR/robots.txt" "$BASE_URL/robots.txt"
+check_contains "robots.txt keeps /download out of every index" "$TMP_DIR/robots.txt" "Disallow: /download/"
+check_contains "and points at the sitemap" "$TMP_DIR/robots.txt" "Sitemap: https://"
+
+# A dead link is a person who wanted a tool, not a JSON error
+CODE=$(curl -s -o "$TMP_DIR/404.html" -w "%{http_code}" -H "Accept: text/html" "$BASE_URL/outils/nexiste-pas")
+check "an unknown tool page → 404" 404 "$CODE"
+check_contains "and offers the other tools instead" "$TMP_DIR/404.html" "tool-card"
+check_contains "while asking not to be indexed" "$TMP_DIR/404.html" "noindex"
+CODE=$(curl -s -o "$TMP_DIR/404.json" -w "%{http_code}" -H "Accept: application/json" "$BASE_URL/api/nexiste-pas")
+check "an unknown API path → 404" 404 "$CODE"
+check_contains "and stays JSON for an integration" "$TMP_DIR/404.json" '"error"'
+
+# The card that shows up when a link is shared, rendered by the engine itself
+curl -s -o "$TMP_DIR/og.png" "$BASE_URL/og.png"
+check_png "the social card is a real image" "$TMP_DIR/og.png"
+echo
+
+# -----------------------------------------------------------
 # 1. Health check
 # -----------------------------------------------------------
 echo "--- GET /api/health ---"

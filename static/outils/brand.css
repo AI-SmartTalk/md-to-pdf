@@ -947,3 +947,350 @@ select { cursor: pointer; }
 }
 .api-key-row label { font-weight: 600; color: var(--text-dim); }
 .api-key-row input { flex: 1 1 200px; font-size: 12px; padding: 6px 9px; }
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   Le site grand public
+
+   Ajouté après la bascule de la racine : le visiteur qui tape le domaine tombe
+   désormais ici, et non plus sur la console. Tout ce qui suit sert une seule
+   règle — un fichier avant une phrase — et se lit d'abord en clair, le sombre
+   restant une préférence et non le défaut.
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────── le héros et le dépôt ─────────────────────────── */
+
+.hero-drop .wrap { padding-top: 44px; padding-bottom: 40px; }
+.hero-drop h1 { max-width: 20ch; margin-bottom: 22px; }
+.hero-short { padding: 40px 0 8px; position: relative; }
+.hero-short h1 { max-width: 22ch; }
+
+@media (min-width: 720px) {
+  .hero-drop .wrap { padding-top: 58px; padding-bottom: 52px; }
+  .hero-drop h1 { margin-bottom: 26px; }
+}
+
+.drop-hero { max-width: 760px; }
+
+/* La zone de dépôt est l'élément principal de la page : elle en a la taille. */
+.dropzone-lg {
+  padding: 42px 20px;
+  border-width: 2px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.dropzone-lg strong { font-size: 17px; }
+.dropzone-lg span { color: var(--text-dim); font-size: 14px; }
+.dropzone-lg .drop-icon { color: var(--accent); line-height: 0; margin-bottom: 4px; }
+
+@media (min-width: 720px) { .dropzone-lg { padding: 56px 24px; } }
+
+.drop-hint {
+  margin-top: 12px;
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+
+/* ── ce que le service propose une fois qu'il a lu le fichier ────────────────
+   L'étape que les concurrents imposent — choisir l'outil avant de déposer —
+   est ici remplacée par une proposition, faite après lecture des octets. */
+.suggest { margin-top: 18px; display: grid; gap: 12px; }
+.suggest-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.suggest-head strong { font-size: 15px; }
+.suggest-head span { font-size: 13px; color: var(--text-dim); }
+.suggest-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+.suggest-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r);
+  color: inherit;
+  transition: border-color .16s var(--ease), transform .16s var(--ease);
+}
+.suggest-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+.suggest-card.is-primary {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: var(--tint-soft);
+}
+.suggest-card svg { color: var(--accent); flex: none; margin-top: 1px; }
+.suggest-card b { display: block; font-size: 14.5px; }
+.suggest-card em { display: block; font-style: normal; font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
+
+/* ────────────────────────────── la réassurance ────────────────────────────── */
+
+.trust-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-top: 20px;
+  list-style: none;
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+.trust-bar li { display: inline-flex; align-items: center; gap: 7px; }
+.trust-bar svg { color: var(--ok); flex: none; }
+.trust-bar.compact { margin: 14px 0 0; font-size: 12.5px; gap: 8px 18px; }
+
+/* ─────────────────────────────── les outils ──────────────────────────────── */
+
+/* La couleur vient de la catégorie, portée par le groupe : cinq familles
+   reconnaissables valent mieux que vingt-et-une teintes qu'on ne retient pas. */
+.tool-group { --cat: var(--accent); }
+.tool-group[data-group^="optimis"] { --cat: #2ea3a3; }
+.tool-group[data-group^="organis"] { --cat: #4b7bec; }
+.tool-group[data-group^="convert"] { --cat: #8b5cf6; }
+.tool-group[data-group^="edit"],
+.tool-group[data-group^="modifi"] { --cat: #d98324; }
+.tool-group[data-group^="secur"],
+.tool-group[data-group^="sécur"] { --cat: #c94f6d; }
+
+.tool-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  color: var(--cat, var(--accent));
+  background: color-mix(in srgb, var(--cat, var(--accent)) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cat, var(--accent)) 26%, transparent);
+  margin-bottom: 4px;
+}
+.tool-card h4 { font-size: 15px; font-weight: 650; }
+.tool-card p {
+  font-size: 13px;
+  color: var(--text-dim);
+  /* Trois lignes suffisent à décider ; au-delà la grille cesse d'être scannable. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tool-card:hover .tool-card-icon {
+  background: color-mix(in srgb, var(--cat, var(--accent)) 20%, transparent);
+}
+
+.tool-hero { padding: 6px 0 22px; }
+.tool-hero h1 { margin-top: 10px; }
+.tool-hero .lede { max-width: 62ch; }
+.tool-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: var(--accent);
+  background: var(--tint);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+/* ──────────────────────────────── le menu ────────────────────────────────── */
+
+.megamenu { position: relative; }
+.megamenu > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 6px 2px;
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 500;
+}
+.megamenu > summary::-webkit-details-marker { display: none; }
+.megamenu > summary::after {
+  content: "";
+  display: inline-block;
+  width: 6px; height: 6px;
+  margin-left: 7px;
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+.megamenu[open] > summary::after { transform: translateY(1px) rotate(-135deg); }
+.megamenu > summary:hover { color: var(--text); }
+
+.megamenu-panel {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 12px);
+  left: -14px;
+  display: grid;
+  gap: 20px 30px;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  padding: 20px 22px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  min-width: 380px;
+}
+@media (min-width: 900px) {
+  .megamenu-panel { grid-template-columns: repeat(3, minmax(150px, 1fr)); min-width: 560px; }
+}
+.megamenu-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+.megamenu-group ul { list-style: none; display: grid; gap: 5px; }
+.megamenu-group a { font-size: 13.5px; color: var(--text-dim); }
+.megamenu-group a:hover { color: var(--accent); }
+
+/* Sur mobile le panneau se déplie dans le flux : un menu flottant plus large que
+   l'écran est un menu qu'on ne peut pas fermer. */
+@media (max-width: 720px) {
+  .megamenu-panel {
+    position: static;
+    min-width: 0;
+    box-shadow: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 10px;
+  }
+}
+
+/* ─────────────────────────── boutons et réglages ─────────────────────────── */
+
+.btn.lg { font-size: 15.5px; padding: 13px 22px; }
+.btn.sm { font-size: 13px; padding: 6px 12px; }
+.btn.block { display: flex; width: 100%; }
+
+.params-fold { margin-top: 14px; }
+.params-fold > summary {
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  padding: 6px 0;
+}
+.params-fold > summary:hover { color: var(--text); }
+.params-fold[open] > summary { margin-bottom: 6px; }
+
+/* ─────────────────────────────── les preuves ─────────────────────────────── */
+
+.proof-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+.proof-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r);
+}
+.proof-card svg { color: var(--ok); flex: none; margin-top: 2px; }
+.proof-card p { font-size: 13.5px; color: var(--text-dim); }
+
+/* ───────────────────────── l'autre public, en bas ────────────────────────── */
+
+.dev-strip {
+  display: grid;
+  gap: 22px;
+  align-items: center;
+  padding: 24px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-lg);
+}
+@media (min-width: 900px) { .dev-strip { grid-template-columns: 1fr 1fr; padding: 30px; } }
+.dev-strip h2 { font-size: 22px; margin: 8px 0 10px; }
+.dev-strip p { color: var(--text-dim); font-size: 14.5px; }
+.dev-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.dev-snippet {
+  overflow-x: auto;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--text-dim);
+}
+
+/* ──────────────────────────────── les tarifs ─────────────────────────────── */
+
+.plan-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  align-items: start;
+}
+.plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 22px 20px;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-lg);
+}
+.plan-card.featured {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow: var(--shadow);
+}
+.plan-flag {
+  position: absolute;
+  top: -11px; left: 20px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: #04121a;
+  background: var(--accent);
+}
+:root[data-theme="dark"] .plan-flag { color: #04121a; }
+.plan-card h2 { font-size: 17px; }
+.plan-price { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.plan-price strong { font-size: 30px; letter-spacing: -.02em; }
+.plan-price span { font-size: 12.5px; color: var(--text-faint); }
+.plan-pitch { font-size: 13.5px; color: var(--text-dim); }
+.plan-features { list-style: none; display: grid; gap: 8px; margin-top: 2px; }
+.plan-features li { display: flex; align-items: flex-start; gap: 9px; font-size: 13.5px; }
+.plan-features svg { color: var(--ok); flex: none; margin-top: 2px; }
+.plan-card .btn { margin-top: auto; }
+.plan-note { max-width: 68ch; margin-top: 18px; }
+
+/* ──────────────────────────────── le pied ────────────────────────────────── */
+
+.footer-links { list-style: none; display: grid; gap: 6px; }
+.footer-links a { font-size: 13.5px; color: var(--text-dim); }
+.footer-links a:hover { color: var(--accent); }
+
+/* ─────────────────────────────── le tactile ──────────────────────────────── */
+
+/* Un doigt n'est pas un curseur : sous 40 px, une cible se rate une fois sur
+   trois. Les deux commandes concernées sont dans l'en-tête, donc sur le chemin
+   de tout le monde. La règle ne s'applique qu'aux pointeurs grossiers pour ne
+   pas alourdir la barre au clavier et à la souris. */
+@media (pointer: coarse) {
+  .site-header .icon-btn,
+  .site-header .btn.sm,
+  .site-header .lang-switch {
+    min-height: 40px;
+    min-width: 40px;
+  }
+  .megamenu > summary { padding: 10px 2px; }
+  .megamenu-group a { display: block; padding: 5px 0; }
+  .footer-links a { display: block; padding: 4px 0; }
+}
+.plan-price-words strong { font-size: 21px; letter-spacing: 0; }

@@ -1,0 +1,98 @@
+{# Un jeu d'icônes en SVG inline. Aucune dépendance externe : le site doit rester
+   utilisable hors ligne, et une icône chargée depuis un CDN est une requête de plus sur
+   la page qui décide de la conversion.
+
+   Toutes partagent la même grammaire — 24×24, trait de 1.6, `currentColor`, extrémités
+   arrondies — pour que la grille se lise comme un seul jeu et non comme une collection.
+   La couleur vient de la catégorie, portée par la carte, jamais par l'icône elle-même. #}
+
+{% macro tool(name) %}
+<svg class="tool-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"
+     fill="none" stroke="currentColor" stroke-width="1.6"
+     stroke-linecap="round" stroke-linejoin="round">
+{%- if name == "compress" -%}
+  <path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/><path d="M8 12h8"/>
+{%- elif name == "merge" -%}
+  <path d="M4 4h6v6H4zM14 14h6v6h-6z"/><path d="M10 7h4a3 3 0 013 3v4"/><path d="M15 12l2 2 2-2"/>
+{%- elif name == "split" -%}
+  <path d="M12 3v18"/><path d="M4 7h5M4 17h5M15 7h5M15 17h5" stroke-dasharray="0.1 3.4"/>
+  <path d="M7 4h2v16H7zM15 4h2v16h-2z"/>
+{%- elif name == "extract" -%}
+  <path d="M5 4h8l4 4v6"/><path d="M13 4v4h4"/><path d="M9 14h11"/><path d="M17 11l3 3-3 3"/>
+{%- elif name == "delete-pages" -%}
+  <path d="M6 4h8l4 4v12H6z"/><path d="M14 4v4h4"/><path d="M9 14h6"/>
+{%- elif name == "organize" -%}
+  <path d="M3 5h6v6H3zM15 5h6v6h-6zM3 15h6v6H3z"/><path d="M18 15v6M15 18h6"/>
+{%- elif name == "rotate" -%}
+  <path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 4v5h-5"/>
+{%- elif name == "crop" -%}
+  <path d="M6 2v14a2 2 0 002 2h14"/><path d="M2 6h14a2 2 0 012 2v14"/>
+{%- elif name == "number" -%}
+  <path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M10 17h4"/><path d="M11 13v4"/>
+{%- elif name == "watermark" -%}
+  <path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>
+  <path d="M8.5 16.5l7-7" stroke-dasharray="2 2"/><path d="M10 18l6-6" stroke-dasharray="2 2"/>
+{%- elif name == "lock" -%}
+  <rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/>
+  <path d="M12 15v2"/>
+{%- elif name == "unlock" -%}
+  <rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 017.5-2"/>
+  <path d="M12 15v2"/>
+{%- elif name == "repair" -%}
+  <path d="M14.5 4.5a4 4 0 015 5L9 20l-5 1 1-5z"/><path d="M13 6l5 5"/>
+{%- elif name == "ocr" -%}
+  <path d="M4 8V5a1 1 0 011-1h3M20 8V5a1 1 0 00-1-1h-3M4 16v3a1 1 0 001 1h3M20 16v3a1 1 0 01-1 1h-3"/>
+  <path d="M8 15l2.5-6 2.5 6M9 13h3"/><path d="M15 9v6"/>
+{%- elif name == "office" -%}
+  <path d="M13 3H6a1 1 0 00-1 1v16a1 1 0 001 1h12a1 1 0 001-1V9z"/><path d="M13 3v6h6"/>
+  <path d="M9 13l1.5 5L12 14l1.5 4L15 13"/>
+{%- elif name == "word" -%}
+  <path d="M13 3H6a1 1 0 00-1 1v16a1 1 0 001 1h12a1 1 0 001-1V9z"/><path d="M13 3v6h6"/>
+  <path d="M8 13l1.3 4L11 13.5 12.7 17 14 13"/>
+{%- elif name == "image" -%}
+  <rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/>
+  <path d="M21 16l-5-5-5.5 5.5L8 14l-5 4"/>
+{%- elif name == "image-to-doc" -%}
+  <rect x="3" y="4" width="9" height="8" rx="1.5"/><path d="M3 10l3-2.5L8.5 10"/>
+  <path d="M16 8h2l3 3v9a1 1 0 01-1 1h-7a1 1 0 01-1-1v-2"/><path d="M18 8v3h3"/>
+{%- elif name == "redact" -%}
+  <path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>
+  <rect x="8.5" y="11" width="7" height="2.4" rx=".4" fill="currentColor" stroke="none"/>
+  <rect x="8.5" y="15.5" width="4.5" height="2.4" rx=".4" fill="currentColor" stroke="none"/>
+{%- elif name == "archive" -%}
+  <rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 001 1h12a1 1 0 001-1V9"/>
+  <path d="M10 13h4"/>
+{%- elif name == "markdown" -%}
+  <rect x="2.5" y="6" width="19" height="12" rx="2"/>
+  <path d="M6 15v-6l2.5 3L11 9v6"/><path d="M15 9v4M15 13l2 2 2-2"/>
+{%- elif name == "sign" -%}
+  <path d="M3 18c3 0 3-9 6-9s3 7 5 7 2-4 4-4"/><path d="M3 21h18"/>
+{%- else -%}
+  {# Repli : un document. Une icône manquante ne doit jamais laisser un trou dans la grille. #}
+  <path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h4"/>
+{%- endif -%}
+</svg>
+{% endmacro tool %}
+
+{# Les pictogrammes de réassurance : plus petits, plus discrets, même grammaire. #}
+{% macro trust(name) %}
+<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"
+     fill="none" stroke="currentColor" stroke-width="1.7"
+     stroke-linecap="round" stroke-linejoin="round">
+{%- if name == "clock" -%}
+  <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+{%- elif name == "shield" -%}
+  <path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/>
+{%- elif name == "no-watermark" -%}
+  <path d="M5 5h14v14H5z"/><path d="M4 20L20 4"/>
+{%- elif name == "flag" -%}
+  <path d="M5 21V4h14l-3 4 3 4H5"/>
+{%- elif name == "check" -%}
+  <path d="M4 12.5l5 5L20 6.5"/>
+{%- elif name == "warn" -%}
+  <path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.5"/>
+{%- else -%}
+  <circle cx="12" cy="12" r="9"/>
+{%- endif -%}
+</svg>
+{% endmacro trust %}

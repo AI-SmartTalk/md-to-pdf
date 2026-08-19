@@ -90,18 +90,27 @@ fn rocket() -> _ {
             "/",
             routes![
                 routes::legacy::convert,
-                routes::site::index_fr,
+                // The root belongs to the visitor who typed the domain
+                routes::site::home_fr,
+                routes::site::home_en,
                 routes::site::tool_fr,
-                routes::site::index_en,
                 routes::site::tool_en,
+                routes::site::pricing_fr,
+                routes::site::pricing_en,
+                // Where the home pages used to live
+                routes::site::index_fr_moved,
+                routes::site::index_en_moved,
+                // The integrator console, unchanged, at its own address
+                routes::site::console,
                 routes::site::sitemap,
                 routes::site::robots,
+                routes::site::og_image,
             ],
         )
         // Static files
         .mount("/static", FileServer::from("static"))
-        // Landing page, API reference and test console at the service root.
-        // Ranked below every declared route so /api and /download always win.
+        // Assets the console and the public site reference from the root (favicon, …).
+        // Ranked below every declared route so /, /api and /download always win.
         .mount("/", FileServer::from("static").rank(20))
         // Download saved PDFs
         .mount("/download", routes![routes::download::download_pdf])

@@ -147,6 +147,10 @@ pub struct AssetMeta {
     /// Page count, when the kind has pages and counting one was cheap
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pages: Option<usize>,
+    /// Whether a PDF carries a selectable text layer. `None` when the question does not
+    /// apply or could not be answered — never guessed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_text: Option<bool>,
     pub created_at: String,
     pub expires_at: String,
     /// Unix seconds, kept for the purge; the two strings above are for humans
@@ -464,6 +468,11 @@ pub fn store_as(
         _ => None,
     };
 
+    let has_text = match kind {
+        AssetKind::Pdf => has_text_layer(&stored),
+        _ => None,
+    };
+
     let now = now_unix();
     let expires_unix = now + config().asset_ttl.as_secs();
     let meta = AssetMeta {
@@ -472,6 +481,7 @@ pub fn store_as(
         kind,
         bytes: bytes_len,
         pages,
+        has_text,
         created_at: rfc3339(now),
         expires_at: rfc3339(expires_unix),
         expires_unix,
@@ -480,6 +490,35 @@ pub fn store_as(
 
     write_meta(&dir, &meta)?;
     Ok(meta)
+}
+
+/// Does this PDF carry a text layer a reader could select?
+///
+/// Answered on the first two pages only: the question is "is this a scan or a real
+/// document", and a scan is a scan from its first page. Two `pdftotext` pages cost a few
+/// milliseconds, and they are what lets the home page propose OCR to someone who dropped a
+/// photocopy — instead of making them guess which of twenty-one tools they need.
+///
+/// `None` means "could not tell", never "no": a wrong `false` here would push somebody
+/// towards an OCR pass their document did not need.
+fn has_text_layer(pdf: &Path) -> Option<bool> {
+    let output = helpers::run_capture(
+        std::process::Command::new("pdftotext")
+            .arg("-q")
+            .arg("-l")
+            .arg("2")
+            .arg(helpers::path_to_str(pdf).ok()?)
+            .arg("-"),
+        "pdftotext",
+        "text detection failed",
+    )
+    .ok()?;
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    // A handful of stray glyphs is what a scanner's header leaves behind; it is not a text
+    // layer. Sixteen characters is low enough to catch a sparse cover page and high enough
+    // to reject that noise.
+    Some(text.chars().filter(|c| !c.is_whitespace()).count() >= 16)
 }
 
 fn read_head(path: &Path, limit: usize) -> Result<Vec<u8>, AppError> {
@@ -868,6 +907,7 @@ mod tests {
             kind: AssetKind::Pdf,
             bytes: 1024,
             pages: Some(3),
+            has_text: Some(true),
             created_at: rfc3339(0),
             expires_at: rfc3339(7200),
             expires_unix: 7200,
