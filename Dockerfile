@@ -29,6 +29,19 @@ RUN apt-get update \
       poppler-utils \
       qpdf \
       curl \
+      # Ingestion of documents the service did not produce. Each one is a parser that will
+      # be handed hostile bytes, which is why every call site pins what it can: Ghostscript
+      # always runs with -dSAFER, LibreOffice with a throwaway profile seeded to refuse
+      # remote references and macros (src/routes/office.rs), ocrmypdf with a page ceiling.
+      #
+      # None of that isolates the processes: they keep this container's network stack and
+      # filesystem. The worker container of PLAN-METAMORPHOSE.md §5.2 is what closes that,
+      # and it does not exist yet — see REVUE-LOT-B.md, constat B3.
+      ghostscript \
+      ocrmypdf tesseract-ocr tesseract-ocr-fra tesseract-ocr-eng tesseract-ocr-deu tesseract-ocr-spa tesseract-ocr-ita \
+      libreoffice-writer libreoffice-calc libreoffice-impress \
+      img2pdf \
+      fonts-dejavu fonts-liberation2 \
  && rm -rf /var/lib/apt/lists/* \
  # https://stackoverflow.com/questions/75608323/how-do-i-solve-error-externally-managed-environment-every-time-i-use-pip-3
  && pip3 install --no-cache-dir --break-system-packages weasyprint \

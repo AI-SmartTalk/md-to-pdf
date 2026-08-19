@@ -3,7 +3,7 @@
 //! The same analysis the renderer runs on itself when `autolayout` is asked for, exposed on
 //! its own so a document produced elsewhere can be checked before it is sent to a client.
 
-use crate::auth::ApiKey;
+use crate::auth::PublicOrKey;
 use crate::exec;
 use crate::helpers;
 use crate::obs::{self, RequestId};
@@ -21,11 +21,11 @@ pub struct LayoutRequest {
 
 #[post("/layout", format = "json", data = "<req>")]
 pub async fn analyze_layout(
-    _key: ApiKey,
+    _key: PublicOrKey,
     trace: RequestId,
     req: Json<LayoutRequest>,
 ) -> Result<Json<LayoutReport>, AppError> {
-    let source = helpers::resolve_pdf_path(&req.into_inner().pdf)?;
+    let source = helpers::resolve_pdf_source(&req.into_inner().pdf)?;
 
     let started = Instant::now();
     let report = match exec::offload(move || crate::layout::analyze(&source)).await {

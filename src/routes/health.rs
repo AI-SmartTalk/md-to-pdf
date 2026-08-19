@@ -2,6 +2,18 @@ use crate::helpers;
 use crate::types::HealthResponse;
 use rocket::serde::json::Json;
 
+/// External binaries a whole family of endpoints depends on. Reporting them is not
+/// decoration: an image built without Ghostscript answers 200 on every probe and 500 on
+/// every compression, and the only way to tell the two deployments apart is to ask.
+const CAPABILITIES: [(&str, &str); 6] = [
+    ("compress", "gs"),
+    ("pdfa", "gs"),
+    ("ocr", "ocrmypdf"),
+    ("office", "soffice"),
+    ("images-to-pdf", "img2pdf"),
+    ("pages", "qpdf"),
+];
+
 /// Unauthenticated on purpose: this is what the container healthcheck polls.
 #[get("/health")]
 pub fn health() -> Json<HealthResponse> {
@@ -12,6 +24,12 @@ pub fn health() -> Json<HealthResponse> {
         .map(|bin| bin.to_string())
         .collect();
 
+    let capabilities: Vec<String> = CAPABILITIES
+        .iter()
+        .filter(|(_, binary)| helpers::binary_available(binary))
+        .map(|(name, _)| name.to_string())
+        .collect();
+
     let core_tools_present =
         helpers::binary_available("pandoc") && helpers::binary_available("weasyprint");
 
@@ -19,5 +37,6 @@ pub fn health() -> Json<HealthResponse> {
         status: if core_tools_present { "ok" } else { "degraded" }.to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         engines,
+        capabilities: Some(capabilities),
     })
 }

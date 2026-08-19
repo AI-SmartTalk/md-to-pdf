@@ -5,8 +5,24 @@ use crate::types::AppError;
 use rocket::tokio::sync::Semaphore;
 use rocket::tokio::task::spawn_blocking;
 use rocket::tokio::time::timeout;
+use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
+
+rocket::tokio::task_local! {
+    /// Key name the request being served presented, for as long as it is being served
+    static OWNER: String;
+}
+
+/// Attribute everything `future` offloads to `owner`.
+///
+/// A tool's output belongs to the caller as much as their upload does, but the code that
+/// stores it sits far below the handler and has no key to hand it. Rather than thread an
+/// owner through every request type — where a caller could forge it — a handler declares it
+/// once here, and `offload` carries it across to the blocking thread.
+pub async fn as_owner<F: Future>(owner: &str, future: F) -> F::Output {
+    OWNER.scope(owner.to_string(), future).await
+}
 
 static QUEUE_DEPTH: AtomicU64 = AtomicU64::new(0);
 static IN_FLIGHT: AtomicU64 = AtomicU64::new(0);
@@ -38,6 +54,9 @@ where
     T: Send + 'static,
 {
     let queue_timeout = config().queue_timeout;
+    // Read on the async side, where the task-local lives, and carried by value: the blocking
+    // thread is not the task, and cannot look it up for itself.
+    let owner = OWNER.try_with(|owner| owner.clone()).ok();
 
     let permit = {
         // The guard also covers the client hanging up while queued, which drops this future
@@ -71,6 +90,8 @@ where
         // One deadline for the whole job: per-process limits do not compose, and a job
         // that outlives the proxy timeout keeps its slot for a client that already left.
         let _budget = helpers::Budget::start(config().render_deadline);
+        // Anything this job stores belongs to the key that asked for it
+        let _owner = owner.as_deref().map(crate::assets::owned_by);
         f()
     })
     .await;

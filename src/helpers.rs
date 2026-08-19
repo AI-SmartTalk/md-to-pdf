@@ -322,9 +322,46 @@ fn apply_latex_sandbox(cmd: &mut Command) {
         .arg("--pdf-engine-opt=-no-shell-escape");
 }
 
+/// Variables a child process genuinely needs. Everything else is left behind.
+const INHERITED_ENV: [&str; 6] = ["PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TERM"];
+
+/// Hand a child only the environment it needs.
+///
+/// Until this service accepted uploads, every process it spawned worked on content it had
+/// written itself. Now Ghostscript, LibreOffice and Tesseract parse bytes chosen by
+/// strangers — and they inherited the whole environment of the service, `API_KEY`,
+/// `ATTESTATION_SECRET` and the log420 token included. Ghostscript has a history of sandbox
+/// escapes and LibreOffice runs macros; making sure whatever runs in there finds nothing
+/// worth stealing costs a dozen lines.
+///
+/// Variables the caller set on the command survive, and win: that is how the urlguard
+/// policy and the TeX lockdown reach the child.
+fn sanitize_env(cmd: &mut Command) {
+    let explicit: Vec<(OsString, Option<OsString>)> = cmd
+        .get_envs()
+        .map(|(key, value)| (key.to_os_string(), value.map(|value| value.to_os_string())))
+        .collect();
+
+    cmd.env_clear();
+
+    for key in INHERITED_ENV {
+        if let Some(value) = env::var_os(key) {
+            cmd.env(key, value);
+        }
+    }
+
+    for (key, value) in explicit {
+        match value {
+            Some(value) => cmd.env(key, value),
+            None => cmd.env_remove(key),
+        };
+    }
+}
+
 /// Spawn a command with piped stdio and wait for it under the global timeout
 fn run_command(cmd: &mut Command, label: &str) -> Result<Output, AppError> {
     budget_check(label)?;
+    sanitize_env(cmd);
 
     let child = cmd
         .stdout(Stdio::piped())
@@ -600,6 +637,7 @@ pub fn run_pandoc(
         .stderr(Stdio::piped());
 
     budget_check("pandoc")?;
+    sanitize_env(&mut cmd);
 
     let child = cmd.spawn().map_err(|e| {
         error!("Failed to spawn pandoc: {}", e);
@@ -683,27 +721,6 @@ pub fn save_pdf(pdf_path: &Path, client_id: &str, pdf_name: &str) -> Result<Stri
     Ok(format!("/download/{}/{}", client_id, final_pdf_name))
 }
 
-/// Hand a produced PDF back the way every route does: the file itself, or the JSON
-/// `download_url` when the caller asked for it to be saved.
-pub async fn deliver(
-    pdf: tempfile::TempPath,
-    download_url: Option<String>,
-) -> Result<
-    rocket::Either<rocket::fs::NamedFile, rocket::serde::json::Json<ConvertResponse>>,
-    AppError,
-> {
-    match download_url {
-        Some(url) => Ok(rocket::Either::Right(rocket::serde::json::Json(
-            ConvertResponse::new(url),
-        ))),
-        None => Ok(rocket::Either::Left(
-            rocket::fs::NamedFile::open(&pdf)
-                .await
-                .map_err(AppError::Io)?,
-        )),
-    }
-}
-
 /// Save the PDF when the caller named a destination. Filesystem work like the tool run it
 /// follows, so it belongs on the same blocking thread.
 pub fn save_if_requested(
@@ -715,6 +732,55 @@ pub fn save_if_requested(
         (Some(client_id), Some(pdf_name)) => Ok(Some(save_pdf(pdf, &client_id, &pdf_name)?)),
         _ => Ok(None),
     }
+}
+
+/// Decide what a tool hands back, from inside the blocking closure that produced it.
+///
+/// The three destinations are not exclusive by accident: a caller can want the file saved
+/// under a stable download URL *and* an asset handle to feed the next tool. What is
+/// exclusive is streaming the binary, which only happens when nothing else was asked for.
+///
+/// `save_if_requested` runs first because `assets::store` moves the file away.
+pub fn finish_tool(
+    produced: &Path,
+    client_id: Option<String>,
+    pdf_name: Option<String>,
+    output: ToolOutput,
+    name_hint: &str,
+) -> Result<ToolResponse, AppError> {
+    let download_url = save_if_requested(produced, client_id, pdf_name)?;
+
+    let asset = match output {
+        ToolOutput::Asset => Some(crate::assets::store(produced, name_hint)?),
+        ToolOutput::Binary => None,
+    };
+
+    Ok(ToolResponse {
+        download_url,
+        asset,
+        ..Default::default()
+    })
+}
+
+/// Hand a tool result back: JSON when the caller asked for a URL or an asset, the file
+/// itself otherwise. Mirrors `deliver`, which the older routes keep using.
+pub async fn deliver_tool(
+    produced: tempfile::TempPath,
+    response: ToolResponse,
+) -> Result<rocket::Either<rocket::fs::NamedFile, rocket::serde::json::Json<ToolResponse>>, AppError>
+{
+    let wants_json =
+        response.download_url.is_some() || response.asset.is_some() || response.assets.is_some();
+
+    if wants_json {
+        return Ok(rocket::Either::Right(rocket::serde::json::Json(response)));
+    }
+
+    Ok(rocket::Either::Left(
+        rocket::fs::NamedFile::open(&produced)
+            .await
+            .map_err(AppError::Io)?,
+    ))
 }
 
 /// Resolution the preview has always been rendered at
@@ -762,6 +828,40 @@ pub fn resolve_pdf_path(url: &str) -> Result<PathBuf, AppError> {
     Ok(canonical)
 }
 
+/// Resolve any reference a caller may hand us to a file on disk.
+///
+/// Two forms are accepted, and the order matters only for readability: `asset://as_…` for
+/// something that was uploaded, and `/download/<client_id>/<name>.pdf` for something this
+/// service produced. The second form is `resolve_pdf_path` untouched — every route that
+/// existed before uploads did keeps working byte for byte, which is the whole point of
+/// adding a function rather than changing one.
+pub fn resolve_source(reference: &str) -> Result<PathBuf, AppError> {
+    match crate::assets::strip_scheme(reference) {
+        Some(id) => crate::assets::path(id),
+        None => resolve_pdf_path(reference),
+    }
+}
+
+/// Same, plus the guarantee that what came back is a PDF.
+///
+/// An asset can be a spreadsheet or a photograph. Handing one of those to qpdf produces a
+/// confusing parser error three layers down; saying so here produces a 400 the caller can
+/// act on.
+pub fn resolve_pdf_source(reference: &str) -> Result<PathBuf, AppError> {
+    if let Some(id) = crate::assets::strip_scheme(reference) {
+        let meta = crate::assets::meta(id)?;
+        if meta.kind != crate::assets::AssetKind::Pdf {
+            return Err(AppError::BadRequest(format!(
+                "Asset {} is a {} file, this endpoint needs a PDF",
+                meta.id,
+                meta.kind.as_str()
+            )));
+        }
+    }
+
+    resolve_source(reference)
+}
+
 fn non_utf8_path() -> AppError {
     AppError::BadRequest("Non UTF-8 path".to_string())
 }
@@ -769,6 +869,25 @@ fn non_utf8_path() -> AppError {
 /// Borrow a path as &str, turning a non UTF-8 path into a proper API error
 pub fn path_to_str(path: &Path) -> Result<&str, AppError> {
     path.to_str().ok_or_else(non_utf8_path)
+}
+
+/// `<prefix>_` followed by 32 hexadecimal characters drawn from the kernel.
+///
+/// Used for asset and job identifiers. No `uuid` and no `rand` crate: the production image
+/// is audited dependency by dependency, and this is sixteen bytes read from a file.
+pub fn random_id(prefix: &str) -> Result<String, AppError> {
+    const ID_BYTES: usize = 16;
+
+    let mut buf = [0u8; ID_BYTES];
+    fs::File::open("/dev/urandom")?.read_exact(&mut buf)?;
+
+    let mut id = String::with_capacity(prefix.len() + 1 + ID_BYTES * 2);
+    id.push_str(prefix);
+    id.push('_');
+    for byte in buf {
+        id.push_str(&format!("{:02x}", byte));
+    }
+    Ok(id)
 }
 
 /// Is an external tool actually installed in this image?
@@ -829,6 +948,49 @@ mod tests {
 
         assert_eq!(process_timeout(), configured);
         assert!(budget_check("pandoc").is_ok());
+    }
+
+    /// A parser fed hostile bytes must not find the service's secrets next to it
+    #[test]
+    fn a_child_process_does_not_inherit_the_service_secrets() {
+        std::env::set_var("API_KEY", "s3cr3t-for-the-test");
+        std::env::set_var("PATH", "/usr/bin:/bin");
+
+        let mut cmd = Command::new("true");
+        cmd.env("PDF_ALLOWED_URL_HOSTS", "example.com");
+        sanitize_env(&mut cmd);
+
+        let passed: Vec<(String, Option<String>)> = cmd
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|v| v.to_string_lossy().into_owned()),
+                )
+            })
+            .collect();
+
+        let value_of = |name: &str| {
+            passed
+                .iter()
+                .find(|(k, _)| k == name)
+                .and_then(|(_, v)| v.clone())
+        };
+
+        assert_eq!(
+            value_of("API_KEY"),
+            None,
+            "the API key must not reach a child"
+        );
+        // What the caller set explicitly still gets through, and still wins
+        assert_eq!(
+            value_of("PDF_ALLOWED_URL_HOSTS"),
+            Some("example.com".to_string())
+        );
+        // …and the child keeps what it needs to run at all
+        assert_eq!(value_of("PATH"), Some("/usr/bin:/bin".to_string()));
+
+        std::env::remove_var("API_KEY");
     }
 
     #[test]

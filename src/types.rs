@@ -162,11 +162,16 @@ pub struct PreviewRequest {
     pub footer_template: Option<String>,
 }
 
+// These three predate the ingestion socle. They gained one optional field, `output`, so a
+// caller can keep the result inside the service and feed it to the next tool. A body that
+// omits it behaves, and answers, exactly as it always has.
+
 #[derive(Deserialize)]
 pub struct MergeRequest {
     pub pdfs: Vec<String>,
     pub client_id: Option<String>,
     pub pdf_name: Option<String>,
+    pub output: Option<ToolOutput>,
 }
 
 #[derive(Deserialize)]
@@ -177,6 +182,7 @@ pub struct WatermarkRequest {
     pub angle: Option<f32>,
     pub client_id: Option<String>,
     pub pdf_name: Option<String>,
+    pub output: Option<ToolOutput>,
 }
 
 #[derive(Deserialize)]
@@ -185,6 +191,7 @@ pub struct ProtectRequest {
     pub password: String,
     pub client_id: Option<String>,
     pub pdf_name: Option<String>,
+    pub output: Option<ToolOutput>,
 }
 
 // ------------ JSON Response Types ------------
@@ -202,12 +209,126 @@ pub struct ConvertResponse {
     pub warnings: Option<Vec<BlockWarning>>,
 }
 
-impl ConvertResponse {
-    /// The historical response: a download URL and nothing else
-    pub fn new(download_url: String) -> ConvertResponse {
-        ConvertResponse {
-            download_url,
-            ..Default::default()
+// ------------ Tool responses ------------
+
+/// Where a tool should put what it produced.
+///
+/// Absent, the binary comes back as it always has. `asset` keeps the result inside the
+/// service so the next tool can pick it up without a round trip through the client — which
+/// is what makes a chain of five operations one upload instead of five.
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ToolOutput {
+    #[default]
+    Binary,
+    Asset,
+}
+
+/// Response of every tool added after the ingestion socle. The routes that predate it keep
+/// `ConvertResponse`, unchanged, because their clients parse it today.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ToolResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub download_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asset: Option<crate::assets::AssetMeta>,
+    /// A tool that produces several files — splitting a document, rasterising its pages
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assets: Option<Vec<crate::assets::AssetMeta>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pages: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verdict: Option<Verdict>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warnings: Option<Vec<String>>,
+}
+
+// ------------ Verdict ------------
+
+/// What the service thinks of what it just produced.
+///
+/// Every competitor hands back a file and lets the user discover, on opening it, that the
+/// compression ate the scan or the conversion lost a table. A verdict is the cheapest
+/// possible answer to that, and nobody else returns one.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Verdict {
+    /// `ok`, `warn` or `fail` — the worst status among the checks
+    pub status: String,
+    /// 0..=100, where 100 is an operation with nothing to report
+    pub score: u8,
+    /// One sentence a human can act on
+    pub summary: String,
+    pub checks: Vec<Check>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Check {
+    /// Stable identifier such as `text-preserved`, `page-count`, `ocr-confidence`
+    pub name: String,
+    /// `ok`, `warn` or `fail`
+    pub status: String,
+    pub detail: String,
+    /// 1-based page, when the check is about one page in particular
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<usize>,
+}
+
+impl Check {
+    pub fn ok(name: &str, detail: impl Into<String>) -> Check {
+        Check::new(name, "ok", detail, None)
+    }
+
+    pub fn warn(name: &str, detail: impl Into<String>) -> Check {
+        Check::new(name, "warn", detail, None)
+    }
+
+    pub fn fail(name: &str, detail: impl Into<String>) -> Check {
+        Check::new(name, "fail", detail, None)
+    }
+
+    pub fn new(name: &str, status: &str, detail: impl Into<String>, page: Option<usize>) -> Check {
+        Check {
+            name: name.to_string(),
+            status: status.to_string(),
+            detail: detail.into(),
+            page,
+        }
+    }
+
+    pub fn on_page(mut self, page: usize) -> Check {
+        self.page = Some(page);
+        self
+    }
+}
+
+impl Verdict {
+    /// Build a verdict from its checks. The score is deliberately blunt — a warning costs
+    /// 10, a failure 35 — because a score nobody can predict is a score nobody trusts.
+    pub fn from_checks(summary: impl Into<String>, checks: Vec<Check>) -> Verdict {
+        let mut score: i32 = 100;
+        let mut status = "ok";
+
+        for check in &checks {
+            match check.status.as_str() {
+                "warn" => {
+                    score -= 10;
+                    if status == "ok" {
+                        status = "warn";
+                    }
+                }
+                "fail" => {
+                    score -= 35;
+                    status = "fail";
+                }
+                _ => {}
+            }
+        }
+
+        Verdict {
+            status: status.to_string(),
+            score: score.clamp(0, 100) as u8,
+            summary: summary.into(),
+            checks,
         }
     }
 }
@@ -281,6 +402,10 @@ pub struct HealthResponse {
     pub status: String,
     pub version: String,
     pub engines: Vec<String>,
+    /// Families of endpoints whose external tool is installed. Absent on a deployment that
+    /// predates them, so a probe that only reads `status` is unaffected.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<Vec<String>>,
 }
 
 #[derive(Serialize)]

@@ -1,4 +1,4 @@
-use crate::auth::ApiKey;
+use crate::auth::PublicOrKey;
 use crate::exec;
 use crate::helpers;
 use crate::types::*;
@@ -11,9 +11,9 @@ use tempfile::{Builder, TempPath};
 
 #[post("/watermark", format = "json", data = "<req>")]
 pub async fn watermark(
-    _key: ApiKey,
+    key: PublicOrKey,
     req: Json<WatermarkRequest>,
-) -> Result<Either<NamedFile, Json<ConvertResponse>>, AppError> {
+) -> Result<Either<NamedFile, Json<ToolResponse>>, AppError> {
     let req = req.into_inner();
 
     let opacity = req.opacity.unwrap_or(0.06);
@@ -35,18 +35,24 @@ pub async fn watermark(
         text,
         client_id,
         pdf_name,
+        output,
         ..
     } = req;
+    let output = output.unwrap_or_default();
 
     // weasyprint then qpdf, both long blocking runs on a large document: they belong on a
     // render slot like every other tool, or two watermarks pin every tokio worker and the
     // healthcheck restarts a service that was merely busy.
-    let (output, download_url) =
-        exec::offload(move || overlay(&pdf, &text, opacity, angle, client_id, pdf_name)).await?;
+    let (produced, response) = exec::as_owner(
+        key.0,
+        exec::offload(move || overlay(&pdf, &text, opacity, angle, client_id, pdf_name, output)),
+    )
+    .await?;
 
-    helpers::deliver(output, download_url).await
+    helpers::deliver_tool(produced, response).await
 }
 
+#[allow(clippy::too_many_arguments)]
 fn overlay(
     pdf: &str,
     text: &str,
@@ -54,8 +60,9 @@ fn overlay(
     angle: f32,
     client_id: Option<String>,
     pdf_name: Option<String>,
-) -> Result<(TempPath, Option<String>), AppError> {
-    let source_path = helpers::resolve_pdf_path(pdf)?;
+    output: ToolOutput,
+) -> Result<(TempPath, ToolResponse), AppError> {
+    let source_path = helpers::resolve_pdf_source(pdf)?;
 
     // Create a watermark overlay PDF using weasyprint
     let watermark_html = format!(
@@ -123,8 +130,8 @@ body {{
         "Watermark overlay failed",
     )?;
 
-    let output = output_temp.into_temp_path();
-    let download_url = helpers::save_if_requested(&output, client_id, pdf_name)?;
+    let produced = output_temp.into_temp_path();
+    let response = helpers::finish_tool(&produced, client_id, pdf_name, output, "watermarked.pdf")?;
 
-    Ok((output, download_url))
+    Ok((produced, response))
 }

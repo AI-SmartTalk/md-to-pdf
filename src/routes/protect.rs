@@ -1,4 +1,4 @@
-use crate::auth::ApiKey;
+use crate::auth::PublicOrKey;
 use crate::exec;
 use crate::helpers;
 use crate::types::*;
@@ -11,9 +11,9 @@ use tempfile::{Builder, TempPath};
 
 #[post("/protect", format = "json", data = "<req>")]
 pub async fn protect(
-    _key: ApiKey,
+    key: PublicOrKey,
     req: Json<ProtectRequest>,
-) -> Result<Either<NamedFile, Json<ConvertResponse>>, AppError> {
+) -> Result<Either<NamedFile, Json<ToolResponse>>, AppError> {
     let req = req.into_inner();
 
     if req.password.is_empty() {
@@ -33,14 +33,19 @@ pub async fn protect(
         password,
         client_id,
         pdf_name,
+        output,
     } = req;
+    let output = output.unwrap_or_default();
 
     // qpdf on a large document is a long blocking run: it belongs on a render slot, not on
     // a tokio worker that `/api/health` needs.
-    let (output, download_url) =
-        exec::offload(move || encrypt(&pdf, &password, client_id, pdf_name)).await?;
+    let (produced, response) = exec::as_owner(
+        key.0,
+        exec::offload(move || encrypt(&pdf, &password, client_id, pdf_name, output)),
+    )
+    .await?;
 
-    helpers::deliver(output, download_url).await
+    helpers::deliver_tool(produced, response).await
 }
 
 fn encrypt(
@@ -48,8 +53,9 @@ fn encrypt(
     password: &str,
     client_id: Option<String>,
     pdf_name: Option<String>,
-) -> Result<(TempPath, Option<String>), AppError> {
-    let source_path = helpers::resolve_pdf_path(pdf)?;
+    output: ToolOutput,
+) -> Result<(TempPath, ToolResponse), AppError> {
+    let source_path = helpers::resolve_pdf_source(pdf)?;
 
     let output_temp = Builder::new().suffix(".pdf").tempfile()?;
     let output_path = helpers::path_to_str(output_temp.path())?.to_string();
@@ -72,7 +78,7 @@ fn encrypt(
         "PDF encryption failed",
     )?;
 
-    let output = output_temp.into_temp_path();
-    let download_url = helpers::save_if_requested(&output, client_id, pdf_name)?;
-    Ok((output, download_url))
+    let produced = output_temp.into_temp_path();
+    let response = helpers::finish_tool(&produced, client_id, pdf_name, output, "protected.pdf")?;
+    Ok((produced, response))
 }

@@ -11,6 +11,11 @@ RUN apt-get update \
       poppler-utils \
       qpdf \
       curl \
+      ghostscript \
+      ocrmypdf tesseract-ocr tesseract-ocr-fra tesseract-ocr-eng tesseract-ocr-deu tesseract-ocr-spa tesseract-ocr-ita \
+      libreoffice-writer libreoffice-calc libreoffice-impress \
+      img2pdf \
+      fonts-dejavu fonts-liberation2 \
  # https://stackoverflow.com/questions/75608323/how-do-i-solve-error-externally-managed-environment-every-time-i-use-pip-3
  && pip3 install --break-system-packages weasyprint \
  && pandoc --version

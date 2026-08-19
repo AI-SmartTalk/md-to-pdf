@@ -4,6 +4,8 @@ extern crate rocket;
 #[macro_use]
 extern crate log;
 
+mod assets;
+mod attest;
 mod auth;
 mod blocks;
 mod cache;
@@ -13,12 +15,15 @@ mod charts;
 mod config;
 mod exec;
 mod helpers;
+mod jobs;
 mod layout;
 mod mermaid;
 mod obs;
 mod pdfops;
 mod pipeline;
 mod routes;
+mod sign;
+mod site;
 mod themes;
 mod types;
 mod urlguard;
@@ -41,17 +46,26 @@ fn rocket() -> _ {
         error!("Could not create {:?}: {}", helpers::pdf_root(), e);
     }
 
-    if std::env::var("API_KEY")
-        .map(|k| k.is_empty())
-        .unwrap_or(true)
-    {
+    // Uploaded files live here, and whatever a previous run left behind is dropped now
+    assets::init();
+
+    // Catalogues and templates of the public tool pages: a malformed catalogue must show
+    // up in the boot log, not on the first visitor's screen
+    site::init();
+
+    if auth::is_open() {
         warn!("API_KEY is not set: the /api endpoints are open to anyone who can reach them");
+    } else {
+        info!(
+            "API keys configured: {}",
+            auth::configured_names().join(", ")
+        );
     }
 
     let cors = CorsOptions::default()
         .allowed_origins(AllowedOrigins::all())
         .allowed_methods(
-            vec![Method::Get, Method::Post, Method::Options]
+            vec![Method::Get, Method::Post, Method::Delete, Method::Options]
                 .into_iter()
                 .map(From::from)
                 .collect(),
@@ -65,8 +79,25 @@ fn rocket() -> _ {
     rocket::build()
         .attach(cors)
         .attach(obs::Observer)
-        // Legacy FormData endpoint (backward compatible)
-        .mount("/", routes![routes::legacy::convert])
+        // The sweeper spawns a tokio task, so it cannot start while the instance is only
+        // being built: liftoff is the first moment there is a runtime to spawn into.
+        .attach(rocket::fairing::AdHoc::on_liftoff("Asset sweeper", |_| {
+            Box::pin(async { assets::start_sweeper() })
+        }))
+        // Legacy FormData endpoint (backward compatible), and the public tool pages.
+        // Both are declared routes, so they outrank the static file server below.
+        .mount(
+            "/",
+            routes![
+                routes::legacy::convert,
+                routes::site::index_fr,
+                routes::site::tool_fr,
+                routes::site::index_en,
+                routes::site::tool_en,
+                routes::site::sitemap,
+                routes::site::robots,
+            ],
+        )
         // Static files
         .mount("/static", FileServer::from("static"))
         // Landing page, API reference and test console at the service root.
@@ -74,6 +105,10 @@ fn rocket() -> _ {
         .mount("/", FileServer::from("static").rank(20))
         // Download saved PDFs
         .mount("/download", routes![routes::download::download_pdf])
+        // Model Context Protocol: the agent surface. Authenticated by the same keys as the
+        // rest of the API, so an agent's consumption is attributed and quota-ed like any
+        // other integration.
+        .mount("/mcp", routes![routes::mcp::mcp_post, routes::mcp::mcp_get])
         // New JSON API endpoints
         .mount(
             "/api",
@@ -92,6 +127,32 @@ fn rocket() -> _ {
                 routes::metrics::metrics,
                 routes::themes::list_themes,
                 routes::themes::theme_preview,
+                // Ingestion: the way a caller's own file gets in
+                routes::files::upload,
+                routes::files::fetch,
+                routes::files::describe,
+                routes::files::forget,
+                routes::jobs::status,
+                // The toolbelt. Every one of these accepts an uploaded asset or a PDF this
+                // service produced, and answers with a binary, a download URL or an asset.
+                routes::pages::pages,
+                routes::numbering::number_pages,
+                routes::crop::crop,
+                routes::compress::compress,
+                routes::repair::repair,
+                routes::repair::unlock,
+                routes::rasterize::rasterize,
+                routes::images_to_pdf::images_to_pdf,
+                routes::office::office_to_pdf,
+                routes::office::pdf_to_office,
+                routes::ocr::ocr,
+                routes::extract::extract,
+                routes::pdfa::to_pdfa,
+                // The contract and its proof: what no competitor answers
+                routes::compose::compose,
+                routes::attest::attest,
+                routes::attest::verify,
+                routes::jobs::submit,
             ],
         )
         .register(
