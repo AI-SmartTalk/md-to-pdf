@@ -24,6 +24,7 @@ mod obs;
 mod pdfops;
 mod pipeline;
 mod routes;
+mod sandbox;
 mod sign;
 mod site;
 mod themes;
@@ -34,9 +35,34 @@ use rocket::fs::FileServer;
 use rocket::http::Method;
 use rocket_cors::{AllowedOrigins, CorsOptions};
 
+/// Serve the sandbox spool instead of mounting Rocket, and never return.
+///
+/// The same binary plays both parts. A second image would have to be built, scanned and kept
+/// in step with this one; a second *role* cannot drift, and the container that runs it is
+/// the one with no network — see `sandbox.rs` for why the converters have to live there.
+///
+/// Called before anything else in `rocket()` because a worker has no HTTP surface, no
+/// catalogue and no accounts to open: it needs a spool and thirteen binaries.
+fn serve_sandbox_if_asked() {
+    let role = std::env::var("MDPDF_ROLE").unwrap_or_default();
+    if role.trim() != "worker" {
+        return;
+    }
+
+    let Some(root) = sandbox::spool_root() else {
+        error!("MDPDF_ROLE=worker needs SANDBOX_SPOOL to point at the shared spool");
+        std::process::exit(1);
+    };
+
+    sandbox::serve(root, config::config().max_concurrency);
+}
+
 #[launch]
 fn rocket() -> _ {
     env_logger::init();
+
+    // Diverges when this container is the worker: everything below is the API's job
+    serve_sandbox_if_asked();
 
     // Configuration first: everything below, including the log shipper, reads from it
     info!("Configuration: {}", config::config().summary());

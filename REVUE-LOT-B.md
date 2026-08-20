@@ -171,3 +171,65 @@ Ce lot n'est pas une série d'enveloppes bâclées. Ce qui suit a été vérifi�
    visiteur.
 5. **S2, S3, S4** — trois corrections courtes, chacune dans un seul fichier.
 6. Le reste au fil de l'eau.
+
+---
+
+## Clôture de B1 et B3 — le bac à sable existe
+
+*Ajouté après coup ; ce qui précède décrit l'état du jour où la revue a été faite.*
+
+**B3 est levé.** `docker-compose.prod.yml` déclare un second service, `md-to-pdf-worker` :
+même image, même binaire, `MDPDF_ROLE=worker`, et **`network_mode: none`**. Ghostscript,
+LibreOffice, Tesseract, pandoc, WeasyPrint, poppler, qpdf et img2pdf s'y exécutent. L'API et
+lui se parlent par un spool de fichiers sur un volume partagé (`src/sandbox.rs`), et le
+worker refuse tout programme hors de sa liste blanche de treize noms — une API compromise
+n'obtient pas un interpréteur de commandes dans le conteneur isolé.
+
+Ce qui a rendu la chose faisable sans toucher aux routes : tous les enfants de ce service
+passaient déjà par un seul point, `helpers::run_command` et `run_pandoc`, réunis en
+`helpers::spawn_and_wait`.
+
+**B1 est levé par construction, et c'est mieux qu'un correctif par vecteur.** Le durcissement
+du profil LibreOffice reste en place, mais il n'est plus la ligne de défense : le conteneur
+qui exécute `soffice` n'a pas d'interface réseau, donc aucun `xlink:href` distant n'a de
+chemin, quel que soit le format ou l'astuce.
+
+### Constaté sur la pile de production reconstruite
+
+```
+interfaces du worker : lo + les tunnels factices du noyau — pas d'eth0
+interfaces de l'API  : lo + eth0
+curl depuis le worker : échoue (impossible de résoudre l'hôte)
+curl depuis l'API     : 200
+worker arrêté  → /api/health = degraded, sandbox = unreachable, conversion refusée en 10 s
+worker démarré → /api/health = ok, sandbox = ok, conversion en 200
+./test_api.sh   266 tests, 0 échec
+```
+
+L'arrêt du worker est la preuve que l'isolement n'est pas décoratif : sans lui, plus aucune
+conversion n'aboutit — les convertisseurs sont bien là-bas.
+
+### Ce que le worker ne monte pas
+
+`public/accounts` et `public/sessions`. Il n'a aucune raison de voir une empreinte de mot de
+passe ni un jeton de session.
+
+### Deux défauts de production trouvés en faisant ce chantier
+
+- **L'image ne créait que `public/pdf` et `public/cache`.** Docker crée en `root:root` tout
+  point de montage absent de l'image, donc les volumes `assets`, `accounts` et `sessions`
+  naissaient inaccessibles au service : `POST /api/files` échouait en « Permission denied »
+  sur tout déploiement neuf. Les sept répertoires d'état sont désormais créés et possédés
+  par `rocket` dans le `Dockerfile`.
+- **`public/accounts` et `public/sessions` n'étaient sur aucun volume.** Chaque
+  redéploiement aurait effacé tous les comptes, clés et registres de qualité, et déconnecté
+  tout le monde. Deux volumes ajoutés.
+
+### Ce qui reste ouvert
+
+`read_only: true` sur le worker a été essayé et retiré, pas oublié : le service désigne ses
+fichiers par des chemins relatifs, les convertisseurs doivent donc tourner depuis
+`/home/rocket`, et pandoc y écrit un temporaire quel que soit `TMPDIR`. L'activer demanderait
+de rendre ces chemins absolus dans tout le service — et n'ajouterait rien à ce qui compte
+ici : ce conteneur n'a pas de réseau. Le raisonnement est écrit dans le compose, à côté de la
+ligne absente.

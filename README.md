@@ -638,6 +638,54 @@ curl -X POST http://localhost:8000/api/convert \
   --output document.pdf
 ```
 
+## 🧱 The sandbox: converters with no network
+
+Thirteen binaries — Ghostscript, LibreOffice, Tesseract, pandoc, WeasyPrint, poppler, qpdf,
+img2pdf — parse bytes a stranger chose, from the moment `PUBLIC_TOOLS` is on. Ghostscript has
+a history of sandbox escapes and LibreOffice runs macros; an adversarial review of this
+service *demonstrated* a document that made LibreOffice emit an outbound request.
+
+Dropping capabilities, clearing the environment and pinning `-dSAFER` remove rungs from that
+ladder. They do not remove the network — and the network is what turns "a parser crashed"
+into "our data left the building".
+
+**In production the converters run in a second container that has no network interface at
+all.** Same image, same binary, `MDPDF_ROLE=worker`, `network_mode: none`.
+
+```
+  md-to-pdf                          md-to-pdf-worker
+  ─────────                          ────────────────
+  HTTP, accounts, verdicts           gs · soffice · pandoc · weasyprint
+  Mermaid Studio, log420,            tesseract · poppler · qpdf · img2pdf
+  job callbacks, URL guard
+  ── has network ──                  ── network_mode: none ──
+            │                                  ▲
+            └────────  shared spool  ──────────┘
+                  req/ → run/ → res/
+```
+
+The split falls that way because the Rust process genuinely needs the network — Mermaid
+Studio, telemetry, job callbacks, the guarded URL fetcher — while the converters never do. A
+child inherits the namespace of whoever spawns it, so the spawner has to live elsewhere.
+
+What crosses between the two is a request to run **one of thirteen named programs**, plus
+files both containers already share on a volume. `src/sandbox.rs` writes it as JSON and
+publishes it with a rename, which is atomic: a reader never sees a half-written job. The
+worker refuses anything outside its allow-list, so a compromised API cannot turn the isolated
+container into a shell.
+
+Every child in this service goes through `helpers::spawn_and_wait`, which is why this was
+introduced without touching a single route. **Unset `SANDBOX_SPOOL` and everything runs in
+one container exactly as it always did** — that is the development default.
+
+`GET /api/health` reports `sandbox: "ok"` or `"unreachable"` and turns `degraded` in the
+second case. Without that, a dead worker leaves an API answering 200 to every probe and 500
+to every conversion, and the watchdog restarts nothing. A job nobody claims fails in ten
+seconds naming the container, rather than holding a render slot for the full timeout.
+
+Two things the worker does **not** mount: `public/accounts` and `public/sessions`. It has no
+reason to see a password hash.
+
 ## 🔧 Deployment
 
 ### Continuous deployment
@@ -765,6 +813,8 @@ Copy `.env.example` to `.env` (or let `install.sh` generate it).
 | `ASSET_TTL_SECS`           | `7200`    | Retention of an anonymous visitor's uploads                           |
 | `ASSET_TTL_MEMBER_SECS`    | `86400`   | Retention of work that belongs to an account — the figure the sign-up page quotes |
 | `AUTH_ATTEMPTS_PER_MINUTE` | `10`      | Sign-in and sign-up attempts per client address — the brute-force *and* the denial-of-service limit, since each one costs 600 000 PBKDF2 rounds |
+| `SANDBOX_SPOOL`            | *set in prod* | Shared spool the API and the isolated worker talk over. Set, converters run in `md-to-pdf-worker`; empty, they run in this container |
+| `MDPDF_ROLE`               | *empty*   | `worker` turns this process into the sandbox server instead of the API |
 | `PDF_MAX_CONCURRENCY`      | cores, ≤ 8 | Simultaneous renders; the rest queue                                |
 | `PDF_QUEUE_TIMEOUT_SECS`   | `30`      | Wait in the queue before a `429`                                     |
 | `PDF_CACHE_ENABLED`        | `true`    | Content-addressed render cache in `public/cache`                     |

@@ -33,10 +33,24 @@ pub fn health() -> Json<HealthResponse> {
     let core_tools_present =
         helpers::binary_available("pandoc") && helpers::binary_available("weasyprint");
 
+    // When the converters live in the isolated container, this service is only as healthy as
+    // that container is: if the worker is gone, every probe still answers 200 while every
+    // conversion returns 500, and the watchdog restarts nothing because nothing looks wrong.
+    let sandbox = crate::sandbox::enabled().then(|| {
+        if crate::sandbox::responds() {
+            "ok".to_string()
+        } else {
+            "unreachable".to_string()
+        }
+    });
+
+    let healthy = core_tools_present && sandbox.as_deref() != Some("unreachable");
+
     Json(HealthResponse {
-        status: if core_tools_present { "ok" } else { "degraded" }.to_string(),
+        status: if healthy { "ok" } else { "degraded" }.to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         engines,
         capabilities: Some(capabilities),
+        sandbox,
     })
 }

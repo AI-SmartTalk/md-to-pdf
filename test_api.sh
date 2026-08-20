@@ -1565,13 +1565,20 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-LIMITED=no
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
-  CODE=$(curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
-    -d '{"email":"nobody@example.test","password":"un mot de passe assez long"}' \
-    "$BASE_URL/api/auth/login")
-  [ "$CODE" = "429" ] && LIMITED=yes && break
+# Fired together rather than one after another. Each attempt costs 600 000 PBKDF2 rounds,
+# which in a debug build takes seconds — serially, twelve of them span more than the sixty
+# second window and it resets underneath the test. Concurrently is also what an attacker
+# does.
+ATTEMPTS=$(mktemp -d)
+for i in $(seq 1 14); do
+  ( curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
+      -d '{"email":"nobody@example.test","password":"un mot de passe assez long"}' \
+      "$BASE_URL/api/auth/login" > "$ATTEMPTS/$i" ) &
 done
+wait
+LIMITED=no
+grep -qs 429 "$ATTEMPTS"/* && LIMITED=yes
+rm -rf "$ATTEMPTS"
 if [ "$LIMITED" = "yes" ]; then
   green "  ✓ repeated sign-in attempts are rate-limited"
   PASS=$((PASS + 1))
@@ -1581,6 +1588,47 @@ else
 fi
 
 fi  # ACCOUNTS_LIMITED
+
+# =========================================================================
+# The sandbox: converters in a container with no network
+# =========================================================================
+# Skipped when the service runs everything in one container, which is what
+# development does. When it is on, /api/health tells the truth about the worker —
+# and that matters more than it looks: without it a dead worker leaves an API that
+# answers 200 to every probe and 500 to every conversion, so the watchdog restarts
+# nothing and the graph stays green through an outage.
+
+echo
+yellow "== Sandbox =="
+
+curl -s -o /tmp/api_health.json "$BASE_URL/api/health"
+SANDBOX=$(sed -n 's/.*"sandbox":"\([a-z]*\)".*/\1/p' /tmp/api_health.json)
+
+if [ -z "$SANDBOX" ]; then
+  skip "Sandbox: converters run in this container (SANDBOX_SPOOL unset)"
+else
+  check "the worker answers" "ok" "$SANDBOX"
+  check_contains "and the service reports itself healthy" /tmp/api_health.json '"status":"ok"'
+
+  # Every family of converters, exercised through the spool: pandoc and WeasyPrint,
+  # then Ghostscript. If the round trip were broken these would not merely be slow,
+  # they would be impossible.
+  CODE=$(api -o /tmp/api_sandbox.pdf -w "%{http_code}" -X POST -H 'Content-Type: application/json' \
+    -d '{"markdown":"# Sandbox\n\nUn paragraphe assez long pour porter une couche de texte."}' \
+    "$BASE_URL/api/convert")
+  check "pandoc and WeasyPrint run over the spool" 200 "$CODE"
+  check_pdf "and produce a real PDF" /tmp/api_sandbox.pdf
+
+  ASSET=$(api -X POST -F "file=@/tmp/api_sandbox.pdf" "$BASE_URL/api/files" \
+    | sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p')
+  CODE=$(api -o /tmp/api_sandbox.json -w "%{http_code}" -X POST -H 'Content-Type: application/json' \
+    -d "{\"pdf\":\"asset://$ASSET\",\"output\":\"asset\"}" "$BASE_URL/api/compress")
+  check "Ghostscript runs over the spool" 200 "$CODE"
+  check_contains "and returns its verdict like any other tool" /tmp/api_sandbox.json '"verdict"'
+
+  rm -f /tmp/api_sandbox.pdf /tmp/api_sandbox.json
+fi
+rm -f /tmp/api_health.json
 
 # =========================================================================
 # The pages a visitor without an account actually lands on

@@ -421,6 +421,12 @@ pub struct HealthResponse {
     /// predates them, so a probe that only reads `status` is unaffected.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<Vec<String>>,
+    /// `ok` when the isolated worker answers, `unreachable` when it does not.
+    ///
+    /// Absent when converters run in this container, which is the historical arrangement —
+    /// so a probe written before the sandbox existed reads exactly what it always read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<String>,
 }
 
 #[derive(Serialize)]

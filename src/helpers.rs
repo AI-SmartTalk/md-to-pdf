@@ -360,19 +360,41 @@ fn sanitize_env(cmd: &mut Command) {
 
 /// Spawn a command with piped stdio and wait for it under the global timeout
 fn run_command(cmd: &mut Command, label: &str) -> Result<Output, AppError> {
+    spawn_and_wait(cmd, None, label)
+}
+
+/// The one place in this service where an external program starts.
+///
+/// Both spawn sites — `run_command` and `run_pandoc`, which differs only by feeding stdin —
+/// come through here, and that is what made the sandbox possible without touching thirteen
+/// routes: when `SANDBOX_SPOOL` is set the child runs in a container with no network, and
+/// the caller cannot tell the difference. Unset, it runs here exactly as it always has,
+/// which is what development and every existing deployment get.
+fn spawn_and_wait(
+    cmd: &mut Command,
+    stdin_data: Option<Vec<u8>>,
+    label: &str,
+) -> Result<Output, AppError> {
     budget_check(label)?;
     sanitize_env(cmd);
 
-    let child = cmd
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| {
-            error!("Failed to spawn {}: {}", label, e);
-            AppError::Io(e)
-        })?;
+    if crate::sandbox::enabled() {
+        // The remaining budget travels with the job: the worker holds the process, so it is
+        // the only side that can enforce a deadline on it.
+        return crate::sandbox::run(cmd, stdin_data, label, process_timeout());
+    }
 
-    wait_with_timeout(child, None, label)
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    if stdin_data.is_some() {
+        cmd.stdin(Stdio::piped());
+    }
+
+    let child = cmd.spawn().map_err(|e| {
+        error!("Failed to spawn {}: {}", label, e);
+        AppError::Io(e)
+    })?;
+
+    wait_with_timeout(child, stdin_data, label)
 }
 
 /// Turn a failed process into an AppError carrying its stderr
@@ -632,19 +654,7 @@ pub fn run_pandoc(
         warn!("HTML header/footer are ignored with the pdflatex engine");
     }
 
-    cmd.stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    budget_check("pandoc")?;
-    sanitize_env(&mut cmd);
-
-    let child = cmd.spawn().map_err(|e| {
-        error!("Failed to spawn pandoc: {}", e);
-        AppError::Io(e)
-    })?;
-
-    let output = wait_with_timeout(child, Some(markdown.as_bytes().to_vec()), "pandoc")?;
+    let output = spawn_and_wait(&mut cmd, Some(markdown.as_bytes().to_vec()), "pandoc")?;
 
     if !output.status.success() {
         return Err(process_error(&output, "Pandoc conversion failed"));
