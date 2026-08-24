@@ -16,6 +16,8 @@ pub async fn watermark(
 ) -> Result<Either<NamedFile, Json<ToolResponse>>, AppError> {
     let req = req.into_inner();
 
+    validate_text(&req.text)?;
+
     let opacity = req.opacity.unwrap_or(0.06);
     if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
         return Err(AppError::BadRequest(
@@ -52,6 +54,35 @@ pub async fn watermark(
     helpers::deliver_tool(produced, response, "watermark").await
 }
 
+/// A watermark that says nothing is not a watermark.
+///
+/// The endpoint used to accept `""`, draw an empty div, overlay it, and answer 200 with a
+/// document byte-identical to the one it was given. The caller downloads it, sees a
+/// "Résultat", and believes their document is marked — which is precisely the silent failure
+/// every other tool here refuses to commit. `/api/protect` already turns an empty password
+/// down for the same reason.
+///
+/// The limit is not a security boundary — the text is escaped before it reaches the HTML —
+/// but a watermark longer than a line is a rendering accident, not an intent.
+fn validate_text(text: &str) -> Result<(), AppError> {
+    const MAX_CHARS: usize = 200;
+
+    if text.trim().is_empty() {
+        return Err(AppError::BadRequest(
+            "\"text\" must not be empty: a watermark with no text would return the document unchanged".to_string(),
+        ));
+    }
+
+    if text.chars().count() > MAX_CHARS {
+        return Err(AppError::BadRequest(format!(
+            "\"text\" is limited to {} characters",
+            MAX_CHARS
+        )));
+    }
+
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn overlay(
     pdf: &str,
@@ -62,7 +93,7 @@ fn overlay(
     pdf_name: Option<String>,
     output: ToolOutput,
 ) -> Result<(TempPath, ToolResponse), AppError> {
-    let source_path = helpers::resolve_pdf_source(pdf)?;
+    let source_path = helpers::resolve_readable_pdf(pdf)?;
 
     // Create a watermark overlay PDF using weasyprint
     let watermark_html = format!(
@@ -134,4 +165,30 @@ body {{
     let response = helpers::finish_tool(&produced, client_id, pdf_name, output, "watermarked.pdf")?;
 
     Ok((produced, response))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_watermark_with_nothing_to_say_is_refused_rather_than_applied() {
+        for empty in ["", "   ", "\n\t "] {
+            match validate_text(empty) {
+                Err(AppError::BadRequest(message)) => {
+                    assert!(message.contains("unchanged"), "{}", message)
+                }
+                other => panic!("expected a bad request for {:?}, got {:?}", empty, other),
+            }
+        }
+    }
+
+    #[test]
+    fn an_ordinary_mention_is_accepted_and_an_endless_one_is_not() {
+        assert!(validate_text("CONFIDENTIEL").is_ok());
+        assert!(validate_text("Confidentiel — ne pas diffuser · 2026").is_ok());
+        // Counted in characters, not bytes: an accented mention is not shorter in French
+        assert!(validate_text(&"é".repeat(200)).is_ok());
+        assert!(validate_text(&"é".repeat(201)).is_err());
+    }
 }

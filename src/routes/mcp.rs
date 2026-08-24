@@ -495,7 +495,7 @@ async fn preview(args: Value) -> Result<Vec<Value>, AppError> {
     let existing = args.pdf.clone();
     let rendered = exec::offload(move || {
         let (path, keepalive) = match existing {
-            Some(reference) => (helpers::resolve_pdf_source(&reference)?, None),
+            Some(reference) => (helpers::resolve_readable_pdf(&reference)?, None),
             None => {
                 let source = source_of(args.markdown, args.html, args.template, args.data)?;
                 let mut spec = RenderSpec::new(source);
@@ -567,7 +567,7 @@ async fn audit(args: Value) -> Result<Vec<Value>, AppError> {
 
     let args: Args = decode(args, "document_audit")?;
     let report = exec::offload(move || {
-        let path = helpers::resolve_pdf_source(&args.pdf)?;
+        let path = helpers::resolve_readable_pdf(&args.pdf)?;
         crate::layout::analyze(&path)
     })
     .await?;
@@ -683,7 +683,7 @@ async fn attest(args: Value) -> Result<Vec<Value>, AppError> {
     }
 
     let sealed = exec::offload(move || {
-        let path = helpers::resolve_pdf_source(&args.pdf)?;
+        let path = helpers::resolve_readable_pdf(&args.pdf)?;
         let pages = pdfops::page_count(&path)?;
 
         let mut claims = crate::attest::Attestation::of(&path, pages)?;
@@ -725,7 +725,7 @@ async fn verify(args: Value) -> Result<Vec<Value>, AppError> {
 
     let args: Args = decode(args, "document_verify")?;
     let verification = exec::offload(move || {
-        let path = helpers::resolve_pdf_source(&args.pdf)?;
+        let path = helpers::resolve_readable_pdf(&args.pdf)?;
         crate::attest::verify(&args.attestation, &path)
     })
     .await?;

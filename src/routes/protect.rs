@@ -55,7 +55,7 @@ fn encrypt(
     pdf_name: Option<String>,
     output: ToolOutput,
 ) -> Result<(TempPath, ToolResponse), AppError> {
-    let source_path = helpers::resolve_pdf_source(pdf)?;
+    let source_path = helpers::resolve_readable_pdf(pdf)?;
 
     let output_temp = Builder::new().suffix(".pdf").tempfile()?;
     let output_path = helpers::path_to_str(output_temp.path())?.to_string();

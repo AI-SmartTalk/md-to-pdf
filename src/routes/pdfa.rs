@@ -67,7 +67,7 @@ pub async fn to_pdfa(
 pub fn run(req: PdfaRequest) -> Result<(TempPath, ToolResponse), AppError> {
     validate_reference(&req.pdf)?;
     let part = parse_variant(req.variant.as_deref())?;
-    let source = helpers::resolve_pdf_source(&req.pdf)?;
+    let source = helpers::resolve_readable_pdf(&req.pdf)?;
     // An encrypted source is refused here as a 400 rather than escaping as a 500 further
     // down: pdfinfo is the first thing that touches the caller's file.
     let source_pages = crate::pdfops::page_count(&source)

@@ -94,7 +94,7 @@ pub async fn redact(
 ) -> Result<Either<NamedFile, Json<RedactResponse>>, AppError> {
     let req = req.into_inner();
 
-    let source = helpers::resolve_pdf_source(&req.pdf)?;
+    let source = helpers::resolve_readable_pdf(&req.pdf)?;
     let patterns = compile_patterns(req.patterns.as_deref())?;
     let entities = parse_entities(req.entities.as_deref())?;
     let dpi = resolve_dpi(req.dpi)?;

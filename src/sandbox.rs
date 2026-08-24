@@ -47,13 +47,14 @@ use std::time::{Duration, Instant};
 /// Every entry is a converter this service already spawns — see the `Command::new` sites.
 /// The list is deliberately by *name*: the worker resolves it against its own `PATH`, so a
 /// path smuggled in from the other side of the volume names nothing.
-const ALLOWED_PROGRAMS: [&str; 13] = [
+const ALLOWED_PROGRAMS: [&str; 14] = [
     "gs",
     "img2pdf",
     "ocrmypdf",
     "pandoc",
     "pdfimages",
     "pdfinfo",
+    "pdftohtml",
     "pdftoppm",
     "pdftotext",
     "pdfunite",
@@ -529,6 +530,10 @@ fn execute(root: &Path, id: &str, request: Request, index: usize) {
     .stdout(Stdio::piped())
     .stderr(Stdio::piped());
 
+    // The worker is the side that holds the process, so it is the side that has to be able
+    // to end it — all of it. See `helpers::own_process_group`.
+    crate::helpers::own_process_group(&mut cmd);
+
     let mut child = match cmd.spawn() {
         Ok(child) => child,
         Err(e) => {
@@ -569,8 +574,10 @@ fn execute(root: &Path, id: &str, request: Request, index: usize) {
             Ok(Some(status)) => break Some(status),
             Ok(None) => {
                 if Instant::now() >= deadline {
-                    let _ = child.kill();
-                    let _ = child.wait();
+                    // The whole tree, not just the pid: the drain threads are joined below,
+                    // and a surviving grandchild holding the pipe would hang this worker
+                    // slot for good.
+                    crate::helpers::kill_process_group(&mut child);
                     timed_out = true;
                     warn!(
                         "Sandbox worker[{}]: {} timed out after {}ms",

@@ -72,7 +72,7 @@ pub async fn pages(
 pub fn run(req: PagesRequest) -> Result<(TempPath, ToolResponse), AppError> {
     let op = validate(&req)?;
 
-    let source = helpers::resolve_pdf_source(&req.pdf)?;
+    let source = helpers::resolve_readable_pdf(&req.pdf)?;
     let source_arg = helpers::path_to_str(&source)?.to_string();
     let total = crate::pdfops::page_count(&source)?;
     if total == 0 {

@@ -60,7 +60,7 @@ pub async fn crop(
 /// All the blocking work. Public and free of Rocket: the async job dispatcher calls it as is.
 pub fn run(req: CropRequest) -> Result<(tempfile::TempPath, ToolResponse), AppError> {
     let (mode, selection) = plan(&req)?;
-    let source = helpers::resolve_pdf_source(&req.pdf)?;
+    let source = helpers::resolve_readable_pdf(&req.pdf)?;
 
     // One pdftotext run yields both the page geometry and the words the auto mode needs
     let (pages, words) = pdfops::words(&source)?;

@@ -568,7 +568,23 @@ pub fn run_unlock(req: UnlockRequest) -> Result<(TempPath, ToolResponse), AppErr
     }
 
     let produced = out_temp.into_temp_path();
-    let pages = crate::pdfops::page_count(&produced)?;
+
+    // qpdf can write a file out of a source whose page tree was already broken: it exits 0,
+    // and what lands here has no readable page. Everywhere else in this service an
+    // unreadable *output* is our bug and stays a 500 — here the input was, by design, a
+    // document nothing else would accept, so the fault is diagnosable and belongs to it.
+    let pages = match crate::pdfops::page_count(&produced) {
+        Ok(pages) => pages,
+        Err(err @ AppError::Timeout(_)) => return Err(err),
+        Err(_) => {
+            return Err(AppError::BadRequest(
+                "The protection could be removed, but the result has no readable page: this \
+                 document was already damaged underneath its encryption. POST /api/repair \
+                 rebuilds what can be rebuilt and tells you what it recovered."
+                    .to_string(),
+            ))
+        }
+    };
     // The claim this endpoint makes is "no longer protected". Reading the output back is
     // what turns that claim into an observation.
     let produced_encryption = encryption_state(&produced)?;
@@ -641,14 +657,38 @@ fn readable(pdf: &Path) -> bool {
 /// rather than a qpdf stderr dump three layers down.
 fn decryption_error(err: AppError) -> AppError {
     if let AppError::ProcessFailed { stderr, .. } = &err {
-        if stderr.to_lowercase().contains("invalid password") {
+        let lowered = stderr.to_lowercase();
+
+        if lowered.contains("invalid password") {
             return AppError::BadRequest(
                 "The supplied password does not open this document".to_string(),
+            );
+        }
+
+        // This endpoint is one of the two that deliberately accept a document nothing else
+        // can open, so it cannot lean on `resolve_readable_pdf`. It still owes the caller the
+        // same distinction: a file qpdf cannot parse is damaged, not password-protected, and
+        // answering 500 with qpdf's stderr sends them to look for a password that would not
+        // have helped.
+        if DAMAGE.iter().any(|phrase| lowered.contains(phrase)) {
+            return AppError::BadRequest(
+                "This file could not be opened at all: its structure is damaged, so there is \
+                 no protection to remove. POST /api/repair rebuilds what can be rebuilt and \
+                 tells you what it recovered."
+                    .to_string(),
             );
         }
     }
     err
 }
+
+/// How qpdf words a file it cannot parse, as opposed to one it can parse but not decrypt
+const DAMAGE: [&str; 4] = [
+    "unable to find trailer dictionary",
+    "can't find startxref",
+    "file is damaged",
+    "not a pdf file",
+];
 
 fn qpdf_warning(err: &AppError) -> String {
     let detail = match err {
@@ -800,9 +840,31 @@ mod tests {
         }
     }
 
+    /// A file qpdf cannot parse at all has no protection to remove, and sending its stderr
+    /// back as a 500 sends the caller looking for a password that would not have helped.
+    #[test]
+    fn a_document_qpdf_cannot_open_is_named_as_damaged_and_pointed_at_the_repair_route() {
+        for stderr in [
+            "qpdf: in.pdf: unable to find trailer dictionary while recovering damaged file",
+            "WARNING: in.pdf: can't find startxref",
+            "qpdf: in.pdf: file is damaged",
+            "qpdf: in.pdf is not a PDF file",
+        ] {
+            match decryption_error(process_failed(stderr)) {
+                AppError::BadRequest(message) => {
+                    assert!(message.contains("/api/repair"), "{}", message);
+                    assert!(message.contains("damaged"), "{}", message);
+                }
+                other => panic!("expected a bad request for {:?}, got {:?}", stderr, other),
+            }
+        }
+    }
+
+    /// Everything this module cannot diagnose stays a 500: guessing would be worse than
+    /// admitting the service broke.
     #[test]
     fn an_unrelated_qpdf_failure_stays_a_tool_failure() {
-        let err = decryption_error(process_failed("qpdf: in.pdf: unable to find trailer"));
+        let err = decryption_error(process_failed("qpdf: out of memory allocating 4096 bytes"));
         assert!(matches!(err, AppError::ProcessFailed { .. }));
     }
 

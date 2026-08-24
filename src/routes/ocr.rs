@@ -98,7 +98,7 @@ pub fn run(req: OcrRequest) -> Result<(tempfile::TempPath, ToolResponse), AppErr
     let languages = parse_languages(req.languages.as_deref())?;
     let pdfa = req.pdfa.unwrap_or(false);
 
-    let source = helpers::resolve_pdf_source(&req.pdf)?;
+    let source = helpers::resolve_readable_pdf(&req.pdf)?;
     // An encrypted source is refused here as a 400 rather than escaping as a 500 further
     // down: pdfinfo is the first thing that touches the caller's file.
     let incoming = crate::pdfops::page_count(&source)

@@ -54,7 +54,7 @@ pub async fn attest(
 }
 
 fn build(req: AttestRequest) -> Result<AttestResponse, AppError> {
-    let path = helpers::resolve_pdf_source(&req.pdf)?;
+    let path = helpers::resolve_readable_pdf(&req.pdf)?;
     let pages = crate::pdfops::page_count(&path)?;
 
     let mut claims = Attestation::of(&path, pages)?;
@@ -97,7 +97,7 @@ pub async fn verify(
     let req = req.into_inner();
 
     let verification = exec::offload(move || {
-        let path = helpers::resolve_pdf_source(&req.pdf)?;
+        let path = helpers::resolve_readable_pdf(&req.pdf)?;
         crate::attest::verify(&req.attestation, &path)
     })
     .await?;

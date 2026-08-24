@@ -48,7 +48,7 @@ fn unite(
 ) -> Result<(TempPath, ToolResponse), AppError> {
     let mut resolved_paths = Vec::new();
     for pdf_url in pdfs {
-        resolved_paths.push(helpers::resolve_pdf_source(pdf_url)?);
+        resolved_paths.push(helpers::resolve_readable_pdf(pdf_url)?);
     }
 
     let output_temp = Builder::new().suffix(".pdf").tempfile()?;

@@ -752,6 +752,9 @@ select { cursor: pointer; }
   border-radius: 50%;
   display: grid;
   place-items: center;
+  /* `place-items` centre chaque élément dans sa piste ; sans ceci les deux
+     pistes s'étirent sur les 74 px et le « sur 100 » va toucher l'anneau. */
+  align-content: center;
   background:
     conic-gradient(var(--verdict-color) calc(var(--score) * 1%), color-mix(in srgb, var(--border) 70%, transparent) 0);
   transition: --score .7s var(--ease);
@@ -763,8 +766,14 @@ select { cursor: pointer; }
   border-radius: 50%;
   background: var(--panel);
 }
+/* `position: relative` ne suffit pas à passer devant le `::after` : à z-index
+   auto, deux éléments positionnés se peignent dans l'ordre de l'arbre, et un
+   pseudo-élément ::after vient après ses frères. Le disque blanc du centre
+   recouvrait donc le score — la jauge s'affichait vide sur toutes les pages
+   outils. */
 .verdict-score .score-value {
   position: relative;
+  z-index: 1;
   font-family: var(--mono);
   font-size: 21px;
   font-weight: 700;
@@ -773,6 +782,7 @@ select { cursor: pointer; }
 }
 .verdict-score .score-unit {
   position: relative;
+  z-index: 1;
   display: block;
   font-family: var(--mono);
   font-size: 9.5px;

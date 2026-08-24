@@ -9,6 +9,9 @@
 use crate::auth::PublicOrKey;
 use crate::exec;
 use crate::helpers;
+// Reading the refusal itself lives in `helpers`: `resolve_readable_pdf` asks the same
+// question of a document the store could not open, and the two answers must not drift.
+use crate::helpers::refused_for_password;
 use crate::types::{AppError, Check, ToolOutput, ToolResponse, Verdict};
 use rocket::fs::NamedFile;
 use rocket::serde::json::Json;
@@ -60,7 +63,7 @@ pub async fn compress(
 /// All the blocking work. Public and free of Rocket: the async job dispatcher calls it
 /// as is.
 pub fn run(req: CompressRequest) -> Result<(tempfile::TempPath, ToolResponse), AppError> {
-    let source = helpers::resolve_pdf_source(&req.pdf)?;
+    let source = helpers::resolve_readable_pdf(&req.pdf)?;
     let level = parse_level(req.level.as_deref())?;
     let dpi = parse_dpi(req.dpi)?;
 
@@ -156,23 +159,6 @@ pub fn name_encrypted_source(error: AppError) -> AppError {
         }
         _ => error,
     }
-}
-
-/// The wordings the tools of this image use for that one refusal — poppler says
-/// `Command Line Error: Incorrect password`, qpdf `invalid password`, Ghostscript
-/// `This file requires a password for access`. Reading the sentence rather than the exit
-/// code is what keeps a genuine breakdown a 500: nothing else in these streams says
-/// "password".
-fn refused_for_password(stderr: &str) -> bool {
-    const REFUSALS: [&str; 4] = [
-        "incorrect password",
-        "invalid password",
-        "requires a password",
-        "password required",
-    ];
-
-    let stderr = stderr.to_lowercase();
-    REFUSALS.iter().any(|refusal| stderr.contains(refusal))
 }
 
 /// What a document weighs, in the three units that matter to a compression

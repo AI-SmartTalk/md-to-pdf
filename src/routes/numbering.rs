@@ -78,7 +78,7 @@ pub async fn number_pages(
 /// All the blocking work. Public and free of Rocket: the async job dispatcher calls it as is.
 pub fn run(req: NumberPagesRequest) -> Result<(tempfile::TempPath, ToolResponse), AppError> {
     let opts = options(&req)?;
-    let source = helpers::resolve_pdf_source(&req.pdf)?;
+    let source = helpers::resolve_readable_pdf(&req.pdf)?;
 
     let source_pages = pdfops::page_count(&source)?;
     let geometries = read_geometry(&source, source_pages)?;

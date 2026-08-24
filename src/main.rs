@@ -23,6 +23,7 @@ mod mermaid;
 mod obs;
 mod pdfops;
 mod pipeline;
+mod reflow;
 mod routes;
 mod sandbox;
 mod sign;

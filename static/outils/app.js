@@ -41,6 +41,18 @@
   const POLL_MAX_MS = 3000;
   const POLL_TIMEOUT_MS = 10 * 60 * 1000;
 
+  /* Au-delà, on cesse d'attendre une réponse synchrone.
+     Choisi juste au-dessus du pire cas du service — 30 s d'attente de créneau
+     plus 120 s de budget de rendu — pour ne jamais abandonner un travail qui
+     aurait abouti. Sans cette borne, une requête qui n'arrive pas laisse la
+     page sur « Traitement… » indéfiniment : c'est exactement ce qu'a vu
+     l'utilisateur, et un spinner éternel est pire qu'une erreur. */
+  const REQUEST_TIMEOUT_MS = 180 * 1000;
+
+  /* L'envoi, lui, dépend du débit de l'utilisateur : 100 Mo sur une ligne
+     lente prennent légitimement des minutes. */
+  const UPLOAD_TIMEOUT_MS = 15 * 60 * 1000;
+
   // ═══════════════════════════════════════════════════════ langue
 
   /* Les pages sont écrites en français et en anglais ; seules les chaînes
@@ -65,6 +77,7 @@
       "error.title": "L'opération n'a pas abouti",
       "error.network": "Le service est injoignable.",
       "error.timeout": "Le traitement dépasse le temps d'attente prévu. Le travail continue côté serveur : rechargez la page plus tard avec le lien de suivi.",
+      "error.tooLong": "Le service n'a pas répondu dans le délai prévu. Réessayez ; si votre document est volumineux, découpez-le.",
       "error.badJson": "Réponse inattendue du service.",
       "result.title": "Résultat",
       "result.download": "Télécharger",
@@ -111,6 +124,7 @@
       "error.title": "The operation did not complete",
       "error.network": "The service cannot be reached.",
       "error.timeout": "This is taking longer than we wait for. The job continues on the server: come back later with the tracking link.",
+      "error.tooLong": "The service did not answer within the expected time. Try again; if your document is large, split it up.",
       "error.badJson": "Unexpected response from the service.",
       "result.title": "Result",
       "result.download": "Download",
@@ -434,18 +448,34 @@
     return errorFrom(response.status, text);
   }
 
+  /* `fetch` n'a pas de délai d'expiration : sans le signal ci-dessous, une
+     requête que le service n'honore jamais laisse la promesse en suspens pour
+     toujours, et la page avec elle. */
   async function apiJson(path, options) {
     const opts = options || {};
+    const budget = opts.timeout || REQUEST_TIMEOUT_MS;
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const expired = controller ? setTimeout(() => controller.abort(), budget) : null;
+
     let response;
     try {
       response = await fetch(API_BASE + path, {
         method: opts.method || "GET",
         headers: Object.assign({ Accept: "application/json" }, authHeaders(), opts.headers || {}),
         body: opts.body,
+        signal: controller ? controller.signal : undefined,
       });
     } catch (e) {
+      // Un abandon n'est pas une panne de réseau, et le dire évite à
+      // l'utilisateur de croire que sa connexion est en cause.
+      if (e && e.name === "AbortError") {
+        throw new ApiError(t("error.tooLong"), path, 0);
+      }
       throw new ApiError(t("error.network"), String(e && e.message ? e.message : e), 0);
+    } finally {
+      if (expired !== null) clearTimeout(expired);
     }
+
     if (!response.ok && response.status !== 202) throw await readError(response);
     return response;
   }
@@ -467,7 +497,10 @@
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total);
       };
+      xhr.timeout = UPLOAD_TIMEOUT_MS;
       xhr.onerror = () => reject(new ApiError(t("error.network"), "", 0));
+      xhr.ontimeout = () => reject(new ApiError(t("error.tooLong"), "", 0));
+      xhr.onabort = () => reject(new ApiError(t("error.network"), "", 0));
       xhr.onload = () => {
         if (xhr.status < 200 || xhr.status >= 300) return reject(errorFrom(xhr.status, xhr.responseText));
         const body = parseJson(xhr.responseText);

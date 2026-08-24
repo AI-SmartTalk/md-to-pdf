@@ -13,6 +13,10 @@ services:
       # ses propres règles dans iptables.
       - "127.0.0.1:8000:8000"
     restart: unless-stopped
+    # Le service tourne en PID 1, et un PID 1 qui n'est pas un init ne récolte pas les
+    # orphelins : chaque conversion tuée au timeout laisse un zombie de plus dans la
+    # table des processus. `init: true` interpose le init de Docker, qui les récolte.
+    init: true
     environment:
       # Obligatoire : sans clé, /api/* est ouvert à quiconque atteint le service.
       # La forme `:?` fait échouer `docker compose up` plutôt que de démarrer une
@@ -200,6 +204,9 @@ services:
     image: md-to-pdf:local
     container_name: md-to-pdf-worker
     restart: unless-stopped
+    # Le worker est celui qui tient les convertisseurs : c'est lui qui accumulerait
+    # le plus de zombies sans récolteur. Voir la note sur le service d'API.
+    init: true
     # Aucune interface, donc aucune sortie possible. C'est toute la mesure.
     network_mode: none
     environment:

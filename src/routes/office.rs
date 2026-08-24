@@ -27,6 +27,7 @@ use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::time::Duration;
 use tempfile::{Builder, TempPath};
 
 /// A reconstruction rewrites the text stream, so a few characters legitimately move.
@@ -123,19 +124,22 @@ pub async fn pdf_to_office(
 /// All the blocking work. Public and free of Rocket: the async job dispatcher calls it
 /// as is.
 pub fn run_pdf_to_office(req: PdfToOfficeRequest) -> Result<(TempPath, ToolResponse), AppError> {
-    let source = helpers::resolve_pdf_source(&req.pdf)?;
+    let source = helpers::resolve_readable_pdf(&req.pdf)?;
     let target = parse_target(&req.to)?;
 
     let before = Measurement::of(&source)?;
 
     let workdir = Builder::new().prefix("office-").tempdir()?;
-    let converted = convert(
-        &source,
-        target.extension,
-        Some(target.infilter),
-        target.extension,
-        workdir.path(),
-    )?;
+    let converted = match target.engine {
+        Engine::Reflow => rebuild_flowing(&source, workdir.path())?,
+        Engine::LibreOffice(infilter) => convert(
+            &source,
+            target.extension,
+            Some(infilter),
+            target.extension,
+            workdir.path(),
+        )?,
+    };
     let produced = adopt(&converted, &format!(".{}", target.extension))?;
 
     // The only honest way to say what the reconstruction kept is to render it back and
@@ -171,36 +175,107 @@ pub fn run_pdf_to_office(req: PdfToOfficeRequest) -> Result<(TempPath, ToolRespo
     Ok((produced, response))
 }
 
-/// Where a PDF can be reconstructed to, and through which LibreOffice module.
-///
-/// The import filter is dictated by the target and not the other way round: the PDF is
-/// loaded into Writer, Calc or Impress, and a Writer document cannot be saved as a
-/// spreadsheet.
-#[derive(Debug)]
+/// Where a PDF can be reconstructed to, and by which route.
+#[derive(Debug, PartialEq)]
 struct Target {
     extension: &'static str,
-    infilter: &'static str,
+    engine: Engine,
+}
+
+/// The two ways this service rebuilds a PDF, and why there are two.
+///
+/// LibreOffice's PDF import is faithful to the *picture*: every line becomes a text frame
+/// pinned at its coordinates. For a slide deck that is the right answer — a slide is a
+/// positioned canvas, and Impress rebuilds one as such. For a Word document it is the wrong
+/// one: the file opens and cannot be edited, because nothing in it is a paragraph. Measured
+/// on this project's README, that route produces 810 text boxes and no working hyperlink.
+///
+/// So the Writer direction goes through `reflow` instead, which reads the geometry poppler
+/// reports and guesses paragraphs, headings and lists back out of it, then lets pandoc write
+/// an ordinary document. Same text, a twenty-ninth of the size, editable.
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum Engine {
+    /// `pdftohtml -xml` → `reflow` → pandoc
+    Reflow,
+    /// `soffice --infilter=…`, the named LibreOffice import filter
+    LibreOffice(&'static str),
 }
 
 fn parse_target(to: &str) -> Result<Target, AppError> {
     match to {
         "docx" => Ok(Target {
             extension: "docx",
-            infilter: "writer_pdf_import",
+            engine: Engine::Reflow,
         }),
+        // Calc has no notion of flowing text to rebuild into, so there is nothing for
+        // `reflow` to do: the sheet is whatever the import filter lays out.
         "xlsx" => Ok(Target {
             extension: "xlsx",
-            infilter: "calc_pdf_import",
+            engine: Engine::LibreOffice("calc_pdf_import"),
         }),
         "pptx" => Ok(Target {
             extension: "pptx",
-            infilter: "impress_pdf_import",
+            engine: Engine::LibreOffice("impress_pdf_import"),
         }),
         other => Err(AppError::BadRequest(format!(
             "\"to\" must be one of docx, xlsx, pptx (got \"{}\")",
             other
         ))),
     }
+}
+
+/// Rebuild a PDF into a flowing word-processor document.
+///
+/// Two processes, both cheap: poppler reports the geometry, `reflow` turns it into HTML, and
+/// pandoc writes the docx with Word's own paragraph and heading styles. `--resource-path`
+/// is what lets pandoc find the images poppler extracted next to the XML; without it every
+/// figure would be silently dropped.
+fn rebuild_flowing(source: &Path, workdir: &Path) -> Result<PathBuf, AppError> {
+    let xml = workdir.join("page.xml");
+
+    helpers::run_tool(
+        Command::new("pdftohtml")
+            .arg("-xml")
+            .arg("-enc")
+            .arg("UTF-8")
+            // Poppler asks before overwriting, and an unanswered prompt is a timeout
+            .arg("-nodrm")
+            .arg(helpers::path_to_str(source)?)
+            .arg(helpers::path_to_str(&xml)?),
+        "pdftohtml",
+        "Reading the PDF layout failed",
+    )?;
+
+    let html_path = workdir.join("page.html");
+    fs::write(
+        &html_path,
+        crate::reflow::to_html(&fs::read_to_string(&xml)?),
+    )?;
+
+    let produced = workdir.join("converted.docx");
+    helpers::run_tool(
+        Command::new("pandoc")
+            .arg("-f")
+            .arg("html")
+            .arg("-t")
+            .arg("docx")
+            .arg("--resource-path")
+            .arg(helpers::path_to_str(workdir)?)
+            .arg("-o")
+            .arg(helpers::path_to_str(&produced)?)
+            .arg(helpers::path_to_str(&html_path)?),
+        "pandoc",
+        "Writing the document failed",
+    )?;
+
+    if fs::metadata(&produced).map(|meta| meta.len()).unwrap_or(0) == 0 {
+        return Err(AppError::ProcessFailed {
+            message: "The rebuilt document came out empty".to_string(),
+            stderr: String::new(),
+        });
+    }
+
+    Ok(produced)
 }
 
 // ------------ LibreOffice ------------
@@ -410,10 +485,21 @@ impl Measurement {
     }
 }
 
+/// How long the fidelity check may take before the answer stops being worth the wait.
+///
+/// The check renders the produced document a second time, and a reconstruction can be
+/// pathological to lay out: LibreOffice's own PDF import used to produce a docx of 810 text
+/// frames that took longer to re-render than the whole request was allowed. Capping it turns
+/// "the caller waits two minutes and gets nothing" into "the caller waits a second longer and
+/// is told the fidelity is unverified".
+const VERIFICATION_BUDGET: Duration = Duration::from_secs(20);
+
 /// Render a reconstructed document back to PDF and measure it.
 ///
 /// Everything here is best effort: it feeds a verdict, never the response itself.
 fn round_trip(document: &Path) -> Option<Measurement> {
+    let _cap = helpers::Budget::cap(VERIFICATION_BUDGET);
+
     let workdir = Builder::new().prefix("office-check-").tempdir().ok()?;
     let rendered = convert(document, "pdf", None, "pdf", workdir.path()).ok()?;
     Measurement::of(&rendered).ok()
@@ -630,11 +716,19 @@ mod tests {
             .unwrap_or_else(|| panic!("no {} check in {:?}", name, verdict.checks))
     }
 
+    /// Word goes through the reflow chain and the other two through the LibreOffice module
+    /// that can actually write them — a Writer document cannot be saved as a spreadsheet.
     #[test]
-    fn the_three_editable_targets_carry_the_module_that_can_write_them() {
-        assert_eq!(parse_target("docx").unwrap().infilter, "writer_pdf_import");
-        assert_eq!(parse_target("xlsx").unwrap().infilter, "calc_pdf_import");
-        assert_eq!(parse_target("pptx").unwrap().infilter, "impress_pdf_import");
+    fn each_target_carries_the_engine_that_can_produce_something_usable() {
+        assert_eq!(parse_target("docx").unwrap().engine, Engine::Reflow);
+        assert_eq!(
+            parse_target("xlsx").unwrap().engine,
+            Engine::LibreOffice("calc_pdf_import")
+        );
+        assert_eq!(
+            parse_target("pptx").unwrap().engine,
+            Engine::LibreOffice("impress_pdf_import")
+        );
         assert_eq!(parse_target("pptx").unwrap().extension, "pptx");
     }
 

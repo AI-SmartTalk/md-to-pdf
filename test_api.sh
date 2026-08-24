@@ -393,6 +393,37 @@ CODE=$(api -o "$TMP_DIR/html2pdf.json" -w "%{http_code}" \
   "$BASE_URL/api/html-to-pdf")
 check "html-to-pdf (with CENSOR tag)" 200 "$CODE"
 echo "  Response: $(cat "$TMP_DIR/html2pdf.json")"
+
+# The three routes that reach weasyprint, on the one input half this service's users type
+# every day. HTML carrying no `<meta charset>` was read as windows-1252 — the HTML5 default —
+# so "Modèle" came back as "ModÃ¨le", with a 200 and no warning. Markdown never showed it,
+# because pandoc writes a charset declaration of its own: only an end-to-end read of the
+# produced text catches this, which is why it lives here and not in a unit test.
+if command -v pdftotext > /dev/null 2>&1; then
+  CODE=$(api -o "$TMP_DIR/utf8_html.pdf" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d '{"html": "<p>Modèle éàü — ✓ Ünïcödé</p>"}' \
+    "$BASE_URL/api/html-to-pdf")
+  check "html-to-pdf accepts a document with no charset declaration" 200 "$CODE"
+  pdftotext "$TMP_DIR/utf8_html.pdf" "$TMP_DIR/utf8_html.txt" 2>/dev/null || true
+  check_contains "and renders its accents as themselves" "$TMP_DIR/utf8_html.txt" "Modèle éàü"
+
+  CODE=$(api -o "$TMP_DIR/utf8_render.pdf" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d '{"template": "<p>{{ v }}</p>", "data": {"v": "Modèle éàü — ✓"}}' \
+    "$BASE_URL/api/render")
+  check "render substitutes accented data" 200 "$CODE"
+  pdftotext "$TMP_DIR/utf8_render.pdf" "$TMP_DIR/utf8_render.txt" 2>/dev/null || true
+  check_contains "and renders it as itself" "$TMP_DIR/utf8_render.txt" "Modèle éàü"
+
+  CODE=$(api -o "$TMP_DIR/utf8_md.pdf" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d '{"markdown": "Modèle éàü — ✓ français"}' \
+    "$BASE_URL/api/convert")
+  check "convert keeps accents too" 200 "$CODE"
+  pdftotext "$TMP_DIR/utf8_md.pdf" "$TMP_DIR/utf8_md.txt" 2>/dev/null || true
+  check_contains "and renders them as themselves" "$TMP_DIR/utf8_md.txt" "Modèle éàü"
+fi
 echo
 
 # -----------------------------------------------------------
@@ -1362,6 +1393,136 @@ fi
 
 # =========================================================================
 # Accounts: signing up, minting a key, and the quality record
+# =========================================================================
+# What a stranger's document does to the toolbelt
+# =========================================================================
+# A PDF nobody can parse is an ordinary event on a service that accepts
+# uploads, and it used to answer 500 with three lines of poppler's stderr —
+# across fourteen endpoints. 500 means "our fault, retry later": it pages an
+# operator, it makes clients retry, and it tells the caller nothing they can
+# act on. What follows pins the four answers that replaced it.
+
+echo
+yellow "== A damaged document, and what each route says about it =="
+
+# A live asset of our own: the retention section above deliberately deletes
+# `$ASSET`, and a suite that leans on a file another test forgot to remove is
+# a suite that fails for the wrong reason.
+FRESH=$(api -o "$TMP_DIR/fresh_up.json" -F "file=@$TMP_DIR/upload_src.pdf;filename=fresh.pdf" \
+  "$BASE_URL/api/files" > /dev/null; sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p' "$TMP_DIR/fresh_up.json" | head -1)
+
+# Built here rather than committed: a corrupt PDF in the repository is a file
+# every scanner flags and nobody can regenerate.
+# Half of a real PDF: the header survives, the cross-reference table and the
+# trailer do not — which is exactly the shape a truncated download has. Cut by
+# ratio and not by a fixed count, so a smaller fixture stays truncated.
+head -c "$(( $(wc -c < "$TMP_DIR/upload_src.pdf") / 2 ))" \
+  "$TMP_DIR/upload_src.pdf" > "$TMP_DIR/damaged.pdf"
+
+DAMAGED=$(api -o "$TMP_DIR/damaged_up.json" -F "file=@$TMP_DIR/damaged.pdf;filename=damaged.pdf" \
+  "$BASE_URL/api/files" > /dev/null; sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p' "$TMP_DIR/damaged_up.json" | head -1)
+
+if [ -z "$DAMAGED" ]; then
+  red "  ✗ the damaged fixture could not be uploaded"
+  FAIL=$((FAIL + 1))
+else
+  # Every tool that reads a caller's PDF, not just the one that happened to be
+  # tested when this was written.
+  for ROUTE in compress pdfa rasterize extract crop redact watermark protect pdf-to-office; do
+    case "$ROUTE" in
+      redact)         EXTRA=', "patterns": ["x"]' ;;
+      watermark)      EXTRA=', "text": "X"' ;;
+      protect)        EXTRA=', "password": "x"' ;;
+      pdf-to-office)  EXTRA=', "to": "docx"' ;;
+      *)              EXTRA='' ;;
+    esac
+    CODE=$(api -o "$TMP_DIR/damaged_$ROUTE.json" -w "%{http_code}" \
+      -H "Content-Type: application/json" \
+      -d "{\"pdf\": \"asset://$DAMAGED\"$EXTRA}" \
+      "$BASE_URL/api/$ROUTE")
+    check "/api/$ROUTE refuses a damaged PDF instead of failing" 400 "$CODE"
+  done
+
+  check_contains "and names the route that repairs it" "$TMP_DIR/damaged_compress.json" "/api/repair"
+
+  # The route whose job is exactly this must still accept it, and say what it could not do
+  CODE=$(api -o "$TMP_DIR/damaged_repair.json" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$DAMAGED\", \"output\": \"asset\"}" \
+    "$BASE_URL/api/repair")
+  if [ "$CODE" = "400" ]; then
+    check_contains "/api/repair explains what it could not rebuild" "$TMP_DIR/damaged_repair.json" "could not be repaired"
+  else
+    check "/api/repair rebuilds it" 200 "$CODE"
+  fi
+fi
+
+# An encrypted document is diagnosable, and its remedy is a different route
+api -o "$TMP_DIR/locked.pdf" \
+  -H "Content-Type: application/json" \
+  -d "{\"pdf\": \"asset://$FRESH\", \"password\": \"mot-de-passe-$RUN_ID\"}" \
+  "$BASE_URL/api/protect" > /dev/null
+
+LOCKED=$(api -o "$TMP_DIR/locked_up.json" -F "file=@$TMP_DIR/locked.pdf;filename=locked.pdf" \
+  "$BASE_URL/api/files" > /dev/null; sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p' "$TMP_DIR/locked_up.json" | head -1)
+
+if [ -n "$LOCKED" ]; then
+  CODE=$(api -o "$TMP_DIR/locked_compress.json" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d "{\"pdf\": \"asset://$LOCKED\"}" \
+    "$BASE_URL/api/compress")
+  check "an encrypted PDF is refused as encrypted, not as broken" 400 "$CODE"
+  check_contains "and is sent to the route that opens it" "$TMP_DIR/locked_compress.json" "/api/unlock"
+fi
+
+# A tool that would return the document untouched must say so rather than
+# hand back a "result" the caller believes in.
+CODE=$(api -o "$TMP_DIR/wm_empty.json" -w "%{http_code}" \
+  -H "Content-Type: application/json" \
+  -d "{\"pdf\": \"asset://$FRESH\", \"text\": \"\"}" \
+  "$BASE_URL/api/watermark")
+check "an empty watermark is refused rather than silently applied" 400 "$CODE"
+
+# =========================================================================
+# PDF → Word: a document that can be edited, not a picture of one
+# =========================================================================
+# LibreOffice's PDF import pins every line of the original in its own text
+# frame. The file opens, and nothing in it is a paragraph: put the cursor in a
+# sentence, type a word, and nothing reflows. Measured on a ten-page document
+# it produced 1.3 MB of document.xml, 810 text boxes and no working hyperlink.
+
+echo
+yellow "== PDF → Word =="
+
+CODE=$(api -o "$TMP_DIR/p2o.json" -w "%{http_code}" \
+  -H "Content-Type: application/json" \
+  -d "{\"pdf\": \"asset://$FRESH\", \"to\": \"docx\", \"output\": \"asset\"}" \
+  "$BASE_URL/api/pdf-to-office")
+check "POST /api/pdf-to-office → 200" 200 "$CODE"
+check_contains "the rebuilt document is a docx" "$TMP_DIR/p2o.json" '"kind":"docx"'
+# The fidelity check used to time out on every single call, so the verdict
+# always read "unverified". If this check is present, it ran.
+check_contains "and its fidelity was actually measured" "$TMP_DIR/p2o.json" "text-preserved"
+
+DOCX=$(sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p' "$TMP_DIR/p2o.json" | head -1)
+if [ -n "$DOCX" ] && command -v python3 > /dev/null 2>&1; then
+  api -o "$TMP_DIR/converted.docx" "$BASE_URL/api/files/$DOCX" > /dev/null
+  python3 - "$TMP_DIR/converted.docx" > "$TMP_DIR/docx_shape.txt" 2>&1 <<'PY'
+import sys, zipfile
+try:
+    body = zipfile.ZipFile(sys.argv[1]).read("word/document.xml").decode("utf8", "replace")
+except Exception as e:
+    print("unreadable:", e)
+    raise SystemExit
+print("frames", body.count("txbxContent"))
+print("anchored", body.count("positionH"))
+print("paragraphs", body.count("<w:p>"))
+PY
+  check_contains "it opens as a Word document" "$TMP_DIR/docx_shape.txt" "paragraphs"
+  check_contains "with no floating text frame" "$TMP_DIR/docx_shape.txt" "frames 0"
+  check_contains "and nothing pinned to a coordinate" "$TMP_DIR/docx_shape.txt" "anchored 0"
+fi
+
 # =========================================================================
 # This is the funnel the whole product hangs off, and it broke silently once
 # already: on a deployment with no API_KEY the guard answered `open` before it

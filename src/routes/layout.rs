@@ -25,7 +25,7 @@ pub async fn analyze_layout(
     trace: RequestId,
     req: Json<LayoutRequest>,
 ) -> Result<Json<LayoutReport>, AppError> {
-    let source = helpers::resolve_pdf_source(&req.into_inner().pdf)?;
+    let source = helpers::resolve_readable_pdf(&req.into_inner().pdf)?;
 
     let started = Instant::now();
     let report = match exec::offload(move || crate::layout::analyze(&source)).await {

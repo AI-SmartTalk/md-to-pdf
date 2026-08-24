@@ -121,8 +121,8 @@ pub async fn diff(
 ) -> Result<Json<DiffResponse>, AppError> {
     let req = req.into_inner();
 
-    let before = helpers::resolve_pdf_source(&req.before)?;
-    let after = helpers::resolve_pdf_source(&req.after)?;
+    let before = helpers::resolve_readable_pdf(&req.before)?;
+    let after = helpers::resolve_readable_pdf(&req.after)?;
     let dpi = resolve_dpi(req.dpi)?;
     let threshold = resolve_threshold(req.threshold)?;
     let want_images = req.images.unwrap_or(false);

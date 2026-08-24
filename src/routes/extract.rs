@@ -84,7 +84,7 @@ pub async fn extract(
 /// it as it is.
 pub fn run(req: ExtractRequest) -> Result<ExtractResponse, AppError> {
     let params = Params::parse(&req)?;
-    let source = helpers::resolve_pdf_source(&req.pdf)?;
+    let source = helpers::resolve_readable_pdf(&req.pdf)?;
 
     // An encrypted source is refused here as a 400 rather than escaping as a 500 further
     // down: pdfinfo is the first thing that touches the caller's file.
