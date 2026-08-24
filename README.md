@@ -678,10 +678,14 @@ Every child in this service goes through `helpers::spawn_and_wait`, which is why
 introduced without touching a single route. **Unset `SANDBOX_SPOOL` and everything runs in
 one container exactly as it always did** — that is the development default.
 
-`GET /api/health` reports `sandbox: "ok"` or `"unreachable"` and turns `degraded` in the
-second case. Without that, a dead worker leaves an API answering 200 to every probe and 500
-to every conversion, and the watchdog restarts nothing. A job nobody claims fails in ten
-seconds naming the container, rather than holding a render slot for the full timeout.
+`GET /api/health` reports `sandbox: "ok"` or `"unreachable"`, turns `degraded` in the second
+case, **and answers `503` rather than `200`**. The status code is the part that matters:
+the compose healthcheck, `deploy/md-to-pdf-watchdog.sh` and the rollback in
+`deploy/bootstrap.sh` are all `curl -fsS`, which reads the status line and nothing else. A
+`200` carrying `"status":"degraded"` would leave a dead worker with an API answering 200 to
+every probe and 500 to every conversion, restarted by nobody and rolled back by nobody. A
+job nobody claims fails in ten seconds naming the container, rather than holding a render
+slot for the full timeout.
 
 Two things the worker does **not** mount: `public/accounts` and `public/sessions`. It has no
 reason to see a password hash.
@@ -786,6 +790,7 @@ make dev          # dev containers with hot reload
 | Process crashes                  | `restart: unless-stopped` — Docker restarts it immediately           |
 | Host reboots                     | `systemctl enable docker` + the same restart policy                  |
 | Service hangs but does not exit  | `md-to-pdf-watchdog.timer` — probes `/api/health` every minute, restarts after 3 consecutive failures |
+| The sandbox worker dies          | The same watchdog: `/api/health` answers `503` with `sandbox: unreachable`, and the worker is restarted before the service that depends on it |
 | Disk fills with generated PDFs   | `md-to-pdf-purge.timer` — nightly, drops PDFs older than `PDF_RETENTION_DAYS` |
 | A document eats all the RAM      | `mem_limit`, `cpus` and `pids_limit` on the container                |
 

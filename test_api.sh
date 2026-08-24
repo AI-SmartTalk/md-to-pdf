@@ -286,6 +286,10 @@ echo
 echo "--- GET /api/health ---"
 CODE=$(curl -s -o "$TMP_DIR/health.json" -w "%{http_code}" "$BASE_URL/api/health")
 check "health check" 200 "$CODE"
+# The verdict has to be on the status line, not only in the body: the compose healthcheck,
+# the watchdog and the rollback in bootstrap.sh are all `curl -fsS`, which reads nothing
+# else. A `200` carrying `"status":"degraded"` is how an outage stays invisible.
+check_contains "and a 200 means the service really is whole" "$TMP_DIR/health.json" '"status":"ok"'
 echo "  Response: $(cat "$TMP_DIR/health.json")"
 echo
 
@@ -1515,8 +1519,19 @@ check_contains "and it reaches the quality record without any API key" /tmp/api_
 # The sign-up page offers longer retention in exchange for an address. That has to be a
 # number in the code, not a sentence on a page: a member's file must outlive an anonymous
 # one, and the page must quote the figure the service actually applies.
+#
+# What decides the retention is whether the owner of the work resolves to an account, not
+# whether a key was presented. A deployment with the free tier off refuses the keyless
+# upload outright (401, no `expires_unix`), so the shorter retention is read there from an
+# upload made with the operator's own key: that key belongs to no account either, and takes
+# exactly the same branch. Without this the suite reported a correctly closed deployment as
+# a broken retention promise.
 ANON_TTL=$(curl -s -F "file=@/tmp/api_web.pdf" "$BASE_URL/api/files" \
   | sed -n 's/.*"expires_unix":\([0-9]*\).*/\1/p')
+if [ -z "$ANON_TTL" ] && [ -n "$API_KEY" ]; then
+  ANON_TTL=$(curl -s -H "X-API-Key: $API_KEY" -F "file=@/tmp/api_web.pdf" "$BASE_URL/api/files" \
+    | sed -n 's/.*"expires_unix":\([0-9]*\).*/\1/p')
+fi
 MEMBER_TTL=$(curl -s -b "$JAR" -F "file=@/tmp/api_web.pdf" "$BASE_URL/api/files" \
   | sed -n 's/.*"expires_unix":\([0-9]*\).*/\1/p')
 if [ -n "$ANON_TTL" ] && [ -n "$MEMBER_TTL" ] && [ "$MEMBER_TTL" -gt "$ANON_TTL" ]; then
@@ -1594,14 +1609,15 @@ fi  # ACCOUNTS_LIMITED
 # =========================================================================
 # Skipped when the service runs everything in one container, which is what
 # development does. When it is on, /api/health tells the truth about the worker —
-# and that matters more than it looks: without it a dead worker leaves an API that
+# and that matters more than it looks: a dead worker would otherwise leave an API that
 # answers 200 to every probe and 500 to every conversion, so the watchdog restarts
-# nothing and the graph stays green through an outage.
+# nothing and the graph stays green through an outage. Hence both checks below: the
+# worker is named `ok`, and the status line agrees.
 
 echo
 yellow "== Sandbox =="
 
-curl -s -o /tmp/api_health.json "$BASE_URL/api/health"
+HEALTH_CODE=$(curl -s -o /tmp/api_health.json -w "%{http_code}" "$BASE_URL/api/health")
 SANDBOX=$(sed -n 's/.*"sandbox":"\([a-z]*\)".*/\1/p' /tmp/api_health.json)
 
 if [ -z "$SANDBOX" ]; then
@@ -1609,6 +1625,7 @@ if [ -z "$SANDBOX" ]; then
 else
   check "the worker answers" "ok" "$SANDBOX"
   check_contains "and the service reports itself healthy" /tmp/api_health.json '"status":"ok"'
+  check "and says so on the status line, where the probes read it" 200 "$HEALTH_CODE"
 
   # Every family of converters, exercised through the spool: pandoc and WeasyPrint,
   # then Ghostscript. If the round trip were broken these would not merely be slow,

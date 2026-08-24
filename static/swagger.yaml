@@ -169,8 +169,11 @@ paths:
       summary: Health check
       description: |
         Vérifie que le service est opérationnel et retourne la version ainsi que les moteurs
-        PDF réellement installés dans l'image. `status` vaut `degraded` si pandoc ou
-        weasyprint sont absents. Endpoint jamais authentifié (utilisé par le healthcheck).
+        PDF réellement installés dans l'image. `status` vaut `degraded` — et la réponse est
+        alors un **503** — si pandoc ou weasyprint sont absents, ou si le bac à sable de
+        conversion ne répond plus (`sandbox: unreachable`). Le code HTTP porte le verdict
+        parce que tout ce qui surveille cette route est un `curl -fsS` qui ne lit que la
+        ligne de statut. Endpoint jamais authentifié (utilisé par le healthcheck).
 
         `capabilities` nomme les familles d'endpoints dont le binaire externe est présent :
         une image construite sans Ghostscript répond 200 à toutes les sondes et 500 à toute
@@ -198,6 +201,21 @@ paths:
                   - office
                   - images-to-pdf
                   - pages
+        "503":
+          description: |
+            Service dégradé : un moteur de rendu manque, ou le worker du bac à sable ne
+            répond plus. Le corps est le même document, `status` y vaut `degraded`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: degraded
+                version: "0.2.0"
+                engines:
+                  - weasyprint
+                capabilities: []
+                sandbox: unreachable
 
   # ───────────────────────────────────────────────
   # Files  (ingestion)

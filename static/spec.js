@@ -288,12 +288,13 @@ const ENDPOINTS = [
     icon: "M12 21s-7-4.4-7-10a7 7 0 0114 0c0 5.6-7 10-7 10z",
     card: { en: "Status, version and the PDF engines actually installed in the image. No token: this is the healthcheck probe.",
       fr: "Statut, version et moteurs PDF réellement installés dans l'image. Sans token : c'est la sonde du healthcheck." },
-    desc: { en: "Returns the service status, its version and the list of PDF engines actually present in the image.\n\"status\" is \"degraded\" when pandoc or WeasyPrint are missing.",
-      fr: "Retourne le statut du service, sa version et la liste des moteurs PDF réellement présents dans l'image.\n« status » vaut « degraded » si pandoc ou WeasyPrint manquent." },
+    desc: { en: "Returns the service status, its version and the list of PDF engines actually present in the image.\n\"status\" is \"degraded\" — and the response a 503 — when pandoc or WeasyPrint are missing, or when the conversion sandbox stops answering.",
+      fr: "Retourne le statut du service, sa version et la liste des moteurs PDF réellement présents dans l'image.\n« status » vaut « degraded » — et la réponse est alors un 503 — si pandoc ou WeasyPrint manquent, ou si le bac à sable de conversion ne répond plus." },
     params: [],
     fields: [],
     example: { response: { status: "ok", version: "0.2.0", engines: ["weasyprint", "wkhtmltopdf", "pdflatex"] } },
-    statuses: [["200", { en: "Service reachable", fr: "Service joignable" }]],
+    statuses: [["200", { en: "Service reachable", fr: "Service joignable" }],
+      ["503", { en: "Degraded: an engine is missing or the sandbox is unreachable", fr: "Dégradé : un moteur manque ou le bac à sable ne répond plus" }]],
   },
 
   {
