@@ -245,10 +245,55 @@ curl --data-urlencode 'markdown=# Heading 1' \
 | `/api/metrics`        | GET    | Prometheus exposition (`text/plain; version=0.0.4`)                |
 | `/download/{client_id}/{pdf_name}` | GET | Fetch a saved PDF                                     |
 
+#### Ingestion — files the service did not produce
+
+| Endpoint                  | Method | Description                                                |
+|---------------------------|--------|------------------------------------------------------------|
+| `/api/files`              | POST   | Upload one or more files (`multipart/form-data`, field `file`) → `asset://…` handles |
+| `/api/files/{id}`         | GET    | The bytes back, with the right `Content-Type`               |
+| `/api/files/{id}/meta`    | GET    | Type, size, page count, expiry                              |
+| `/api/files/{id}`         | DELETE | Forget it now                                               |
+| `/api/jobs`               | POST   | Queue an endpoint's work → `202 {job_id, poll_url}`         |
+| `/api/jobs/{id}`          | GET    | State of an asynchronous job                                |
+
+#### The toolbelt
+
+| Endpoint                | Method | Description                                                    |
+|-------------------------|--------|----------------------------------------------------------------|
+| `/api/pages`            | POST   | `extract`, `delete`, `reorder`, `rotate`, `split` — one `op`     |
+| `/api/pages/number`     | POST   | Page numbers on an existing PDF                                 |
+| `/api/crop`             | POST   | Explicit box, or `"auto"` from the content                      |
+| `/api/compress`         | POST   | Ghostscript presets, **with a verdict on what it cost**          |
+| `/api/repair`           | POST   | Recover a damaged file (qpdf, then Ghostscript)                  |
+| `/api/unlock`           | POST   | Remove encryption **with the password** — it breaks nothing      |
+| `/api/rasterize`        | POST   | PDF → PNG/JPEG, one page or many                                 |
+| `/api/images-to-pdf`    | POST   | Images → one PDF, in the order given                             |
+| `/api/office-to-pdf`    | POST   | Word, Excel, PowerPoint, ODF → PDF                               |
+| `/api/pdf-to-office`    | POST   | PDF → docx/xlsx/pptx, best effort and it says so                 |
+| `/api/ocr`              | POST   | Text layer on a scan, and which pages stayed unreadable          |
+| `/api/extract`          | POST   | PDF → Markdown, text or JSON                                     |
+| `/api/pdfa`             | POST   | PDF/A-1b, 2b or 3b for legal archiving                           |
+
+#### Contract and proof
+
+| Endpoint          | Method | Description                                                          |
+|-------------------|--------|-----------------------------------------------------------------------|
+| `/api/compose`    | POST   | Render under **constraints** — renders, audits, corrects, re-renders, and reports what it could not meet |
+| `/api/attest`     | POST   | Seal a produced document: a signed record of what it is               |
+| `/api/verify`     | POST   | Check a seal against a file: `valid`, `altered`, `forged`, `unreadable` |
+
 Every endpoint that produces a PDF returns the **binary PDF** by default, or
 `{"download_url": "/download/<client_id>/<pdf_name>.pdf"}` when both `client_id` and
 `pdf_name` are provided. `client_id` and `pdf_name` must be plain names
 (`[A-Za-z0-9._-]`, not starting with a dot).
+
+The tools added with the ingestion socle accept a third form: `"output": "asset"` answers
+`{"asset": {...}}` and keeps the result inside the service, so the next tool picks it up
+without a round trip. Five operations on one document is one upload, not five.
+
+**Everywhere a PDF is named — `pdf`, `before`, `after`, the entries of `pdfs` — two forms
+are accepted:** `/download/<client_id>/<name>.pdf` as before, and `asset://as_…` for a file
+that was uploaded. No existing request shape changed.
 
 `options` accepts `paper_size` (`a4`, `a3`, `letter`), `orientation`, `margins`,
 `page_numbers`, `page_number_format`, `toc`, `toc_depth`, `watermark`, `theme`,
@@ -319,12 +364,331 @@ renamed heading.
 > version and it will compare a stale cached PDF against a fresh one, or worse, call two
 > different renders `identical`. `CACHE_VERSION` in `src/cache.rs` exists for exactly this.
 
+#### `POST /api/files` — uploads, and how long they live
+
+```bash
+curl -H "X-API-Key: $API_KEY" -F 'file=@contrat.pdf' http://localhost:8000/api/files
+# {"files":[{"id":"as_9f…","name":"contrat.pdf","kind":"pdf","bytes":184203,
+#            "pages":12,"created_at":"…","expires_at":"2026-08-19T14:02:11Z"}]}
+```
+
+The **kind is read from the first bytes, never from the extension**: a zip renamed
+`invoice.pdf` is refused by the endpoint that needs a PDF rather than handed to a parser
+that nobody checked. `ASSET_MAX_MB` (100) and `ASSET_MAX_PAGES` (2000) bound what gets in.
+
+`ASSET_TTL_SECS` (7200, i.e. two hours) bounds how long it stays — or
+`ASSET_TTL_MEMBER_SECS` (86400, a day) when the work belongs to an account, which is what
+the sign-up page offers in exchange for an address. The choice is made from the owner
+already attached to the request, never from anything a caller sends. **Expiry is enforced on
+read as well as by the sweeper**: an asset the sweeper has not reached yet is already
+invisible, otherwise the retention promise would only be a promise. `DELETE /api/files/{id}`
+forgets it sooner.
+
+This is deliberately not a document store. There is no listing endpoint, no folders and no
+sharing: uploads exist so a tool has something to read.
+
+#### Chaining tools without re-uploading
+
+```bash
+# One upload, three operations, one download
+ASSET=$(curl -sH "X-API-Key: $API_KEY" -F 'file=@scan.pdf' localhost:8000/api/files \
+        | sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p')
+
+OCRED=$(curl -sH "X-API-Key: $API_KEY" -H 'Content-Type: application/json' \
+        -d "{\"pdf\":\"asset://$ASSET\",\"output\":\"asset\"}" localhost:8000/api/ocr \
+        | sed -n 's/.*"id":"\(as_[0-9a-f]*\)".*/\1/p')
+
+curl -sH "X-API-Key: $API_KEY" -H 'Content-Type: application/json' \
+     -d "{\"pdf\":\"asset://$OCRED\",\"level\":\"ebook\"}" localhost:8000/api/compress \
+     --output final.pdf
+```
+
+#### The verdict
+
+Every tool that *transforms* a document answers with one, and it is the reason to use this
+service rather than another:
+
+```json
+{
+  "verdict": {
+    "status": "warn",
+    "score": 90,
+    "summary": "4.2 MB → 780 kB, 12 pages, text intact",
+    "checks": [
+      {"name": "page-count",     "status": "ok",   "detail": "12 pages, unchanged"},
+      {"name": "text-preserved", "status": "ok",   "detail": "18 402 of 18 404 glyphs kept"},
+      {"name": "image-dpi",      "status": "warn", "detail": "images downsampled to 150 dpi", "page": 7}
+    ]
+  }
+}
+```
+
+A verdict never fails a request — it informs. Only `/api/compose` turns requirements into
+an explicit `unmet`.
+
+#### `POST /api/compose` — the document that refuses to come out non-conforming
+
+The caller states constraints instead of asking for a render:
+
+```json
+{
+  "markdown": "…",
+  "options": { "theme": "aismarttalk@1" },
+  "constraints": { "max_pages": 4, "no_split_tables": true, "min_layout_score": 90 }
+}
+```
+
+The service renders, audits with the Layout Doctor, applies its corrections, re-renders, and
+repeats until the contract holds or its passes run out. It answers with the PDF **and** the
+log:
+
+```json
+{
+  "verdict": "met",
+  "score": 94,
+  "pages": 4,
+  "passes": [
+    {"n": 1, "score": 71, "pages": 6, "applied": []},
+    {"n": 2, "score": 94, "pages": 4, "applied": ["layout: content past the content box",
+                                                  "--compose-shrink: 6 pages for a 4-page contract"]}
+  ],
+  "unmet": []
+}
+```
+
+Deterministic: no LLM, no outbound call. A contract it cannot meet still returns the best
+document produced, with `"verdict": "unmet"` and every broken constraint named — refusing to
+hand over the file would leave the caller with a report and nothing to look at.
+
+#### `POST /api/attest` and `POST /api/verify` — the proof
+
+An attestation is a signed record of what a document is: its SHA-256, page count, engine,
+theme, layout score and timestamp. It travels as one header-safe line,
+`v1.<payload>.<signature>`, and verifying it needs the file and that string — nothing else,
+no lookup in a database we would then have to keep, back up and eventually leak.
+
+```bash
+curl -sH "X-API-Key: $API_KEY" -H 'Content-Type: application/json' \
+     -d '{"pdf":"/download/acme/contrat.pdf"}' localhost:8000/api/attest
+# {"attestation":"v1.eyJ2ZXJz…","claims":{…}}
+```
+
+`POST /api/verify` answers one of four verdicts, and the distinction matters:
+
+| Verdict      | What happened                                                          |
+|--------------|------------------------------------------------------------------------|
+| `valid`      | This file is byte-for-byte the one this deployment issued               |
+| `altered`    | The record is genuine; the **document** was edited since                |
+| `forged`     | The **record** was rewritten, or came from another deployment           |
+| `unreadable` | Not an attestation this version can parse                              |
+
+Set `ATTESTATION_SECRET` in production. Without it a key is drawn at startup: attestations
+stay verifiable for the life of the process and stop verifying after a restart. That is the
+honest failure — an attestation nobody can check beats one anybody can forge — and the
+startup log says which situation you are in.
+
+#### Keys, attribution and quotas
+
+`API_KEY` is read two ways, and the first one is what every existing deployment already uses:
+
+```
+API_KEY=s3cr3t                       # one anonymous key, unchanged
+API_KEY=core=s3cr3t,zapier=t0k3n     # one named key per integration
+```
+
+A value without `=` is never split, even when it contains a comma. The named form is what
+makes consumption attributable: the name lands in the access log (`api_key`), in
+`mdtopdf_requests_by_key_total{key="…"}` and in the quota counter. `API_QUOTA_PER_MINUTE`
+(0 = no limit, the historical behaviour) answers 429 with `Retry-After` past the ceiling.
+
+#### The free tier
+
+The public tool pages call the same API a paying integration does, and a visitor has no
+token. `PUBLIC_TOOLS=true` opens the endpoints those pages drive — uploads, the toolbelt,
+compose, attest — to requests with no key, rate-limited per client address by
+`PUBLIC_QUOTA_PER_MINUTE` (20). Everything else is unchanged:
+
+- **Off by default.** A deployment that set `API_KEY` this morning is exactly as closed
+  tonight.
+- **A valid key always wins**, keeping its own name, quota and metric line.
+- **A key that is presented and wrong stays a 401.** Falling back to the free tier would
+  hide a typo in someone's deployment for months.
+- `/api/render` and `/api/metrics` are never opened: a template engine facing the open
+  internet is a different conversation.
+
+## 🤖 MCP — the agent surface
+
+`GET/POST /mcp` speaks Model Context Protocol over HTTP. Claude Code, Claude Desktop or any
+MCP client discovers the service and uses it without a line of glue, authenticated by the
+same keys as the rest of the API — so an agent's consumption is attributed and quota-ed like
+any other integration.
+
+```bash
+curl -sH "X-API-Key: $API_KEY" -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' http://localhost:8000/mcp
+```
+
+| Tool | What it gives an agent |
+|---|---|
+| `document_render` · `document_compose` | A document, and with `compose`, a contract it either meets or reports |
+| **`document_preview`** | **The pages as images.** An agent that writes Markdown blind can finally see that its table is cut in half |
+| `document_audit` | The layout score and every issue with its page and bounding box |
+| `document_compress` · `document_ocr` · `document_pages` · `document_convert_office` | The toolbelt, each answering with its verdict |
+| `document_extract` | A PDF as Markdown, so an agent can *read* before it writes |
+| `document_attest` · `document_verify` | Proof that a document came from here, unaltered |
+| `themes_list` | The brand kits available |
+
+Files are referenced, never inlined: a chain of five operations never moves bytes through
+the conversation.
+
+## 🌍 The public site
+
+| Path | What it serves |
+|---|---|
+| `/` · `/en` | The public home, French and English |
+| `/outils/<slug>` · `/tools/<slug>` | One page per tool, 21 in each language |
+| `/tarifs` · `/pricing` | The offer |
+| `/guides` · `/guides/<slug>` | Fifteen guides, indexable, one per question people search for |
+| `/inscription` · `/signup` · `/connexion` · `/signin` | Creating an account and signing in |
+| `/app` · `/en/app` | The workspace: quality record, keys, plan |
+| **`/dev`** | **The integrator console, unchanged** — every view it had, under the site's shell |
+| `/console` | 308 to `/dev`, because that address is in READMEs and bookmarks |
+| `/sitemap.xml` · `/robots.txt` · `/og.png` | What a crawler and a social preview need |
+
+The root used to be the console, which greeted every visitor with
+`SERVICE INTERNE · RUST · PANDOC · WEASYPRINT`. It now belongs to the person who typed the
+domain. `/outils` and `/tools`, the previous home pages, answer 308 rather than serving a
+second copy: two URLs for one page split its authority between them.
+
+Pages are server-rendered with Tera from `static/outils/catalog.{fr,en}.json`. Adding a tool
+is a catalogue entry, not a template change — the client (`static/outils/app.js`) is driven
+entirely by `data-*` attributes, so one implementation serves all of them.
+`static/outils/README.md` documents the contract.
+
+### Accounts, and what an account is for
+
+Signing up takes an address and a password, and nothing else — no card, at any point. What
+it buys is deliberately not a gate: every tool works signed out, without a watermark and
+without a task limit. An account **adds**, it never takes away.
+
+| | Anonymous | With a free account |
+|---|---|---|
+| Every tool, no watermark | yes | yes |
+| Retention | `ASSET_TTL_SECS` (2 h) | `ASSET_TTL_MEMBER_SECS` (24 h) |
+| Quality record | — | every operation, with its verdict |
+| API keys | — | self-served, created and revoked without us |
+
+**Two credentials reach the API and they never mix.** An `X-API-Key` header says a program
+is calling; a session cookie says a human is looking at a page. Both resolve to the same
+attribution name — `<12 hex of the account>/<key name>`, and `/web` for a browser session —
+which is what lands in the logs, in the metrics, and in the quality record.
+
+That second half matters more than it looks: the tool pages call the API **with no key at
+all**, and most members will never mint one. Without the cookie branch in `src/auth.rs`
+their work is attributed to nobody and the workspace is an empty page for almost everyone
+who signs up. The cookie is `HttpOnly` and `SameSite=Lax` — the second property is what
+makes reading it here safe, since a cross-site form cannot spend somebody's session.
+
+Passwords are PBKDF2-HMAC-SHA256, 600 000 rounds (the OWASP floor for this construction),
+built on the HMAC already in `src/sign.rs` rather than pulled in as a crate. Hashing runs on
+`exec::offload_cpu`, which is a **separate** queue from the render pool: signing in must not
+be refused because the service is busy compressing a PDF, and a burst of sign-ins must not
+starve the renderers.
+
+Everything lives in files under `public/accounts/` and `public/sessions/`, both
+`.gitignore`d — one holds e-mail addresses and password hashes, the other holds tokens that
+open an account.
+
+### Drop first, choose after
+
+The home page takes a file **before** asking what to do with it. The service reads the type
+from the bytes and, for a PDF, whether it carries a text layer — so a scan is offered OCR
+and a heavy document is offered compression, without the visitor having to know which of
+twenty-one tools they need.
+
+Competitors make you pick the tool first. Removing that step is the one UX advantage this
+architecture hands us for free: `POST /api/files` already returned `kind` and `pages`, and
+now returns `has_text` as well.
+
+The file is uploaded once. A suggestion links to `…/<tool>#asset=<id>`, and the tool page
+picks it up already loaded — five operations on one document is one upload, not five.
+
+### What was done for search
+
+Everything on-page, because everything on-page is what a product can control:
+
+- one page per search intent, with the phrase people type in the `<title>` and the `h1`
+- absolute canonicals, and `hreflang` pointing at **the same tool** in the other language
+  rather than at that language's home page
+- `WebApplication`, `SoftwareApplication`, `BreadcrumbList`, `FAQPage` and `Organization`
+  in JSON-LD
+- a sitemap with alternates, `lastmod` and priorities, and a `robots.txt` that keeps
+  `/download/` out of every index
+- a 404 that offers the other twenty tools to a visitor and stays JSON for an integration
+- an `og:image` rendered by this service's own engine, so the social card cannot drift from
+  the brand
+
+Ranking also depends on domain authority and inbound links, which no amount of markup
+replaces. The technical and editorial groundwork is in place; the rest is time.
+
 ```bash
 curl -X POST http://localhost:8000/api/convert \
   -H 'Content-Type: application/json' \
   -d '{"markdown": "# Hello", "options": {"paper_size": "a4", "page_numbers": true}}' \
   --output document.pdf
 ```
+
+## 🧱 The sandbox: converters with no network
+
+Thirteen binaries — Ghostscript, LibreOffice, Tesseract, pandoc, WeasyPrint, poppler, qpdf,
+img2pdf — parse bytes a stranger chose, from the moment `PUBLIC_TOOLS` is on. Ghostscript has
+a history of sandbox escapes and LibreOffice runs macros; an adversarial review of this
+service *demonstrated* a document that made LibreOffice emit an outbound request.
+
+Dropping capabilities, clearing the environment and pinning `-dSAFER` remove rungs from that
+ladder. They do not remove the network — and the network is what turns "a parser crashed"
+into "our data left the building".
+
+**In production the converters run in a second container that has no network interface at
+all.** Same image, same binary, `MDPDF_ROLE=worker`, `network_mode: none`.
+
+```
+  md-to-pdf                          md-to-pdf-worker
+  ─────────                          ────────────────
+  HTTP, accounts, verdicts           gs · soffice · pandoc · weasyprint
+  Mermaid Studio, log420,            tesseract · poppler · qpdf · img2pdf
+  job callbacks, URL guard
+  ── has network ──                  ── network_mode: none ──
+            │                                  ▲
+            └────────  shared spool  ──────────┘
+                  req/ → run/ → res/
+```
+
+The split falls that way because the Rust process genuinely needs the network — Mermaid
+Studio, telemetry, job callbacks, the guarded URL fetcher — while the converters never do. A
+child inherits the namespace of whoever spawns it, so the spawner has to live elsewhere.
+
+What crosses between the two is a request to run **one of thirteen named programs**, plus
+files both containers already share on a volume. `src/sandbox.rs` writes it as JSON and
+publishes it with a rename, which is atomic: a reader never sees a half-written job. The
+worker refuses anything outside its allow-list, so a compromised API cannot turn the isolated
+container into a shell.
+
+Every child in this service goes through `helpers::spawn_and_wait`, which is why this was
+introduced without touching a single route. **Unset `SANDBOX_SPOOL` and everything runs in
+one container exactly as it always did** — that is the development default.
+
+`GET /api/health` reports `sandbox: "ok"` or `"unreachable"`, turns `degraded` in the second
+case, **and answers `503` rather than `200`**. The status code is the part that matters:
+the compose healthcheck, `deploy/md-to-pdf-watchdog.sh` and the rollback in
+`deploy/bootstrap.sh` are all `curl -fsS`, which reads the status line and nothing else. A
+`200` carrying `"status":"degraded"` would leave a dead worker with an API answering 200 to
+every probe and 500 to every conversion, restarted by nobody and rolled back by nobody. A
+job nobody claims fails in ten seconds naming the container, rather than holding a render
+slot for the full timeout.
+
+Two things the worker does **not** mount: `public/accounts` and `public/sessions`. It has no
+reason to see a password hash.
 
 ## 🔧 Deployment
 
@@ -426,6 +790,7 @@ make dev          # dev containers with hot reload
 | Process crashes                  | `restart: unless-stopped` — Docker restarts it immediately           |
 | Host reboots                     | `systemctl enable docker` + the same restart policy                  |
 | Service hangs but does not exit  | `md-to-pdf-watchdog.timer` — probes `/api/health` every minute, restarts after 3 consecutive failures |
+| The sandbox worker dies          | The same watchdog: `/api/health` answers `503` with `sandbox: unreachable`, and the worker is restarted before the service that depends on it |
 | Disk fills with generated PDFs   | `md-to-pdf-purge.timer` — nightly, drops PDFs older than `PDF_RETENTION_DAYS` |
 | A document eats all the RAM      | `mem_limit`, `cpus` and `pids_limit` on the container                |
 
@@ -450,6 +815,11 @@ Copy `.env.example` to `.env` (or let `install.sh` generate it).
 | `RUST_LOG`                 | `info`    | Log level                                                            |
 | `MEM_LIMIT` / `CPUS`       | `1g` / `2.0` | Container resource ceiling                                        |
 | `PDF_RETENTION_DAYS`       | `180`     | Age past which the purge deletes saved PDFs                          |
+| `ASSET_TTL_SECS`           | `7200`    | Retention of an anonymous visitor's uploads                           |
+| `ASSET_TTL_MEMBER_SECS`    | `86400`   | Retention of work that belongs to an account — the figure the sign-up page quotes |
+| `AUTH_ATTEMPTS_PER_MINUTE` | `10`      | Sign-in and sign-up attempts per client address — the brute-force *and* the denial-of-service limit, since each one costs 600 000 PBKDF2 rounds |
+| `SANDBOX_SPOOL`            | *set in prod* | Shared spool the API and the isolated worker talk over. Set, converters run in `md-to-pdf-worker`; empty, they run in this container |
+| `MDPDF_ROLE`               | *empty*   | `worker` turns this process into the sandbox server instead of the API |
 | `PDF_MAX_CONCURRENCY`      | cores, ≤ 8 | Simultaneous renders; the rest queue                                |
 | `PDF_QUEUE_TIMEOUT_SECS`   | `30`      | Wait in the queue before a `429`                                     |
 | `PDF_CACHE_ENABLED`        | `true`    | Content-addressed render cache in `public/cache`                     |

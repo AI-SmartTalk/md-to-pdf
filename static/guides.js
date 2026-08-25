@@ -92,18 +92,18 @@ const GUIDES = [
     icon: "M13 2L3 14h7l-1 8 10-12h-7z",
     title: { en: "First call in three minutes", fr: "Premier appel en trois minutes" },
     lede: {
-      en: "No SDK, no build step: HTTP, JSON, and a token in a header.",
-      fr: "Aucun SDK, aucune étape de build : de l'HTTP, du JSON, et un token dans un en-tête.",
+      en: "No SDK, no build step: HTTP, JSON, and a key in a header.",
+      fr: "Aucun SDK, aucune étape de build : de l'HTTP, du JSON, et une clé dans un en-tête.",
     },
     blocks: [
       ["h", { en: "Authenticate", fr: "S'authentifier" }],
       ["p", {
-        en: 'Every <code>/api/*</code> route needs your token, as <code>X-API-Key</code> or <code>Authorization: Bearer</code>. Two routes stay open: <code>GET /api/health</code> (the container probe) and <code>GET /download/…</code> (fetching a PDF that was already produced).',
-        fr: 'Toutes les routes <code>/api/*</code> demandent votre token, en <code>X-API-Key</code> ou en <code>Authorization: Bearer</code>. Deux routes restent ouvertes : <code>GET /api/health</code> (la sonde du conteneur) et <code>GET /download/…</code> (récupérer un PDF déjà produit).',
+        en: 'Every <code>/api/*</code> route needs your key, as <code>X-API-Key</code> or <code>Authorization: Bearer</code>. Two routes stay open: <code>GET /api/health</code> (the container probe) and <code>GET /download/…</code> (fetching a PDF that was already produced). The public tools at <a href="/tools">AI SmartTalk Documents</a> need no key at all.',
+        fr: 'Toutes les routes <code>/api/*</code> demandent votre clé, en <code>X-API-Key</code> ou en <code>Authorization: Bearer</code>. Deux routes restent ouvertes : <code>GET /api/health</code> (la sonde du conteneur) et <code>GET /download/…</code> (récupérer un PDF déjà produit). Les outils publics d\'<a href="/outils">AI SmartTalk Documents</a> ne demandent aucune clé.',
       }],
       ["code", "shell", {
-        en: "# The token is given to you by the team — never hard-coded in a repository\nexport MDTOPDF_KEY='your-token'\n\ncurl -s $BASE/api/health\n# {\"status\":\"ok\",\"version\":\"0.2.0\",\"engines\":[\"weasyprint\",\"wkhtmltopdf\",\"pdflatex\"]}",
-        fr: "# Le token vous est fourni par l'équipe — jamais en dur dans un dépôt\nexport MDTOPDF_KEY='votre-token'\n\ncurl -s $BASE/api/health\n# {\"status\":\"ok\",\"version\":\"0.2.0\",\"engines\":[\"weasyprint\",\"wkhtmltopdf\",\"pdflatex\"]}",
+        en: "# Your key comes from your personal space — never hard-coded in a repository\nexport MDTOPDF_KEY='your-key'\n\ncurl -s $BASE/api/health\n# {\"status\":\"ok\",\"version\":\"0.2.0\",\"engines\":[\"weasyprint\",\"wkhtmltopdf\",\"pdflatex\"]}",
+        fr: "# Votre clé vient de votre espace personnel — jamais en dur dans un dépôt\nexport MDTOPDF_KEY='votre-cle'\n\ncurl -s $BASE/api/health\n# {\"status\":\"ok\",\"version\":\"0.2.0\",\"engines\":[\"weasyprint\",\"wkhtmltopdf\",\"pdflatex\"]}",
       }],
 
       ["h", { en: "Get a PDF back", fr: "Récupérer un PDF" }],
@@ -569,6 +569,108 @@ const GUIDES = [
   // ───────────────────────────────────────────── boîte à outils ───────────
 
   {
+    key: "assets",
+    group: { en: "PDF toolbox", fr: "Boîte à outils PDF" },
+    icon: "M12 16V4m0 0L8 8m4-4l4 4M5 20h14",
+    title: { en: "Upload a file, then chain tools", fr: "Déposer un fichier et enchaîner des outils" },
+    lede: {
+      en: "One upload, one opaque handle, and every tool in the service accepts it — including on documents this engine never rendered.",
+      fr: "Un dépôt, une poignée opaque, et tous les outils du service l'acceptent — y compris sur des documents que ce moteur n'a jamais rendus.",
+    },
+    blocks: [
+      ["p", {
+        en: "For a long time every tool here only worked on documents the service had produced itself, because the only way to name a file was <code>/download/&lt;client_id&gt;/&lt;name&gt;.pdf</code>. <code>POST /api/files</code> is the other half: you hand over bytes, you get a handle, and that handle goes wherever a download path went.",
+        fr: "Longtemps, chaque outil d'ici n'a fonctionné que sur des documents produits par le service lui-même, parce que la seule manière de nommer un fichier était <code>/download/&lt;client_id&gt;/&lt;nom&gt;.pdf</code>. <code>POST /api/files</code> est l'autre moitié : vous confiez des octets, vous recevez une poignée, et cette poignée passe partout où passait un chemin de téléchargement.",
+      }],
+
+      ["h", { en: "Upload", fr: "Déposer" }],
+      ["p", {
+        en: "This is the <b>only</b> endpoint of the API that is not JSON: <code>multipart/form-data</code>, with a field named <code>file</code> that may repeat. Do not set <code>Content-Type</code> by hand — the multipart boundary is part of it.",
+        fr: "C'est le <b>seul</b> endpoint de l'API qui ne soit pas du JSON : <code>multipart/form-data</code>, avec un champ <code>file</code> répétable. Ne fixez pas <code>Content-Type</code> à la main — la frontière multipart en fait partie.",
+      }],
+      ["code", "shell", {
+        en: "curl -s -X POST \"$BASE/api/files\" \\\n  -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -F 'file=@contract.pdf' \\\n  -F 'file=@appendix.pdf'\n\n# {\"files\":[\n#   {\"id\":\"as_9f2c1d84e6b74a01bd35c7f0a1e2d3c4\",\"name\":\"contract.pdf\",\"kind\":\"pdf\",\n#    \"bytes\":184203,\"pages\":12,\"expires_at\":\"2026-08-19T14:02:11Z\"},\n#   {\"id\":\"as_31b0…\",\"name\":\"appendix.pdf\",\"kind\":\"pdf\",\"bytes\":40118,\"pages\":3,…}\n# ]}",
+        fr: "curl -s -X POST \"$BASE/api/files\" \\\n  -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -F 'file=@contrat.pdf' \\\n  -F 'file=@annexe.pdf'\n\n# {\"files\":[\n#   {\"id\":\"as_9f2c1d84e6b74a01bd35c7f0a1e2d3c4\",\"name\":\"contrat.pdf\",\"kind\":\"pdf\",\n#    \"bytes\":184203,\"pages\":12,\"expires_at\":\"2026-08-19T14:02:11Z\"},\n#   {\"id\":\"as_31b0…\",\"name\":\"annexe.pdf\",\"kind\":\"pdf\",\"bytes\":40118,\"pages\":3,…}\n# ]}",
+      }],
+      ["p", {
+        en: "The <code>kind</code> is read from the <b>bytes</b>, never from the extension: a <code>.pdf</code> that is really a zip comes back as what it is, and the tool that would have choked on it refuses before starting. What is kept is an id, a type, a size, a page count and an expiry — nothing that would make this a library.",
+        fr: "Le <code>kind</code> est lu dans les <b>octets</b>, jamais dans l'extension : un <code>.pdf</code> qui est en réalité un zip revient pour ce qu'il est, et l'outil qui s'y serait cassé les dents refuse avant de commencer. Ce qui est conservé : un id, un type, une taille, un nombre de pages et une expiration — rien qui ferait de ceci une bibliothèque.",
+      }],
+
+      ["h", { en: "Two reference forms, everywhere", fr: "Deux formes de référence, partout" }],
+      ["p", {
+        en: "Every route that consumes a document now accepts both. The old form did not move, and no existing integration has to change a line.",
+        fr: "Toute route qui consomme un document accepte désormais les deux. L'ancienne forme n'a pas bougé, et aucune intégration existante n'a une ligne à changer.",
+      }],
+      ["table",
+        [{ en: "Form", fr: "Forme" }, { en: "Where it comes from", fr: "D'où elle vient" }, { en: "Lifetime", fr: "Durée de vie" }],
+        [
+          ["<code>/download/&lt;client_id&gt;/&lt;name&gt;.pdf</code>",
+           { en: "A render saved with <code>client_id</code> + <code>pdf_name</code>.", fr: "Un rendu sauvegardé avec <code>client_id</code> + <code>pdf_name</code>." },
+           { en: "Kept until the deployment purges it.", fr: "Conservé jusqu'à la purge du déploiement." }],
+          ["<code>asset://as_…</code>",
+           { en: "An upload, or the output of a tool asked for as <code>\"output\": \"asset\"</code>.", fr: "Un dépôt, ou la sortie d'un outil demandée en <code>« output » : « asset »</code>." },
+           { en: "Two hours by default, then purged. <code>DELETE /api/files/&lt;id&gt;</code> is immediate.", fr: "Deux heures par défaut, puis purge. <code>DELETE /api/files/&lt;id&gt;</code> est immédiat." }],
+        ],
+      ],
+
+      ["h", { en: "Three ways to get the result out", fr: "Trois façons de récupérer le résultat" }],
+      ["table",
+        [{ en: "What you send", fr: "Ce que vous envoyez" }, { en: "What you get", fr: "Ce que vous recevez" }, { en: "When to use it", fr: "Quand l'utiliser" }],
+        [
+          [{ en: "nothing", fr: "rien" }, { en: "the binary file itself", fr: "le fichier binaire lui-même" }, { en: "One operation, one download.", fr: "Une opération, un téléchargement." }],
+          ["<code>client_id</code> + <code>pdf_name</code>", "<code>{\"download_url\": \"…\"}</code>", { en: "The file must stay reachable by URL.", fr: "Le fichier doit rester joignable par URL." }],
+          ["<code>\"output\": \"asset\"</code>", "<code>{\"asset\": {\"id\": \"as_…\", …}}</code>", { en: "Another tool comes next. This is the one that makes a chain cheap.", fr: "Un autre outil suit. C'est celle qui rend une chaîne bon marché." }],
+        ],
+      ],
+
+      ["h", { en: "A chain, end to end", fr: "Une chaîne, de bout en bout" }],
+      ["p", {
+        en: "A scanned contract arrives, has to be read, compressed, and handed back. Four calls, and the file never comes back down to the caller until the last one.",
+        fr: "Un contrat scanné arrive, doit être lu, compressé, puis rendu. Quatre appels, et le fichier ne redescend chez l'appelant qu'au dernier.",
+      }],
+      ["code", "shell", {
+        en: "# 1. Upload\nSRC=$(curl -s -X POST \"$BASE/api/files\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -F 'file=@scan.pdf' | jq -r '.files[0].id')\n\n# 2. OCR — the result stays inside the service\nOCRED=$(curl -s -X POST \"$BASE/api/ocr\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  -d \"{\\\"pdf\\\": \\\"asset://$SRC\\\", \\\"languages\\\": [\\\"fra\\\"], \\\"output\\\": \\\"asset\\\"}\" \\\n  | jq -r '.asset.id')\n\n# 3. Compress, and read the verdict rather than hoping\nRESULT=$(curl -s -X POST \"$BASE/api/compress\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  -d \"{\\\"pdf\\\": \\\"asset://$OCRED\\\", \\\"level\\\": \\\"ebook\\\", \\\"output\\\": \\\"asset\\\"}\")\necho \"$RESULT\" | jq -r '.verdict.summary'   # 4.2 MB -> 780 KB, text intact\nFINAL=$(echo \"$RESULT\" | jq -r '.asset.id')\n\n# 4. Fetch the bytes, with the right content type\ncurl -s \"$BASE/api/files/$FINAL\" -H \"X-API-Key: $MDTOPDF_KEY\" --output ready.pdf",
+        fr: "# 1. Déposer\nSRC=$(curl -s -X POST \"$BASE/api/files\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -F 'file=@scan.pdf' | jq -r '.files[0].id')\n\n# 2. OCR — le résultat reste dans le service\nOCRED=$(curl -s -X POST \"$BASE/api/ocr\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  -d \"{\\\"pdf\\\": \\\"asset://$SRC\\\", \\\"languages\\\": [\\\"fra\\\"], \\\"output\\\": \\\"asset\\\"}\" \\\n  | jq -r '.asset.id')\n\n# 3. Compresser, et lire le verdict plutôt que d'espérer\nRESULT=$(curl -s -X POST \"$BASE/api/compress\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  -d \"{\\\"pdf\\\": \\\"asset://$OCRED\\\", \\\"level\\\": \\\"ebook\\\", \\\"output\\\": \\\"asset\\\"}\")\necho \"$RESULT\" | jq -r '.verdict.summary'   # 4,2 Mo -> 780 Ko, texte intact\nFINAL=$(echo \"$RESULT\" | jq -r '.asset.id')\n\n# 4. Récupérer les octets, avec le bon type de contenu\ncurl -s \"$BASE/api/files/$FINAL\" -H \"X-API-Key: $MDTOPDF_KEY\" --output pret.pdf",
+      }],
+      ["note", "info", {
+        en: "<code>GET /api/files/&lt;id&gt;</code> serves the file with the content type of what it holds, while <code>/download/…</code> serves everything as <code>application/pdf</code>. That is why a tool that produces an image or a <code>.docx</code> tells you to ask for an asset.",
+        fr: "<code>GET /api/files/&lt;id&gt;</code> sert le fichier avec le type de contenu de ce qu'il contient, là où <code>/download/…</code> sert tout en <code>application/pdf</code>. C'est pourquoi un outil qui produit une image ou un <code>.docx</code> vous invite à demander un asset.",
+      }],
+
+      ["h", { en: "When the work outlives the request", fr: "Quand le travail survit à la requête" }],
+      ["p", {
+        en: "OCR on two hundred pages, a LibreOffice conversion or a Ghostscript pass on a heavy file do not fit inside a synchronous deadline. <code>POST /api/jobs</code> takes the endpoint name and the body it would have received, answers <code>202</code> with a poll URL, and forces the result to an asset — a job has no socket to stream a file down.",
+        fr: "Un OCR de deux cents pages, une conversion LibreOffice ou une passe Ghostscript sur un fichier lourd ne tiennent pas dans une échéance synchrone. <code>POST /api/jobs</code> prend le nom de l'endpoint et le corps qu'il aurait reçu, répond <code>202</code> avec une URL d'interrogation, et force le résultat en asset — un travail n'a pas de socket pour faire descendre un fichier.",
+      }],
+      ["code", "shell", {
+        en: "JOB=$(curl -s -X POST \"$BASE/api/jobs\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"endpoint\": \"ocr\", \"body\": {\"pdf\": \"asset://as_9f2c…\", \"languages\": [\"fra\"]}}' \\\n  | jq -r '.job_id')\n\ncurl -s \"$BASE/api/jobs/$JOB\" -H \"X-API-Key: $MDTOPDF_KEY\" | jq '{status, result: .result.asset.id}'\n# {\"status\":\"running\",\"result\":null} … then {\"status\":\"done\",\"result\":\"as_77aa…\"}",
+        fr: "JOB=$(curl -s -X POST \"$BASE/api/jobs\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"endpoint\": \"ocr\", \"body\": {\"pdf\": \"asset://as_9f2c…\", \"languages\": [\"fra\"]}}' \\\n  | jq -r '.job_id')\n\ncurl -s \"$BASE/api/jobs/$JOB\" -H \"X-API-Key: $MDTOPDF_KEY\" | jq '{status, result: .result.asset.id}'\n# {\"status\":\"running\",\"result\":null} … puis {\"status\":\"done\",\"result\":\"as_77aa…\"}",
+      }],
+      ["p", {
+        en: "The poll URL is the source of truth. A <code>callback_url</code>, when one is given, is a courtesy: sent once, signed with <code>X-Signature</code>, never retried. A webhook that must arrive exactly once is a message queue, and this service is not one.",
+        fr: "L'URL d'interrogation fait foi. Un <code>callback_url</code>, quand il est fourni, est une politesse : envoyé une fois, signé par <code>X-Signature</code>, jamais réessayé. Un webhook qui doit arriver exactement une fois est une file de messages, et ce service n'en est pas une.",
+      }],
+
+      ["h", { en: "What is kept, and for how long", fr: "Ce qui est conservé, et combien de temps" }],
+      ["table",
+        [{ en: "Rule", fr: "Règle" }, { en: "Default", fr: "Défaut" }],
+        [
+          [{ en: "Lifetime of an uploaded file", fr: "Durée de vie d'un fichier déposé" }, { en: "2 hours, then purged — configurable per deployment.", fr: "2 heures, puis purge — configurable par déploiement." }],
+          [{ en: "Maximum size", fr: "Taille maximale" }, "100 MB"],
+          [{ en: "Maximum pages", fr: "Nombre de pages maximal" }, "2 000"],
+          [{ en: "Immediate deletion", fr: "Suppression immédiate" }, "<code>DELETE /api/files/&lt;id&gt;</code> → 204"],
+        ],
+      ],
+      ["note", "warn", {
+        en: "An expired asset answers <b>404</b>, not a stale file. A chain that sits idle between two steps for longer than the retention will fail on the second one — which is the correct behaviour, and worth knowing before a nightly batch discovers it.",
+        fr: "Un asset expiré répond <b>404</b>, jamais un fichier périmé. Une chaîne qui attend entre deux étapes plus longtemps que la rétention échouera à la seconde — c'est le comportement correct, et il vaut mieux le savoir avant qu'un lot de nuit ne le découvre.",
+      }],
+      ["try", "files", { en: "Upload a file from the console", fr: "Déposer un fichier depuis la console" }],
+    ],
+  },
+
+  {
     key: "toolbox",
     group: { en: "PDF toolbox", fr: "Boîte à outils PDF" },
     icon: "M3 7h18v13H3zM8 7V4h8v3M8 12h8",
@@ -626,6 +728,141 @@ const GUIDES = [
       }],
       ["code", "json", '{\n  "pdf": "/download/demo/contract-draft.pdf",\n  "password": "a-real-passphrase",\n  "client_id": "demo",\n  "pdf_name": "contract-sealed"\n}'],
       ["try", "preview", { en: "Preview a document", fr: "Prévisualiser un document" }],
+    ],
+  },
+
+  // ───────────────────────────────────────────── verdict et preuve ────────
+
+  {
+    key: "compose",
+    group: { en: "Verdict and proof", fr: "Verdict et preuve" },
+    icon: "M6 3h9l4 4v14H6zM9 12h7M9 16h5M9 8h4",
+    title: { en: "The document contract", fr: "Le contrat de document" },
+    lede: {
+      en: "State what the document must satisfy instead of asking for a render. The service renders, audits, corrects, and answers with the log of what it had to do.",
+      fr: "Posez ce que le document doit satisfaire au lieu de demander un rendu. Le service rend, audite, corrige, et répond avec le journal de ce qu'il a dû faire.",
+    },
+    blocks: [
+      ["p", {
+        en: "Every other endpoint answers <i>here is your PDF, hope it is fine</i>. <code>POST /api/compose</code> takes <b>constraints</b>: at most four pages, no table cut in half, a layout score of at least 90. It renders, audits with the Layout Doctor, applies corrective rules, re-renders, and stops when the contract holds or the passes run out — then hands back the file <b>and</b> what it had to do to get there.",
+        fr: "Tous les autres endpoints répondent <i>voici votre PDF, espérons qu'il aille</i>. <code>POST /api/compose</code> prend des <b>contraintes</b> : quatre pages au plus, aucun tableau coupé en deux, un score de mise en page d'au moins 90. Il rend, audite avec le Layout Doctor, applique des règles correctives, re-rend, et s'arrête quand le contrat tient ou que les passes sont épuisées — puis rend le fichier <b>et</b> ce qu'il a fallu faire pour y arriver.",
+      }],
+      ["note", "info", {
+        en: "Entirely deterministic: no model, no outbound call, and the same input produces the same document. That is what makes the render cache, the pixel diff <b>and</b> the attestation possible at all.",
+        fr: "Entièrement déterministe : aucun modèle, aucun appel sortant, et la même entrée produit le même document. C'est ce qui rend possibles le cache de rendu, le diff au pixel <b>et</b> l'attestation.",
+      }],
+
+      ["h", { en: "A request", fr: "Une requête" }],
+      ["p", {
+        en: "The body is a render body — <code>markdown</code>, or <code>html</code>, or <code>template</code> + <code>data</code>, plus the usual <code>css</code> and <code>options</code> — with one field more.",
+        fr: "Le corps est un corps de rendu — <code>markdown</code>, ou <code>html</code>, ou <code>template</code> + <code>data</code>, plus les habituels <code>css</code> et <code>options</code> — avec un champ de plus.",
+      }],
+      ["code", "json", '{\n  "markdown": "# Quarterly report\\n\\n…",\n  "options": { "theme": "report@1", "page_numbers": true },\n  "constraints": {\n    "max_pages": 4,\n    "no_split_tables": true,\n    "no_orphan_headings": true,\n    "min_layout_score": 90\n  },\n  "max_passes": 3,\n  "client_id": "acme", "pdf_name": "report-q4"\n}'],
+
+      ["h", { en: "The constraints", fr: "Les contraintes" }],
+      ["table",
+        [{ en: "Field", fr: "Champ" }, { en: "Values", fr: "Valeurs" }, { en: "What it forbids", fr: "Ce qu'il interdit" }],
+        [
+          ["<code>max_pages</code> · <code>min_pages</code>", { en: "a page count", fr: "un nombre de pages" }, { en: "A document that does not fit the envelope it was written for.", fr: "Un document qui ne tient pas dans l'enveloppe pour laquelle il a été écrit." }],
+          ["<code>no_split_tables</code>", "true", { en: "A table broken across two pages.", fr: "Un tableau coupé entre deux pages." }],
+          ["<code>no_orphan_headings</code>", "true", { en: "A heading stranded at the foot of a page.", fr: "Un titre resté seul en bas de page." }],
+          ["<code>no_blank_pages</code>", "true", { en: "A page produced by pagination and holding nothing.", fr: "Une page produite par la pagination et ne contenant rien." }],
+          ["<code>no_overflow</code>", "true", { en: "Content reaching past the print area.", fr: "Du contenu qui déborde de la zone imprimable." }],
+          ["<code>min_layout_score</code>", "0 – 100", { en: "Anything the Layout Doctor grades below that mark.", fr: "Tout ce que le Layout Doctor note en dessous de cette barre." }],
+        ],
+      ],
+      ["p", {
+        en: "Every field is optional, and a request with no constraint at all is simply a render with a report. <code>max_passes</code> defaults to <code>3</code> and is capped at <code>5</code>: each pass is a <b>full render</b>, so a contract that needs more than a handful is a document problem rather than a layout problem, and saying so quickly is more useful than burning the whole time budget to fail anyway.",
+        fr: "Chaque champ est optionnel, et une requête sans aucune contrainte n'est qu'un rendu avec rapport. <code>max_passes</code> vaut <code>3</code> par défaut et plafonne à <code>5</code> : chaque passe est un <b>rendu complet</b>, donc un contrat qui en demande davantage relève du document, pas de la mise en page, et le dire vite vaut mieux que de brûler tout le budget de temps pour échouer quand même.",
+      }],
+
+      ["h", { en: "The answer", fr: "La réponse" }],
+      ["p", {
+        en: "Send <code>client_id</code> + <code>pdf_name</code> (or <code>\"output\": \"asset\"</code>) and you get the report; send neither and you get the PDF itself, as everywhere else.",
+        fr: "Envoyez <code>client_id</code> + <code>pdf_name</code> (ou <code>« output » : « asset »</code>) et vous recevez le rapport ; n'envoyez ni l'un ni l'autre et vous recevez le PDF lui-même, comme partout ailleurs.",
+      }],
+      ["code", "json", '{\n  "download_url": "/download/acme/report-q4.pdf",\n  "verdict": "met",\n  "score": 94,\n  "pages": 4,\n  "passes": [\n    { "n": 1, "score": 78, "pages": 5, "applied": ["tighter tables", "smaller figure margins"] },\n    { "n": 2, "score": 94, "pages": 4, "applied": [] }\n  ],\n  "unmet": [],\n  "layout": { "pages": 4, "score": 94, "issues": [] }\n}'],
+      ["p", {
+        en: "<code>verdict</code> is <code>met</code> or <code>unmet</code>. <code>passes</code> is the honest part: it says what each attempt scored and which corrective rules it introduced, so a document that needed three passes today tells you where it is fragile before it needs four tomorrow.",
+        fr: "<code>verdict</code> vaut <code>met</code> ou <code>unmet</code>. <code>passes</code> est la partie honnête : elle dit ce que chaque tentative a obtenu et quelles règles correctives elle a introduites — un document qui a demandé trois passes aujourd'hui vous dit où il est fragile avant d'en demander quatre demain.",
+      }],
+      ["note", "warn", {
+        en: "A contract that could not be met <b>still returns the best document produced</b>, with <code>verdict: \"unmet\"</code> and <code>unmet</code> naming what is still broken. Refusing to hand it over would leave you with a report and nothing to look at. Check <code>verdict</code> — an HTTP 200 does not mean the contract held.",
+        fr: "Un contrat qui n'a pas pu être tenu <b>rend quand même le meilleur document produit</b>, avec <code>verdict : « unmet »</code> et un tableau <code>unmet</code> qui nomme ce qui reste cassé. Refuser de le rendre vous laisserait un rapport et rien à regarder. Contrôlez <code>verdict</code> — un HTTP 200 ne signifie pas que le contrat a tenu.",
+      }],
+
+      ["h", { en: "Sealing the result in the same call", fr: "Sceller le résultat dans le même appel" }],
+      ["p", {
+        en: "Add <code>\"attest\": true</code> and the answer carries an <code>attestation</code>: the signed record of what was rendered, which <code>POST /api/verify</code> checks later. One call produces the document, its verdict and its proof.",
+        fr: "Ajoutez <code>« attest » : true</code> et la réponse porte une <code>attestation</code> : la fiche signée de ce qui a été rendu, que <code>POST /api/verify</code> contrôlera plus tard. Un appel produit le document, son verdict et sa preuve.",
+      }],
+      ["try", "compose", { en: "Write a contract", fr: "Écrire un contrat" }],
+    ],
+  },
+
+  {
+    key: "attestation",
+    group: { en: "Verdict and proof", fr: "Verdict et preuve" },
+    icon: "M12 3l7 4v6c0 4-3 7-7 8-4-1-7-4-7-8V7zM9 12l2 2 4-4",
+    title: { en: "Proving a document came from us", fr: "Prouver qu'un document vient de chez nous" },
+    lede: {
+      en: "A signed, self-contained record that says this file was issued here and has not been edited since. Two endpoints, no database, no lookup.",
+      fr: "Une fiche signée et autoportante qui dit que ce fichier a été émis ici et n'a pas été modifié depuis. Deux endpoints, aucune base, aucune consultation.",
+    },
+    blocks: [
+      ["p", {
+        en: "A PDF says nothing about where it came from. An attestation does: hash of the file, page count, size, engine, theme, PDF variant, operations applied and the moment it was issued — serialised, signed with this deployment's key, and folded into a single line you can put in a header, a database column or an e-mail.",
+        fr: "Un PDF ne dit rien de sa provenance. Une attestation, si : empreinte du fichier, nombre de pages, taille, moteur, thème, variante PDF, opérations appliquées et l'instant de l'émission — sérialisés, signés avec la clé de ce déploiement, et repliés en une seule ligne que vous pouvez mettre dans un en-tête, une colonne de base ou un courriel.",
+      }],
+      ["code", "shell", {
+        en: "curl -s -X POST \"$BASE/api/attest\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' -d '{\n    \"pdf\": \"/download/acme/agreement.pdf\",\n    \"theme\": \"report@1\",\n    \"operations\": [\"convert\", \"redact\"]\n  }' | jq '{attestation, sha: .claims.output_sha256, pages: .claims.pages}'",
+        fr: "curl -s -X POST \"$BASE/api/attest\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' -d '{\n    \"pdf\": \"/download/acme/contrat.pdf\",\n    \"theme\": \"report@1\",\n    \"operations\": [\"convert\", \"redact\"]\n  }' | jq '{attestation, sha: .claims.output_sha256, pages: .claims.pages}'",
+      }],
+      ["code", "json", '{\n  "attestation": "v1.eyJ2ZXJzaW9uIjox….a3f9…",\n  "claims": {\n    "version": 1,\n    "service": "md-to-pdf",\n    "issued_at": "2026-08-19T12:04:00Z",\n    "output_sha256": "9f2c1d84…",\n    "bytes": 184203,\n    "pages": 12,\n    "theme": "report@1",\n    "operations": ["convert", "redact"]\n  }\n}'],
+      ["p", {
+        en: "The record is <b>self-contained</b> on purpose: verifying it needs the file and that one line, never a lookup in a store we would then have to keep, back up and eventually leak. <code>claims</code> is the same record, readable, so you can show it without decoding anything.",
+        fr: "La fiche est <b>autoportante</b> à dessein : la vérifier demande le fichier et cette seule ligne, jamais une consultation dans un magasin qu'il faudrait ensuite conserver, sauvegarder, et finir par laisser fuir. <code>claims</code> est la même fiche, lisible, pour l'afficher sans rien décoder.",
+      }],
+
+      ["h", { en: "Verifying, later, elsewhere", fr: "Vérifier, plus tard, ailleurs" }],
+      ["code", "shell", {
+        en: "curl -s -X POST \"$BASE/api/verify\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' -d '{\n    \"pdf\": \"asset://as_9f2c…\",\n    \"attestation\": \"v1.eyJ2ZXJzaW9uIjox….a3f9…\"\n  }'\n# {\"verdict\":\"valid\",\"detail\":\"…\",\"attestation\":{…}}",
+        fr: "curl -s -X POST \"$BASE/api/verify\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' -d '{\n    \"pdf\": \"asset://as_9f2c…\",\n    \"attestation\": \"v1.eyJ2ZXJzaW9uIjox….a3f9…\"\n  }'\n# {\"verdict\":\"valid\",\"detail\":\"…\",\"attestation\":{…}}",
+      }],
+      ["p", {
+        en: "The document is uploaded like any other — <code>POST /api/files</code> then <code>asset://</code> — so a partner who received a PDF by mail can check it without ever having had an account here.",
+        fr: "Le document se dépose comme n'importe quel autre — <code>POST /api/files</code> puis <code>asset://</code> — de sorte qu'un partenaire ayant reçu un PDF par courriel peut le contrôler sans avoir jamais eu de compte ici.",
+      }],
+
+      ["h", { en: "The four verdicts", fr: "Les quatre verdicts" }],
+      ["table",
+        [{ en: "Verdict", fr: "Verdict" }, { en: "What happened", fr: "Ce qui s'est passé" }, { en: "What to do", fr: "Quoi faire" }],
+        [
+          ["<code>valid</code>", { en: "The signature matches and the file still hashes to what was sealed.", fr: "La signature correspond et l'empreinte du fichier est toujours celle qui a été scellée." }, { en: "Nothing. This is the file that was issued.", fr: "Rien. C'est bien le fichier qui a été émis." }],
+          ["<code>altered</code>", { en: "The record is genuine, and the <b>document</b> no longer hashes to it.", fr: "La fiche est authentique, et le <b>document</b> ne lui correspond plus." }, { en: "The file was edited after issue. Ask for the original.", fr: "Le fichier a été modifié après émission. Redemandez l'original." }],
+          ["<code>forged</code>", { en: "The signature does not belong to this deployment's key.", fr: "La signature n'appartient pas à la clé de ce déploiement." }, { en: "The record was tampered with — or it was issued by another service.", fr: "La fiche a été trafiquée — ou elle a été émise par un autre service." }],
+          ["<code>unreadable</code>", { en: "Not in the <code>v1.&lt;payload&gt;.&lt;signature&gt;</code> form, or a version this build does not read.", fr: "Pas sous la forme <code>v1.&lt;charge&gt;.&lt;signature&gt;</code>, ou une version que cette build ne lit pas." }, { en: "Copy-paste accident, most of the time. Check the whole line travelled.", fr: "Accident de copier-coller, le plus souvent. Vérifiez que toute la ligne a voyagé." }],
+        ],
+      ],
+      ["p", {
+        en: "<code>altered</code> and <code>forged</code> are deliberately told apart. They are different incidents — an edited document, or a fabricated record — and a single <i>invalid</i> would hide which one you are dealing with.",
+        fr: "<code>altered</code> et <code>forged</code> sont distingués volontairement. Ce sont deux incidents différents — un document modifié, ou une fiche fabriquée — et un unique <i>invalid</i> masquerait celui auquel vous avez affaire.",
+      }],
+
+      ["h", { en: "What it proves, and what it does not", fr: "Ce que cela prouve, et ce que cela ne prouve pas" }],
+      ["note", "warn", {
+        en: "An attestation proves <b>origin and integrity</b> against one deployment's key. It is not a qualified electronic signature: it carries no identity, no certificate and no legal timestamp. When a document has to be signed in the legal sense, that is a different apparatus, and this one does not pretend to replace it.",
+        fr: "Une attestation prouve <b>l'origine et l'intégrité</b> au regard de la clé d'un déploiement. Ce n'est pas une signature électronique qualifiée : elle ne porte ni identité, ni certificat, ni horodatage opposable. Quand un document doit être signé au sens juridique, c'est un autre appareillage, et celui-ci ne prétend pas le remplacer.",
+      }],
+      ["p", {
+        en: "The signing key is the deployment's. Set <code>ATTESTATION_SECRET</code> (16 characters at least) and attestations survive a restart and can be checked by any instance sharing it; leave it unset and the service draws a key at startup, says so in its logs, and every attestation stops verifying at the next restart. That is the honest failure: an attestation nobody can check is better than one anybody can forge.",
+        fr: "La clé de signature est celle du déploiement. Renseignez <code>ATTESTATION_SECRET</code> (16 caractères au moins) et les attestations survivent à un redémarrage et sont vérifiables par toute instance qui la partage ; laissez-la vide et le service tire une clé au démarrage, le dit dans ses logs, et chaque attestation cesse d'être vérifiable au redémarrage suivant. C'est l'échec honnête : une attestation que personne ne peut vérifier vaut mieux qu'une attestation que n'importe qui peut forger.",
+      }],
+      ["p", {
+        en: "The natural pairing is with the contract: <code>POST /api/compose</code> with <code>\"attest\": true</code> renders the document, grades it, and seals it in one call — the file, its verdict and its proof, produced together.",
+        fr: "L'appariement naturel est avec le contrat : <code>POST /api/compose</code> avec <code>« attest » : true</code> rend le document, le note et le scelle en un seul appel — le fichier, son verdict et sa preuve, produits ensemble.",
+      }],
+      ["try", "attest", { en: "Seal a document", fr: "Sceller un document" }],
     ],
   },
 

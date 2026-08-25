@@ -132,6 +132,11 @@ const ST = {
   unauthorized: { en: "Token missing or refused", fr: "Token absent ou refusé" },
   notFound: { en: "PDF not found", fr: "PDF introuvable" },
   timeout: { en: "Timeout", fr: "Timeout" },
+  // Les outils arrivés avec l'ingestion partagent la même réponse et les mêmes
+  // deux façons d'échouer sur leur source.
+  toolOk: { en: "Binary file, or JSON { download_url | asset, pages, verdict }",
+    fr: "Fichier binaire, ou JSON { download_url | asset, pages, verdict }" },
+  sourceMissing: { en: "Unknown asset, or asset expired", fr: "Asset inconnu, ou asset expiré" },
 };
 
 // ══════════════════════════════════════════════════════════ blocs de champs
@@ -206,6 +211,21 @@ const headerFooterBlock = () => ({
   ],
 });
 
+// Les outils arrivés avec l'ingestion ont tous la même sortie : le binaire par
+// défaut, une download_url si client_id et pdf_name sont donnés, un asset si
+// output vaut « asset » — c'est ce dernier qui permet d'enchaîner deux outils
+// sans faire redescendre le fichier chez l'appelant.
+const outputBlock = () => ({
+  type: "fieldset", legend: { en: "output — binary file by default", fr: "sortie — fichier binaire par défaut" }, collapsed: false, fields: [
+    { type: "row", fields: [
+      { name: "client_id", type: "text", label: "client_id", placeholder: "demo-client", value: "" },
+      { name: "pdf_name", type: "text", label: "pdf_name", placeholder: "mon-document", value: "" },
+    ]},
+    { name: "output", type: "select", label: "output", options: ["", "binary", "asset"], value: "",
+      hint: { en: "asset keeps the result in the service, ready for the next tool", fr: "asset garde le résultat dans le service, prêt pour l'outil suivant" } },
+  ],
+});
+
 // Paramètres communs, pour les tables de la référence
 const OPTIONS_PARAM = {
   name: "options", type: "object", desc: {
@@ -237,8 +257,30 @@ const CSS_PARAM = { name: "css", type: "string", desc: {
   en: "Extra stylesheet, applied after <code>templates/default.css</code>.",
   fr: "Feuille de style additionnelle, appliquée après <code>templates/default.css</code>." } };
 
+// Toute route qui consomme un document accepte les deux formes de référence :
+// celle d'hier, et celle qu'apporte le dépôt de fichier.
+const sourceParam = (name) => ({ name, type: "string", required: true, desc: {
+  en: "Source document: <code>asset://as_…</code> returned by <code>POST /api/files</code>, or a <code>/download/&lt;client_id&gt;/&lt;name&gt;.pdf</code> path this service produced.",
+  fr: "Document source : <code>asset://as_…</code> renvoyé par <code>POST /api/files</code>, ou un chemin <code>/download/&lt;client_id&gt;/&lt;nom&gt;.pdf</code> produit par ce service." } });
+
+const OUTPUT_PARAM = { name: "output", type: "enum", desc: {
+  en: "<code>binary</code> (default) or <code>asset</code>. With <code>asset</code> the answer carries an <code>asset</code> object whose <code>asset://&lt;id&gt;</code> feeds the next tool without a round trip.",
+  fr: "<code>binary</code> (défaut) ou <code>asset</code>. Avec <code>asset</code>, la réponse porte un objet <code>asset</code> dont l'<code>asset://&lt;id&gt;</code> alimente l'outil suivant sans aller-retour." } };
+
+const VERDICT_PARAM = { name: "verdict", type: "response", desc: {
+  en: "Read-only field of the answer: <code>{ status, score, summary, checks }</code>. It never blocks a response — it says what the tool thinks of what it just produced.",
+  fr: "Champ de la réponse, en lecture seule : <code>{ status, score, summary, checks }</code>. Il ne bloque jamais une réponse — il dit ce que l'outil pense de ce qu'il vient de produire." } };
+
+const TOOL_PARAMS = [...SAVE_PARAMS, OUTPUT_PARAM, VERDICT_PARAM];
+
 // ══════════════════════════════════════════════════════════ endpoints
 
+// Un endpoint = un objet, et son « method » et son « path » tiennent sur la
+// même ligne que sa « key ». Ce n'est pas une coquetterie : tests/api_surface.rs
+// lit ce fichier ligne à ligne pour le confronter aux routes montées dans
+// src/main.rs et aux chemins de swagger.yaml, et casse si les trois inventaires
+// divergent. Un endpoint dont la déclaration s'étale sur plusieurs lignes serait
+// signalé comme manquant.
 const ENDPOINTS = [
   {
     key: "health", method: "GET", path: "/api/health", auth: false, group: "service",
@@ -246,12 +288,13 @@ const ENDPOINTS = [
     icon: "M12 21s-7-4.4-7-10a7 7 0 0114 0c0 5.6-7 10-7 10z",
     card: { en: "Status, version and the PDF engines actually installed in the image. No token: this is the healthcheck probe.",
       fr: "Statut, version et moteurs PDF réellement installés dans l'image. Sans token : c'est la sonde du healthcheck." },
-    desc: { en: "Returns the service status, its version and the list of PDF engines actually present in the image.\n\"status\" is \"degraded\" when pandoc or WeasyPrint are missing.",
-      fr: "Retourne le statut du service, sa version et la liste des moteurs PDF réellement présents dans l'image.\n« status » vaut « degraded » si pandoc ou WeasyPrint manquent." },
+    desc: { en: "Returns the service status, its version and the list of PDF engines actually present in the image.\n\"status\" is \"degraded\" — and the response a 503 — when pandoc or WeasyPrint are missing, or when the conversion sandbox stops answering.",
+      fr: "Retourne le statut du service, sa version et la liste des moteurs PDF réellement présents dans l'image.\n« status » vaut « degraded » — et la réponse est alors un 503 — si pandoc ou WeasyPrint manquent, ou si le bac à sable de conversion ne répond plus." },
     params: [],
     fields: [],
     example: { response: { status: "ok", version: "0.2.0", engines: ["weasyprint", "wkhtmltopdf", "pdflatex"] } },
-    statuses: [["200", { en: "Service reachable", fr: "Service joignable" }]],
+    statuses: [["200", { en: "Service reachable", fr: "Service joignable" }],
+      ["503", { en: "Degraded: an engine is missing or the sandbox is unreachable", fr: "Dégradé : un moteur manque ou le bac à sable ne répond plus" }]],
   },
 
   {
@@ -560,6 +603,862 @@ const ENDPOINTS = [
     statuses: [["200", "DiffResponse"], ["400", { en: "Invalid path / dpi out of range", fr: "Chemin invalide / dpi hors bornes" }], ["401", ST.unauthorized], ["404", ST.notFound], ["500", { en: "poppler failed", fr: "Échec poppler" }], ["504", ST.timeout]],
   },
 
+  // ────────────────────────────────────────── ingestion et assets ─────────
+
+  {
+    key: "files", method: "POST", path: "/api/files", form: true, multipart: true, group: "files",
+    title: { en: "Upload a file", fr: "Déposer un fichier" },
+    icon: "M12 16V4m0 0L8 8m4-4l4 4M5 20h14",
+    card: { en: "The way in: your own file becomes an asset:// reference every tool accepts.",
+      fr: "La porte d'entrée : votre fichier devient une référence asset:// que tous les outils acceptent." },
+    desc: { en: "The only endpoint of the API that is not JSON: multipart/form-data, with a repeatable field named \"file\".\nThe type is read from the bytes, never from the extension. What comes back is an id, a type, a size, a page count and an expiry — nothing else is kept.",
+      fr: "Le seul endpoint de l'API qui ne soit pas du JSON : multipart/form-data, avec un champ « file » répétable.\nLe type est lu dans les octets, jamais dans l'extension. Ce qui revient : un id, un type, une taille, un nombre de pages et une expiration — rien d'autre n'est conservé." },
+    params: [
+      { name: "file", type: "file", required: true, desc: {
+        en: "One or more files, all under the same field name. PDF, images, Office and OpenDocument, HTML, Markdown, text and CSV are recognised; anything else is stored as <code>binary</code> and no tool will accept it.",
+        fr: "Un ou plusieurs fichiers, tous sous le même nom de champ. PDF, images, Office et OpenDocument, HTML, Markdown, texte et CSV sont reconnus ; le reste est stocké en <code>binary</code> et aucun outil ne l'acceptera." } },
+    ],
+    fields: [
+      { name: "file", type: "file", label: "file", required: true, multiple: true,
+        hint: { en: "several files at once are allowed", fr: "plusieurs fichiers à la fois sont acceptés" }, value: "" },
+    ],
+    example: {
+      response: { files: [{ id: "as_9f2c1d84e6b74a01bd35c7f0a1e2d3c4", name: "contrat.pdf", kind: "pdf", bytes: 184203, pages: 12, created_at: "2026-08-19T12:02:11Z", expires_at: "2026-08-19T14:02:11Z" }] },
+    },
+    statuses: [["201", { en: "Files stored", fr: "Fichiers stockés" }], ["400", { en: "No file, or file too large / too many pages", fr: "Aucun fichier, ou fichier trop lourd / trop de pages" }], ["401", ST.unauthorized], ["413", { en: "Body over the upload ceiling", fr: "Corps au-delà du plafond de dépôt" }]],
+  },
+
+  {
+    key: "file-meta", method: "GET", path: "/api/files/{id}/meta", group: "files",
+    title: { en: "Asset description", fr: "Description d'un asset" },
+    icon: "M12 8h.01M11 12h1v5h1M12 3a9 9 0 100 18 9 9 0 000-18z",
+    card: { en: "Type, size, page count and expiry of a stored file, without downloading it.",
+      fr: "Type, taille, nombre de pages et expiration d'un fichier stocké, sans le télécharger." },
+    desc: { en: "Returns the record kept about an uploaded file. Reading it also triggers the lazy purge: an expired asset answers 404 rather than being served.",
+      fr: "Renvoie la fiche conservée sur un fichier déposé. La lecture déclenche aussi la purge paresseuse : un asset expiré répond 404 plutôt que d'être servi." },
+    params: [{ name: "id", type: "path", required: true, desc: { en: "Asset identifier, <code>as_</code> followed by 32 hexadecimal characters.", fr: "Identifiant d'asset, <code>as_</code> suivi de 32 caractères hexadécimaux." } }],
+    fields: [{ name: "id", type: "assetpick", label: "id", required: true, placeholder: "as_…", value: "" }],
+    buildPath: (v) => `/api/files/${encodeURIComponent(String(v.id || "").replace("asset://", ""))}/meta`,
+    example: { response: { id: "as_9f2c1d84e6b74a01bd35c7f0a1e2d3c4", name: "contrat.pdf", kind: "pdf", bytes: 184203, pages: 12, expires_at: "2026-08-19T14:02:11Z" } },
+    statuses: [["200", "AssetMeta"], ["401", ST.unauthorized], ["404", ST.sourceMissing]],
+  },
+
+  {
+    key: "file-get", method: "GET", path: "/api/files/{id}", group: "files",
+    title: { en: "Download an asset", fr: "Récupérer un asset" },
+    icon: "M12 4v10m0 0l-4-4m4 4l4-4M5 20h14",
+    card: { en: "The bytes back, with the content type read from the file itself.",
+      fr: "Les octets, avec le type de contenu lu dans le fichier lui-même." },
+    desc: { en: "Serves a stored file. This is how the result of a chain asked for as \"output\": \"asset\" is finally fetched.",
+      fr: "Sert un fichier stocké. C'est ainsi que le résultat d'une chaîne demandé en « output »: « asset » est finalement récupéré." },
+    params: [{ name: "id", type: "path", required: true, desc: { en: "Asset identifier.", fr: "Identifiant d'asset." } }],
+    fields: [{ name: "id", type: "assetpick", label: "id", required: true, placeholder: "as_…", value: "" }],
+    buildPath: (v) => `/api/files/${encodeURIComponent(String(v.id || "").replace("asset://", ""))}`,
+    example: { responseNote: { en: "Binary body, with the Content-Type of the stored kind", fr: "Corps binaire, avec le Content-Type du type stocké" } },
+    statuses: [["200", { en: "The file", fr: "Le fichier" }], ["401", ST.unauthorized], ["404", ST.sourceMissing]],
+  },
+
+  {
+    key: "file-delete", method: "DELETE", path: "/api/files/{id}", group: "files",
+    title: { en: "Forget an asset", fr: "Oublier un asset" },
+    icon: "M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13",
+    card: { en: "Immediate deletion, before the expiry does it. Nothing is kept.",
+      fr: "Suppression immédiate, avant que l'expiration ne s'en charge. Rien n'est conservé." },
+    desc: { en: "Deletes an uploaded file and its record now, rather than waiting for the TTL.\nAnswers 204 with no body: there is nothing left to describe.",
+      fr: "Supprime maintenant un fichier déposé et sa fiche, sans attendre le TTL.\nRépond 204 sans corps : il ne reste rien à décrire." },
+    params: [{ name: "id", type: "path", required: true, desc: { en: "Asset identifier.", fr: "Identifiant d'asset." } }],
+    fields: [{ name: "id", type: "assetpick", label: "id", required: true, placeholder: "as_…", value: "" }],
+    buildPath: (v) => `/api/files/${encodeURIComponent(String(v.id || "").replace("asset://", ""))}`,
+    example: { responseNote: { en: "204, empty body", fr: "204, corps vide" } },
+    statuses: [["204", { en: "Deleted", fr: "Supprimé" }], ["401", ST.unauthorized], ["404", ST.sourceMissing]],
+  },
+
+  // ────────────────────────────────────────── pages ───────────────────────
+
+  {
+    key: "pages", method: "POST", path: "/api/pages", json: true, group: "organize",
+    title: { en: "Organise pages", fr: "Organiser les pages" },
+    icon: "M4 4h9v16H4zM15 8h5v12h-5",
+    card: { en: "Extract, delete, reorder, rotate or split — one route, one verb, one range syntax.",
+      fr: "Extraire, supprimer, réordonner, pivoter ou découper — une route, un verbe, une syntaxe de plage." },
+    desc: { en: "Five operations on the page list of a document, chosen with \"op\".\nA range that names a page the document does not have is a 400, not a silently shorter PDF. \"split\" answers with one asset per part.",
+      fr: "Cinq opérations sur la liste des pages d'un document, choisies par « op ».\nUne plage qui nomme une page absente du document donne un 400, pas un PDF silencieusement plus court. « split » répond avec un asset par partie." },
+    params: [
+      sourceParam("pdf"),
+      { name: "op", type: "enum", required: true, desc: {
+        en: "<code>extract</code>, <code>delete</code>, <code>reorder</code>, <code>rotate</code> or <code>split</code>.",
+        fr: "<code>extract</code>, <code>delete</code>, <code>reorder</code>, <code>rotate</code> ou <code>split</code>." } },
+      { name: "pages", type: "string", desc: {
+        en: "Range: <code>1,3,5-9</code>, <code>2-</code>, <code>all</code>, <code>odd</code>, <code>even</code>. Used by every op but <code>reorder</code>; on <code>split</code> it gives the cut points.",
+        fr: "Plage : <code>1,3,5-9</code>, <code>2-</code>, <code>all</code>, <code>odd</code>, <code>even</code>. Utilisée par tous les op sauf <code>reorder</code> ; sur <code>split</code>, elle donne les points de coupe." } },
+      { name: "order", type: "string", desc: {
+        en: "For <code>reorder</code>: the complete new order, which must list every page of the document.",
+        fr: "Pour <code>reorder</code> : l'ordre complet, qui doit lister toutes les pages du document." } },
+      { name: "angle", type: "number", desc: { en: "For <code>rotate</code>: a multiple of 90, positive or negative.", fr: "Pour <code>rotate</code> : un multiple de 90, positif ou négatif." } },
+      { name: "every", type: "number", desc: { en: "For <code>split</code> without <code>pages</code>: pages per file. Default <code>1</code>.", fr: "Pour <code>split</code> sans <code>pages</code> : pages par fichier. Défaut <code>1</code>." } },
+      ...TOOL_PARAMS,
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      { type: "row", fields: [
+        { name: "op", type: "select", label: "op", options: ["extract", "delete", "reorder", "rotate", "split"], value: "extract" },
+        { name: "pages", type: "text", label: "pages", placeholder: "1,3,5-9 · 2- · all · odd · even", value: "" },
+      ]},
+      { type: "row", fields: [
+        { name: "order", type: "text", label: "order", placeholder: "3,1,2", value: "" },
+        { name: "angle", type: "number", step: "90", label: "angle", hint: "90 · 180 · 270", value: "" },
+        { name: "every", type: "number", label: "every", hint: { en: "split: pages per file", fr: "split : pages par fichier" }, value: "" },
+      ]},
+      outputBlock(),
+    ],
+    example: {
+      request: { pdf: "asset://as_9f2c1d84e6b74a01bd35c7f0a1e2d3c4", op: "extract", pages: "1-3,7", output: "asset" },
+      response: { asset: { id: "as_31b0…", name: "pages.pdf", kind: "pdf", bytes: 41208, pages: 4 }, pages: 4 },
+    },
+    statuses: [["200", ST.toolOk], ["400", { en: "Unknown op / range outside the document", fr: "op inconnu / plage hors document" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["500", { en: "qpdf failed", fr: "Échec qpdf" }], ["504", ST.timeout]],
+  },
+
+  {
+    key: "pages-number", method: "POST", path: "/api/pages/number", json: true, group: "organize",
+    title: { en: "Number the pages", fr: "Numéroter les pages" },
+    icon: "M4 4h16v16H4zM8 16h2m4 0h2",
+    card: { en: "Page numbers on a document rendered elsewhere, drawn on an overlay of the same geometry.",
+      fr: "Des numéros de page sur un document rendu ailleurs, dessinés sur un calque de même géométrie." },
+    desc: { en: "The renderer numbers what it lays out itself; this stamps a document it never saw. The geometry is read from the source rather than assumed, because an overlay built for A4 lands scaled and off-centre on a letter page.\n\"format\" is plain text with the tokens {page} and {pages} — not HTML.",
+      fr: "Le moteur numérote ce qu'il met en page lui-même ; ceci tamponne un document qu'il n'a jamais vu. La géométrie est lue dans la source plutôt que supposée : un calque construit pour de l'A4 arrive mis à l'échelle et décentré sur une page letter.\n« format » est du texte simple avec les jetons {page} et {pages} — pas du HTML." },
+    params: [
+      sourceParam("pdf"),
+      { name: "format", type: "string", desc: { en: 'Tokens <code>{page}</code> and <code>{pages}</code>. Default <code>{page}</code>, 64 characters at most.', fr: 'Jetons <code>{page}</code> et <code>{pages}</code>. Défaut <code>{page}</code>, 64 caractères au plus.' } },
+      { name: "position", type: "enum", desc: { en: "<code>bottom-center</code> (default), <code>bottom-left</code>, <code>bottom-right</code>, <code>top-center</code>, <code>top-left</code>, <code>top-right</code>.", fr: "<code>bottom-center</code> (défaut), <code>bottom-left</code>, <code>bottom-right</code>, <code>top-center</code>, <code>top-left</code>, <code>top-right</code>." } },
+      { name: "start", type: "number", desc: { en: "First number shown. Default <code>1</code> — an appendix numbered from 900 is legitimate.", fr: "Premier numéro affiché. Défaut <code>1</code> — une annexe numérotée à partir de 900 est légitime." } },
+      { name: "from_page", type: "number", desc: { en: "First page that gets a number. The pages before it stay bare.", fr: "Première page qui reçoit un numéro. Les pages précédentes restent nues." } },
+      { name: "font_size", type: "number", desc: { en: "4 to 72 points. Default <code>10</code>.", fr: "4 à 72 points. Défaut <code>10</code>." } },
+      { name: "margin", type: "string", desc: { en: "CSS length: <code>1.5cm</code> by default.", fr: "Longueur CSS : <code>1.5cm</code> par défaut." } },
+      ...TOOL_PARAMS,
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      { type: "row", fields: [
+        { name: "format", type: "text", label: "format", placeholder: "{page} / {pages}", value: "" },
+        { name: "position", type: "select", label: "position",
+          options: ["", "bottom-center", "bottom-left", "bottom-right", "top-center", "top-left", "top-right"], value: "" },
+      ]},
+      { type: "row", fields: [
+        { name: "start", type: "number", label: "start", value: "" },
+        { name: "from_page", type: "number", label: "from_page", value: "" },
+        { name: "font_size", type: "number", label: "font_size", hint: "4 → 72", value: "" },
+        { name: "margin", type: "text", label: "margin", placeholder: "1.5cm", value: "" },
+      ]},
+      outputBlock(),
+    ],
+    example: {
+      request: { pdf: "/download/demo-client/report.pdf", format: "{page} / {pages}", position: "bottom-right", from_page: 2 },
+      response: { pages: 12, verdict: { status: "ok", score: 100, summary: "12 pages numbered", checks: [] } },
+    },
+    statuses: [["200", ST.toolOk], ["400", { en: "Unknown token in format / position out of the list", fr: "Jeton inconnu dans format / position hors liste" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["500", { en: "qpdf failed", fr: "Échec qpdf" }], ["504", ST.timeout]],
+  },
+
+  {
+    key: "crop", method: "POST", path: "/api/crop", json: true, group: "organize",
+    title: { en: "Crop", fr: "Rogner" },
+    icon: "M6 2v16h16M2 6h16v16",
+    card: { en: "Rewrites the CropBox, either to a box you give or to the bounding box of the visible text.",
+      fr: "Réécrit la CropBox, soit sur un cadre fourni, soit sur la boîte englobante du texte visible." },
+    desc: { en: "Two modes. An explicit box is clamped to the page rather than refused; \"auto\" measures the words on each page and keeps a margin around them.\nA page whose content cannot be measured keeps its own box: cropping to nothing would hand back blank pages.",
+      fr: "Deux modes. Un cadre explicite est ramené dans la page plutôt que refusé ; « auto » mesure les mots de chaque page et garde une marge autour.\nUne page dont le contenu ne peut pas être mesuré garde son propre cadre : rogner à zéro rendrait des pages blanches." },
+    params: [
+      sourceParam("pdf"),
+      { name: "box", type: "array | string", desc: {
+        en: "<code>[left, bottom, right, top]</code> in PostScript points, or the string <code>\"auto\"</code>. Absent means <code>\"auto\"</code>.",
+        fr: "<code>[gauche, bas, droite, haut]</code> en points PostScript, ou la chaîne <code>\"auto\"</code>. Absent vaut <code>\"auto\"</code>." } },
+      { name: "margin", type: "number", desc: { en: "Points kept around the detected content in <code>auto</code>. Default <code>12</code>.", fr: "Points conservés autour du contenu détecté en <code>auto</code>. Défaut <code>12</code>." } },
+      { name: "pages", type: "string", desc: { en: "<code>\"all\"</code>, <code>\"3\"</code>, <code>\"2-5\"</code> or <code>\"1,4,7-9\"</code>. Untargeted pages keep their box.", fr: "<code>\"all\"</code>, <code>\"3\"</code>, <code>\"2-5\"</code> ou <code>\"1,4,7-9\"</code>. Les pages non visées gardent leur cadre." } },
+      ...TOOL_PARAMS,
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      { name: "box", type: "json", rows: 2, label: "box",
+        hint: { en: '"auto", or [left, bottom, right, top] in points', fr: '"auto", ou [gauche, bas, droite, haut] en points' }, value: '"auto"' },
+      { type: "row", fields: [
+        { name: "margin", type: "number", label: "margin", hint: { en: "points, auto mode", fr: "points, mode auto" }, value: "" },
+        { name: "pages", type: "text", label: "pages", placeholder: "all", value: "" },
+      ]},
+      outputBlock(),
+    ],
+    example: {
+      request: { pdf: "asset://as_9f2c…", box: "auto", margin: 18 },
+      response: { pages: 4, verdict: { status: "ok", score: 96, summary: "4 pages cropped", checks: [] } },
+    },
+    statuses: [["200", ST.toolOk], ["400", { en: "Malformed box / page list", fr: "Cadre ou liste de pages malformés" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["504", ST.timeout]],
+  },
+
+  // ────────────────────────────────────────── optimisation ────────────────
+
+  {
+    key: "compress", method: "POST", path: "/api/compress", json: true, group: "optimize",
+    title: { en: "Compress", fr: "Compresser" },
+    icon: "M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4M8 12h8",
+    card: { en: "Four presets, and a verdict that says what the compression cost — pages, text, image dpi.",
+      fr: "Quatre préréglages, et un verdict qui dit ce que la compression a coûté — pages, texte, dpi des images." },
+    desc: { en: "Ghostscript in -dSAFER, with the four standard presets.\nThe verdict is the point: it compares the page count and the number of selectable characters before and after, so a compression that rasterised a scan says so instead of being discovered on opening the file.",
+      fr: "Ghostscript en -dSAFER, avec les quatre préréglages standard.\nLe verdict est l'essentiel : il compare le nombre de pages et le nombre de caractères sélectionnables avant et après, de sorte qu'une compression qui a rastérisé un scan le dit, au lieu d'être découverte à l'ouverture du fichier." },
+    params: [
+      sourceParam("pdf"),
+      { name: "level", type: "enum", desc: { en: "<code>screen</code>, <code>ebook</code> (default), <code>printer</code>, <code>prepress</code>.", fr: "<code>screen</code>, <code>ebook</code> (défaut), <code>printer</code>, <code>prepress</code>." } },
+      { name: "dpi", type: "number", desc: { en: "Image downsampling target, 36 to 1200. Absent: the preset decides.", fr: "Cible de rééchantillonnage des images, 36 à 1200. Absent : le préréglage décide." } },
+      ...TOOL_PARAMS,
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      { type: "row", fields: [
+        { name: "level", type: "select", label: "level", options: ["", "screen", "ebook", "printer", "prepress"], value: "" },
+        { name: "dpi", type: "number", label: "dpi", hint: "36 → 1200", value: "" },
+      ]},
+      outputBlock(),
+    ],
+    example: {
+      request: { pdf: "asset://as_9f2c…", level: "ebook", output: "asset" },
+      response: { asset: { id: "as_71ad…", name: "compressed.pdf", kind: "pdf", bytes: 798231 },
+        pages: 12,
+        verdict: { status: "ok", score: 92, summary: "4.2 MB → 780 KB, text intact", checks: [{ name: "text-preserved", status: "ok", detail: "100% of the characters kept" }] } },
+    },
+    statuses: [["200", ST.toolOk], ["400", { en: "Unknown level / dpi out of range", fr: "level inconnu / dpi hors bornes" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["500", { en: "Ghostscript failed", fr: "Échec Ghostscript" }], ["504", ST.timeout]],
+  },
+
+  {
+    key: "repair", method: "POST", path: "/api/repair", json: true, group: "optimize",
+    title: { en: "Repair", fr: "Réparer" },
+    icon: "M14 7l3 3-7 7-3-3zM17 3l4 4-2 2-4-4z",
+    card: { en: "Rebuilds the internal structure of a file readers refuse to open.",
+      fr: "Reconstruit la structure interne d'un fichier que les lecteurs refusent d'ouvrir." },
+    desc: { en: "Rewrites the document with qpdf, then falls back to Ghostscript when qpdf itself cannot make sense of it.\nThe verdict says how many pages came back and whether the text layer survived — a repair that silently drops half the document is the failure mode worth naming.",
+      fr: "Réécrit le document avec qpdf, puis se rabat sur Ghostscript quand qpdf lui-même n'en tire rien.\nLe verdict dit combien de pages sont revenues et si la couche texte a survécu — une réparation qui perd silencieusement la moitié du document est le mode d'échec qui mérite d'être nommé." },
+    params: [sourceParam("pdf"), ...TOOL_PARAMS],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      outputBlock(),
+    ],
+    example: {
+      request: { pdf: "asset://as_9f2c…" },
+      response: { pages: 9, verdict: { status: "warn", score: 78, summary: "9 of 10 pages recovered", checks: [] } },
+    },
+    statuses: [["200", ST.toolOk], ["400", { en: "Unreadable source", fr: "Source illisible" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["504", ST.timeout]],
+  },
+
+  {
+    key: "unlock", method: "POST", path: "/api/unlock", json: true, group: "optimize",
+    title: { en: "Remove a password", fr: "Retirer un mot de passe" },
+    icon: "M7 11V8a5 5 0 019.5-2M5 11h14v9H5z",
+    card: { en: "Decrypts a PDF with the password you provide. No cracking, ever.",
+      fr: "Déchiffre un PDF avec le mot de passe que vous fournissez. Aucun cassage, jamais." },
+    desc: { en: "qpdf --decrypt, with the password given in the request.\nThere is no recovery mode and there will not be one: a tool that opens a document without its password is not a tool, it is a liability.",
+      fr: "qpdf --decrypt, avec le mot de passe fourni dans la requête.\nIl n'existe aucun mode de récupération et il n'en existera pas : un outil qui ouvre un document sans son mot de passe n'est pas un outil, c'est un risque." },
+    params: [
+      sourceParam("pdf"),
+      { name: "password", type: "string", required: true, desc: { en: "The document's own password. A wrong one is a 400 that says so.", fr: "Le mot de passe du document. Un mauvais mot de passe donne un 400 qui le dit." } },
+      ...TOOL_PARAMS,
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      { name: "password", type: "text", label: "password", required: true, value: "" },
+      outputBlock(),
+    ],
+    example: {
+      request: { pdf: "asset://as_9f2c…", password: "s3cr3t" },
+      response: { pages: 12 },
+    },
+    statuses: [["200", ST.toolOk], ["400", { en: "Missing or wrong password", fr: "Mot de passe absent ou faux" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["504", ST.timeout]],
+  },
+
+  {
+    key: "ocr", method: "POST", path: "/api/ocr", json: true, group: "optimize",
+    title: { en: "OCR", fr: "OCR" },
+    icon: "M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4M8 10h8M8 14h5",
+    card: { en: "Adds a text layer to a scan, and says which pages it is unsure about.",
+      fr: "Ajoute une couche texte à un scan, et dit de quelles pages il n'est pas sûr." },
+    desc: { en: "ocrmypdf over the pages that need it. \"auto\" only reads the pages without text, \"force\" rasterises and reads everything again, \"redo\" replaces a previous OCR layer.\nThe verdict names the pages below the confidence threshold — an OCR that half worked is worse than one that failed, because nobody checks.",
+      fr: "ocrmypdf sur les pages qui en ont besoin. « auto » ne lit que les pages sans texte, « force » rastérise et relit tout, « redo » remplace une couche OCR précédente.\nLe verdict nomme les pages sous le seuil de confiance — un OCR à moitié réussi est pire qu'un OCR échoué, parce que personne ne vérifie." },
+    params: [
+      sourceParam("pdf"),
+      { name: "languages", type: "string[]", desc: { en: "Among the languages installed in the image: <code>fra</code>, <code>eng</code>, <code>deu</code>, <code>spa</code>, <code>ita</code>. Default <code>[\"fra\", \"eng\"]</code>.", fr: "Parmi les langues installées dans l'image : <code>fra</code>, <code>eng</code>, <code>deu</code>, <code>spa</code>, <code>ita</code>. Défaut <code>[\"fra\", \"eng\"]</code>." } },
+      { name: "mode", type: "enum", desc: { en: "<code>auto</code> (default), <code>force</code> or <code>redo</code>.", fr: "<code>auto</code> (défaut), <code>force</code> ou <code>redo</code>." } },
+      { name: "pdfa", type: "boolean", desc: { en: "Also produce a PDF/A in the same pass, which ocrmypdf can do for free.", fr: "Produire en plus un PDF/A dans la même passe, ce qu'ocrmypdf sait faire gratuitement." } },
+      ...TOOL_PARAMS,
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      { name: "languages", type: "list", rows: 2, label: "languages",
+        hint: { en: "one per line: fra, eng, deu, spa, ita", fr: "une par ligne : fra, eng, deu, spa, ita" }, value: "" },
+      { type: "row", fields: [
+        { name: "mode", type: "select", label: "mode", options: ["", "auto", "force", "redo"], value: "" },
+        { name: "pdfa", type: "checkbox", label: "pdfa", value: false },
+      ]},
+      outputBlock(),
+    ],
+    example: {
+      request: { pdf: "asset://as_9f2c…", languages: ["fra"], mode: "auto", output: "asset" },
+      response: { pages: 24, verdict: { status: "warn", score: 81, summary: "24 pages read, 2 below the confidence threshold", checks: [{ name: "ocr-confidence", status: "warn", detail: "page 7: 61%", page: 7 }] } },
+    },
+    statuses: [["200", ST.toolOk], ["400", { en: "Unknown language or mode / too many pages", fr: "Langue ou mode inconnus / trop de pages" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["504", { en: "Timeout — send it through POST /api/jobs", fr: "Timeout — passez par POST /api/jobs" }]],
+  },
+
+  {
+    key: "pdfa", method: "POST", path: "/api/pdfa", json: true, group: "optimize",
+    title: { en: "PDF/A archiving", fr: "Archivage PDF/A" },
+    icon: "M4 4h16v5H4zM6 9v11h12V9M10 13h4",
+    card: { en: "Converts to the archival profile a public body will actually accept.",
+      fr: "Convertit vers le profil d'archivage qu'une administration acceptera réellement." },
+    desc: { en: "Ghostscript to the requested PDF/A profile, fonts embedded.\nThe verdict reports what the conversion changed — a profile is only worth something if you know the document survived it.",
+      fr: "Ghostscript vers le profil PDF/A demandé, polices embarquées.\nLe verdict rapporte ce que la conversion a changé — un profil ne vaut quelque chose que si l'on sait que le document y a survécu." },
+    params: [
+      sourceParam("pdf"),
+      { name: "variant", type: "enum", desc: { en: "<code>pdf/a-1b</code>, <code>pdf/a-2b</code> (default) or <code>pdf/a-3b</code>.", fr: "<code>pdf/a-1b</code>, <code>pdf/a-2b</code> (défaut) ou <code>pdf/a-3b</code>." } },
+      ...TOOL_PARAMS,
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      { name: "variant", type: "select", label: "variant", options: ["", "pdf/a-1b", "pdf/a-2b", "pdf/a-3b"], value: "" },
+      outputBlock(),
+    ],
+    example: {
+      request: { pdf: "/download/demo-client/report.pdf", variant: "pdf/a-2b" },
+      response: { pages: 12, verdict: { status: "ok", score: 100, summary: "pdf/a-2b, 12 pages, fonts embedded", checks: [] } },
+    },
+    statuses: [["200", ST.toolOk], ["400", { en: "Unknown variant", fr: "Variante inconnue" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["500", { en: "Ghostscript failed", fr: "Échec Ghostscript" }], ["504", ST.timeout]],
+  },
+
+  // ────────────────────────────────────────── conversions ─────────────────
+
+  {
+    key: "rasterize", method: "POST", path: "/api/rasterize", json: true, group: "convert",
+    title: { en: "PDF → images", fr: "PDF → images" },
+    icon: "M4 5h16v14H4zM8 13l3-3 3 3 2-2 2 2",
+    card: { en: "Pages of an uploaded document as PNG or JPEG, one asset per page.",
+      fr: "Les pages d'un document déposé en PNG ou JPEG, un asset par page." },
+    desc: { en: "pdftoppm on a document the service did not render — a thumbnail, a page for a viewer, an image for something that cannot read PDF.\nOne page comes back as the image itself; several come back as one asset per page.",
+      fr: "pdftoppm sur un document que le service n'a pas rendu — une vignette, une page pour une visionneuse, une image pour ce qui ne sait pas lire le PDF.\nUne page revient comme l'image elle-même ; plusieurs reviennent en un asset par page." },
+    params: [
+      sourceParam("pdf"),
+      { name: "pages", type: "string", desc: { en: "<code>\"1\"</code>, <code>\"2-5\"</code> or <code>\"all\"</code>. Absent: the whole document, up to the per-call ceiling.", fr: "<code>\"1\"</code>, <code>\"2-5\"</code> ou <code>\"all\"</code>. Absent : tout le document, jusqu'au plafond par appel." } },
+      { name: "dpi", type: "number", desc: { en: "36 to 300. Default <code>150</code>.", fr: "36 à 300. Défaut <code>150</code>." } },
+      { name: "format", type: "enum", desc: { en: "<code>png</code> (default) or <code>jpeg</code>.", fr: "<code>png</code> (défaut) ou <code>jpeg</code>." } },
+      ...TOOL_PARAMS,
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      { type: "row", fields: [
+        { name: "pages", type: "text", label: "pages", placeholder: "1, 2-5, all", value: "" },
+        { name: "dpi", type: "number", label: "dpi", hint: "36 → 300", value: "" },
+        { name: "format", type: "select", label: "format", options: ["", "png", "jpeg"], value: "" },
+      ]},
+      outputBlock(),
+    ],
+    example: {
+      request: { pdf: "asset://as_9f2c…", pages: "1-3", dpi: 150, format: "png" },
+      response: { assets: [{ id: "as_a1…", name: "page-1.png", kind: "png", bytes: 210442 }], pages: 3 },
+    },
+    statuses: [["200", { en: "Image, or JSON { assets }", fr: "Image, ou JSON { assets }" }], ["400", { en: "Range outside the document / pixel budget exceeded", fr: "Plage hors document / budget de pixels dépassé" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["504", ST.timeout]],
+  },
+
+  {
+    key: "images-to-pdf", method: "POST", path: "/api/images-to-pdf", json: true, group: "convert",
+    title: { en: "Images → PDF", fr: "Images → PDF" },
+    icon: "M3 6h13v11H3zM8 12l2-2 2 2 2-2M18 8h3v11H8",
+    card: { en: "Uploaded images become one paginated document, in the order given.",
+      fr: "Des images déposées deviennent un document paginé, dans l'ordre fourni." },
+    desc: { en: "One image per page, laid out by WeasyPrint rather than pasted at native size, so a portrait scan and a landscape photo end up in the same document without one of them overflowing.",
+      fr: "Une image par page, mise en page par WeasyPrint plutôt que collée à sa taille native : un scan portrait et une photo paysage finissent dans le même document sans que l'un déborde." },
+    params: [
+      { name: "images", type: "string[]", required: true, desc: { en: "<code>asset://as_…</code> references, one per page, in page order. 200 at most.", fr: "Références <code>asset://as_…</code>, une par page, dans l'ordre des pages. 200 au plus." } },
+      { name: "paper_size", type: "enum", desc: { en: "<code>A3</code>, <code>A4</code> (default), <code>A5</code>, <code>A6</code>, <code>Letter</code>, <code>Legal</code>, <code>Tabloid</code>. Ignored when <code>fit</code> is <code>actual</code>.", fr: "<code>A3</code>, <code>A4</code> (défaut), <code>A5</code>, <code>A6</code>, <code>Letter</code>, <code>Legal</code>, <code>Tabloid</code>. Ignoré quand <code>fit</code> vaut <code>actual</code>." } },
+      { name: "orientation", type: "enum", desc: { en: "<code>portrait</code> (default), <code>landscape</code>, or <code>auto</code> to follow each image.", fr: "<code>portrait</code> (défaut), <code>landscape</code>, ou <code>auto</code> pour suivre chaque image." } },
+      { name: "fit", type: "enum", desc: { en: "<code>contain</code> (default) or <code>actual</code>.", fr: "<code>contain</code> (défaut) ou <code>actual</code>." } },
+      { name: "margin", type: "number", desc: { en: "Points between the image and the page border, 144 at most.", fr: "Points entre l'image et le bord de page, 144 au plus." } },
+      ...TOOL_PARAMS,
+    ],
+    fields: [
+      { name: "images", type: "assetlist", pick: "image", rows: 4, label: "images", required: true,
+        hint: { en: "one asset:// per line, in page order", fr: "un asset:// par ligne, dans l'ordre des pages" }, value: "" },
+      { type: "row", fields: [
+        { name: "paper_size", type: "select", label: "paper_size", options: ["", "A3", "A4", "A5", "A6", "Letter", "Legal", "Tabloid"], value: "" },
+        { name: "orientation", type: "select", label: "orientation", options: ["", "portrait", "landscape", "auto"], value: "" },
+        { name: "fit", type: "select", label: "fit", options: ["", "contain", "actual"], value: "" },
+        { name: "margin", type: "number", label: "margin", hint: { en: "points", fr: "points" }, value: "" },
+      ]},
+      outputBlock(),
+    ],
+    example: {
+      request: { images: ["asset://as_a1…", "asset://as_b2…"], paper_size: "A4", fit: "contain", margin: 24 },
+      response: { pages: 2 },
+    },
+    statuses: [["200", ST.toolOk], ["400", { en: "Empty list / reference that is not an image", fr: "Liste vide / référence qui n'est pas une image" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["504", ST.timeout]],
+  },
+
+  {
+    key: "office-to-pdf", method: "POST", path: "/api/office-to-pdf", json: true, group: "convert",
+    title: { en: "Office → PDF", fr: "Office → PDF" },
+    icon: "M5 3h9l5 5v13H5zM14 3v5h5M8 13h8M8 17h5",
+    card: { en: "Word, Excel, PowerPoint, OpenDocument and CSV, converted by LibreOffice in the sandbox.",
+      fr: "Word, Excel, PowerPoint, OpenDocument et CSV, convertis par LibreOffice dans le bac à sable." },
+    desc: { en: "LibreOffice headless, with a throwaway profile, macros disabled and no network.\nThe verdict reports the page count and the text coverage of the result: a conversion that produced two blank pages is caught here rather than by the recipient.",
+      fr: "LibreOffice headless, avec un profil jetable, macros désactivées et sans réseau.\nLe verdict rapporte le nombre de pages et la couverture texte du résultat : une conversion qui a produit deux pages blanches est attrapée ici plutôt que par le destinataire." },
+    params: [
+      { name: "file", type: "string", required: true, desc: { en: "<code>asset://as_…</code> of an uploaded document — this direction always starts from an upload.", fr: "<code>asset://as_…</code> d'un document déposé — cette direction part toujours d'un dépôt." } },
+      ...TOOL_PARAMS,
+    ],
+    fields: [
+      { name: "file", type: "assetpick", pick: "office", label: "file", required: true, value: "" },
+      outputBlock(),
+    ],
+    example: {
+      request: { file: "asset://as_9f2c…", output: "asset" },
+      response: { asset: { id: "as_51fe…", name: "office.pdf", kind: "pdf", bytes: 240119 }, pages: 6,
+        verdict: { status: "ok", score: 94, summary: "6 pages, text kept", checks: [] } },
+    },
+    statuses: [["200", ST.toolOk], ["400", { en: "The asset is not an Office document", fr: "L'asset n'est pas un document Office" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["504", { en: "Timeout — send it through POST /api/jobs", fr: "Timeout — passez par POST /api/jobs" }]],
+  },
+
+  {
+    key: "pdf-to-office", method: "POST", path: "/api/pdf-to-office", json: true, group: "convert",
+    title: { en: "PDF → Office", fr: "PDF → Office" },
+    icon: "M5 3h9l5 5v13H5zM14 3v5h5M9 14l3 3 3-3",
+    card: { en: "Back to an editable document — docx, xlsx or pptx, with a verdict on what survived.",
+      fr: "Retour à un document éditable — docx, xlsx ou pptx, avec un verdict sur ce qui a survécu." },
+    desc: { en: "LibreOffice reads the PDF back through the import filter matching the target format.\nThis direction is lossy by nature. The verdict says how much of the text made it across, which is the only honest way to offer it.",
+      fr: "LibreOffice relit le PDF via le filtre d'import correspondant au format cible.\nCette direction est lossy par nature. Le verdict dit quelle part du texte est passée, seule manière honnête de la proposer." },
+    params: [
+      sourceParam("pdf"),
+      { name: "to", type: "enum", required: true, desc: { en: "<code>docx</code>, <code>xlsx</code> or <code>pptx</code>.", fr: "<code>docx</code>, <code>xlsx</code> ou <code>pptx</code>." } },
+      ...TOOL_PARAMS,
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      { name: "to", type: "select", label: "to", options: ["docx", "xlsx", "pptx"], value: "docx" },
+      outputBlock(),
+    ],
+    example: {
+      request: { pdf: "asset://as_9f2c…", to: "docx", output: "asset" },
+      response: { asset: { id: "as_88cc…", name: "converted.docx", kind: "docx", bytes: 61204 },
+        verdict: { status: "warn", score: 74, summary: "text kept, layout approximated", checks: [] } },
+    },
+    statuses: [["200", ST.toolOk], ["400", { en: "Unknown target format", fr: "Format cible inconnu" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["504", { en: "Timeout — send it through POST /api/jobs", fr: "Timeout — passez par POST /api/jobs" }]],
+  },
+
+  {
+    key: "extract", method: "POST", path: "/api/extract", json: true, group: "convert",
+    title: { en: "PDF → Markdown", fr: "PDF → Markdown" },
+    icon: "M4 5h16v14H4zM7 15l3-6 2 4 2-2 3 4",
+    card: { en: "The text back as Markdown, plain text or structured JSON — tables included.",
+      fr: "Le texte en Markdown, texte brut ou JSON structuré — tableaux compris." },
+    desc: { en: "pdftotext with the layout kept, plus our own column heuristic to rebuild the tables.\nThis is the endpoint an agent wants: a PDF is unreadable to a model, Markdown is not.",
+      fr: "pdftotext en conservant la mise en page, plus notre propre heuristique de colonnes pour reconstruire les tableaux.\nC'est l'endpoint que veut un agent : un PDF est illisible pour un modèle, du Markdown non." },
+    params: [
+      sourceParam("pdf"),
+      { name: "format", type: "enum", desc: { en: "<code>markdown</code> (default), <code>text</code> or <code>json</code>.", fr: "<code>markdown</code> (défaut), <code>text</code> ou <code>json</code>." } },
+      { name: "pages", type: "string", desc: { en: "<code>\"1\"</code>, <code>\"2-5\"</code> or <code>\"all\"</code>. Absent: the whole document.", fr: "<code>\"1\"</code>, <code>\"2-5\"</code> ou <code>\"all\"</code>. Absent : tout le document." } },
+      { name: "layout", type: "boolean", desc: { en: "Keep the column layout, on by default. Turning it off gives reading order instead, at the cost of every table.", fr: "Conserver la disposition en colonnes, actif par défaut. Le couper donne l'ordre de lecture, au prix de tous les tableaux." } },
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      { type: "row", fields: [
+        { name: "format", type: "select", label: "format", options: ["", "markdown", "text", "json"], value: "" },
+        { name: "pages", type: "text", label: "pages", placeholder: "all", value: "" },
+        { name: "layout", type: "bool", label: "layout", value: "" },
+      ]},
+    ],
+    example: {
+      request: { pdf: "asset://as_9f2c…", format: "markdown", pages: "1-2" },
+      response: { format: "markdown", pages: 2, content: "# Contract\n\n| Item | Price |\n|---|---|\n…" },
+    },
+    statuses: [["200", "ExtractResponse"], ["400", { en: "Unknown format / range outside the document", fr: "Format inconnu / plage hors document" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["504", ST.timeout]],
+  },
+
+  // ────────────────────────────────────────── contrat et preuve ───────────
+
+  {
+    key: "compose", method: "POST", path: "/api/compose", json: true, group: "contract",
+    title: { en: "Document contract", fr: "Contrat de document" },
+    icon: "M6 3h9l4 4v14H6zM9 12h7M9 16h5M9 8h4",
+    card: { en: "You state constraints, not a render. The service renders, audits, corrects, and answers with the log.",
+      fr: "Vous posez des contraintes, pas une demande de rendu. Le service rend, audite, corrige, et répond avec le journal." },
+    desc: { en: "At most four pages, no table cut in half, a layout score of at least 90: the service renders, audits, corrects and re-renders until the contract holds or the passes run out.\nEntirely deterministic — no model, no outbound call. A contract that cannot be met still returns the best document produced, and names what is still unmet.",
+      fr: "Quatre pages au plus, aucun tableau coupé en deux, un score de mise en page d'au moins 90 : le service rend, audite, corrige et re-rend jusqu'à ce que le contrat tienne ou que les passes soient épuisées.\nEntièrement déterministe — aucun modèle, aucun appel sortant. Un contrat qui ne peut pas être tenu rend quand même le meilleur document produit, et nomme ce qui reste non satisfait." },
+    params: [
+      { name: "markdown", type: "string", desc: { en: "Source document. <code>html</code>, or <code>template</code> + <code>data</code>, work too — same three modes as the render endpoints.", fr: "Document source. <code>html</code>, ou <code>template</code> + <code>data</code>, marchent aussi — mêmes trois modes que les endpoints de rendu." } },
+      CSS_PARAM, OPTIONS_PARAM,
+      { name: "constraints", type: "object", desc: {
+        en: "<code>max_pages</code>, <code>min_pages</code>, <code>no_split_tables</code>, <code>no_orphan_headings</code>, <code>no_blank_pages</code>, <code>no_overflow</code>, <code>min_layout_score</code> (0–100). Every field is optional; with none, this is a render with a report.",
+        fr: "<code>max_pages</code>, <code>min_pages</code>, <code>no_split_tables</code>, <code>no_orphan_headings</code>, <code>no_blank_pages</code>, <code>no_overflow</code>, <code>min_layout_score</code> (0–100). Chaque champ est optionnel ; sans aucun, c'est un rendu avec rapport." } },
+      { name: "max_passes", type: "number", desc: { en: "Corrective passes allowed, 1 to 5. Default <code>3</code>. Each pass is a full render.", fr: "Passes correctives autorisées, 1 à 5. Défaut <code>3</code>. Chaque passe est un rendu complet." } },
+      { name: "attest", type: "boolean", desc: { en: "Seal the result with a signed attestation, returned in <code>attestation</code>.", fr: "Sceller le résultat par une attestation signée, renvoyée dans <code>attestation</code>." } },
+      ...SAVE_PARAMS, OUTPUT_PARAM,
+    ],
+    fields: [
+      { name: "markdown", type: "textarea", rows: 10, label: "markdown", value: SAMPLE_MD },
+      cssField,
+      { type: "fieldset", legend: { en: "constraints — what the document must satisfy", fr: "constraints — ce que le document doit satisfaire" }, collapsed: false, fields: [
+        { type: "row", fields: [
+          { name: "constraints.max_pages", type: "number", label: "max_pages", value: "" },
+          { name: "constraints.min_pages", type: "number", label: "min_pages", value: "" },
+          { name: "constraints.min_layout_score", type: "number", label: "min_layout_score", hint: "0 → 100", value: "" },
+        ]},
+        { name: "constraints.no_split_tables", type: "checkbox", label: "no_split_tables", value: false },
+        { name: "constraints.no_orphan_headings", type: "checkbox", label: "no_orphan_headings", value: false },
+        { name: "constraints.no_blank_pages", type: "checkbox", label: "no_blank_pages", value: false },
+        { name: "constraints.no_overflow", type: "checkbox", label: "no_overflow", value: false },
+      ]},
+      { type: "row", fields: [
+        { name: "max_passes", type: "number", label: "max_passes", hint: "1 → 5", value: "" },
+        { name: "attest", type: "checkbox", label: "attest", value: false },
+      ]},
+      optionsBlock(), outputBlock(),
+    ],
+    example: {
+      request: () => ({
+        markdown: t({ en: "# Quarterly report", fr: "# Rapport trimestriel" }) + "\n\n…",
+        options: { theme: "report@1" },
+        constraints: { max_pages: 4, no_split_tables: true, min_layout_score: 90 },
+        client_id: "demo-client", pdf_name: t({ en: "report-2026", fr: "rapport-2026" }),
+      }),
+      response: { verdict: "met", score: 94, pages: 4, passes: [{ n: 1, score: 82, pages: 5, applied: ["tighter table"] }, { n: 2, score: 94, pages: 4, applied: [] }], unmet: [] },
+    },
+    statuses: [["200", { en: "PDF, or JSON { verdict, score, pages, passes, unmet, layout }", fr: "PDF, ou JSON { verdict, score, pages, passes, unmet, layout }" }], ["400", ST.badRequest], ["401", ST.unauthorized], ["500", { en: "Render failed", fr: "Échec du rendu" }], ["504", ST.timeout]],
+  },
+
+  {
+    key: "attest", method: "POST", path: "/api/attest", json: true, group: "contract",
+    title: { en: "Attestation of origin", fr: "Attestation d'origine" },
+    icon: "M12 3l7 4v6c0 4-3 7-7 8-4-1-7-4-7-8V7zM9 12l2 2 4-4",
+    card: { en: "A signed manifest that says this file came from here, and has not moved since.",
+      fr: "Un manifeste signé qui dit que ce fichier vient d'ici, et qu'il n'a pas bougé depuis." },
+    desc: { en: "Hash of the document, page count, engine, theme, PDF variant, operations applied, timestamp — sealed into one line, v1.<payload>.<signature>.\nThe record is self-contained: verifying it needs the file and that line, never a lookup in a database we would then have to keep, back up and eventually leak.",
+      fr: "Empreinte du document, nombre de pages, moteur, thème, variante PDF, opérations appliquées, horodatage — scellés en une seule ligne, v1.<payload>.<signature>.\nLa fiche est autoportante : la vérifier demande le fichier et cette ligne, jamais une consultation dans une base qu'il faudrait ensuite conserver, sauvegarder, et finir par laisser fuir." },
+    params: [
+      sourceParam("pdf"),
+      { name: "engine", type: "string", desc: { en: "Recorded as claimed by the caller — useful when the PDF was produced by a chain.", fr: "Enregistré tel que déclaré par l'appelant — utile quand le PDF vient d'une chaîne." } },
+      { name: "theme", type: "string", desc: { en: "Brand kit as <code>name@version</code>.", fr: "Kit de marque, sous la forme <code>nom@version</code>." } },
+      { name: "pdf_variant", type: "string", desc: { en: "e.g. <code>pdf/a-2b</code>.", fr: "par ex. <code>pdf/a-2b</code>." } },
+      { name: "source_sha256", type: "string", desc: { en: "SHA-256 of the source document, when you kept it: 64 hexadecimal characters, checked before being sealed.", fr: "SHA-256 du document source, si vous l'avez gardé : 64 caractères hexadécimaux, vérifiés avant d'être scellés." } },
+      { name: "operations", type: "string[]", desc: { en: "What was applied, 16 entries at most: <code>compress</code>, <code>ocr</code>, <code>redact</code>…", fr: "Ce qui a été appliqué, 16 entrées au plus : <code>compress</code>, <code>ocr</code>, <code>redact</code>…" } },
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      { type: "row", fields: [
+        { name: "engine", type: "text", label: "engine", placeholder: "weasyprint", value: "" },
+        { name: "theme", type: "text", label: "theme", placeholder: "report@1", value: "" },
+        { name: "pdf_variant", type: "text", label: "pdf_variant", placeholder: "pdf/a-2b", value: "" },
+      ]},
+      { name: "source_sha256", type: "text", label: "source_sha256", hint: { en: "64 hexadecimal characters", fr: "64 caractères hexadécimaux" }, value: "" },
+      { name: "operations", type: "list", rows: 2, label: "operations",
+        hint: { en: "one per line", fr: "une par ligne" }, value: "" },
+    ],
+    example: {
+      request: { pdf: "/download/demo-client/report.pdf", theme: "report@1", operations: ["compress", "ocr"] },
+      response: { attestation: "v1.eyJ…….", claims: { version: 1, service: "md-to-pdf", issued_at: "2026-08-19T12:04:00Z", output_sha256: "9f2c…", bytes: 184203, pages: 12, theme: "report@1", operations: ["compress", "ocr"] } },
+    },
+    statuses: [["200", { en: "{ attestation, claims }", fr: "{ attestation, claims }" }], ["400", { en: "Malformed source_sha256", fr: "source_sha256 malformé" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["504", ST.timeout]],
+  },
+
+  {
+    key: "verify", method: "POST", path: "/api/verify", json: true, group: "contract",
+    title: { en: "Verify an attestation", fr: "Vérifier une attestation" },
+    icon: "M12 3l7 4v6c0 4-3 7-7 8-4-1-7-4-7-8V7zM8 12l3 3 5-6",
+    card: { en: "Checks the signature and re-hashes the file: same document, or not.",
+      fr: "Vérifie la signature et recalcule l'empreinte du fichier : même document, ou pas." },
+    desc: { en: "Takes an attestation and the file it claims to describe, and answers with one of four verdicts.\nThe two failures are told apart deliberately: \"forged\" means the record itself was altered or came from another deployment, \"altered\" means the record is genuine and the document was edited. A single \"invalid\" would hide which incident happened.",
+      fr: "Prend une attestation et le fichier qu'elle prétend décrire, et répond par l'un de quatre verdicts.\nLes deux échecs sont distingués volontairement : « forged » signifie que la fiche elle-même a été altérée ou vient d'un autre déploiement, « altered » que la fiche est authentique et que le document a été modifié. Un seul « invalid » masquerait lequel des deux incidents s'est produit." },
+    params: [
+      sourceParam("pdf"),
+      { name: "attestation", type: "string", required: true, desc: { en: "The <code>v1.&lt;payload&gt;.&lt;signature&gt;</code> line returned by <code>/api/attest</code>, or by <code>/api/compose</code> with <code>attest: true</code>.", fr: "La ligne <code>v1.&lt;payload&gt;.&lt;signature&gt;</code> renvoyée par <code>/api/attest</code>, ou par <code>/api/compose</code> avec <code>attest: true</code>." } },
+    ],
+    fields: [
+      { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
+      { name: "attestation", type: "textarea", rows: 3, label: "attestation", required: true, placeholder: "v1.…", value: "" },
+    ],
+    example: {
+      request: { pdf: "/download/demo-client/report.pdf", attestation: "v1.eyJ……." },
+      response: { verdict: "valid", detail: "The signature matches and the file still hashes to what was sealed.", attestation: { output_sha256: "9f2c…", pages: 12, issued_at: "2026-08-19T12:04:00Z" } },
+    },
+    statuses: [["200", { en: "{ verdict: valid | altered | forged | unreadable, detail, attestation }", fr: "{ verdict : valid | altered | forged | unreadable, detail, attestation }" }], ["401", ST.unauthorized], ["404", ST.sourceMissing]],
+  },
+
+  // ────────────────────────────────────────── travaux asynchrones ─────────
+
+  {
+    key: "jobs", method: "POST", path: "/api/jobs", json: true, group: "jobs",
+    title: { en: "Submit a job", fr: "Soumettre un travail" },
+    icon: "M12 6v6l4 2M12 3a9 9 0 100 18 9 9 0 000-18z",
+    card: { en: "For the tools that outlive a request: OCR, LibreOffice, Ghostscript on a large file.",
+      fr: "Pour les outils qui survivent à une requête : OCR, LibreOffice, Ghostscript sur un gros fichier." },
+    desc: { en: "Takes the name of an endpoint and the body it would have received, and answers 202 with a job to poll.\nThe result is forced to an asset unless a download destination was named: a job has no socket to stream a file down.\nSupported: compress, ocr, pdfa, office-to-pdf, pdf-to-office, pages, rasterize, repair, images-to-pdf.",
+      fr: "Prend le nom d'un endpoint et le corps qu'il aurait reçu, et répond 202 avec un travail à interroger.\nLe résultat est forcé en asset sauf si une destination de téléchargement est nommée : un travail n'a pas de socket pour faire descendre un fichier.\nSupportés : compress, ocr, pdfa, office-to-pdf, pdf-to-office, pages, rasterize, repair, images-to-pdf." },
+    params: [
+      { name: "endpoint", type: "string", required: true, desc: { en: "<code>ocr</code> or <code>/api/ocr</code>, both work.", fr: "<code>ocr</code> ou <code>/api/ocr</code>, les deux marchent." } },
+      { name: "body", type: "object", required: true, desc: { en: "Exactly the body that endpoint takes.", fr: "Exactement le corps que prend cet endpoint." } },
+      { name: "callback_url", type: "string", desc: { en: "http(s) URL notified once when the job ends, signed with <code>X-Signature</code>. Sent once, never retried.", fr: "URL http(s) notifiée une fois le travail terminé, signée par <code>X-Signature</code>. Envoyée une fois, jamais réessayée." } },
+    ],
+    fields: [
+      { name: "endpoint", type: "select", label: "endpoint",
+        options: ["compress", "ocr", "pdfa", "office-to-pdf", "pdf-to-office", "pages", "rasterize", "repair", "images-to-pdf"], value: "ocr" },
+      { name: "body", type: "json", rows: 6, label: "body", required: true,
+        value: '{\n  "pdf": "asset://as_…",\n  "mode": "auto"\n}' },
+      { name: "callback_url", type: "text", label: "callback_url", placeholder: "https://…", value: "" },
+    ],
+    example: {
+      request: { endpoint: "ocr", body: { pdf: "asset://as_9f2c…", languages: ["fra"] } },
+      response: { job_id: "jb_4c1e…", status: "queued", kind: "ocr", poll_url: "/api/jobs/jb_4c1e…" },
+    },
+    statuses: [["202", { en: "Job accepted", fr: "Travail accepté" }], ["400", { en: "Endpoint not queueable / invalid body", fr: "Endpoint non asynchronisable / corps invalide" }], ["401", ST.unauthorized]],
+  },
+
+  {
+    key: "job-status", method: "GET", path: "/api/jobs/{id}", group: "jobs",
+    title: { en: "Poll a job", fr: "Interroger un travail" },
+    icon: "M4 6h16M4 12h10M4 18h7M17 15l3 3-3 3",
+    card: { en: "queued, running, done or failed — with the tool's own answer once it is done.",
+      fr: "queued, running, done ou failed — avec la réponse de l'outil une fois terminé." },
+    desc: { en: "The poll URL is the source of truth, callback or not.\nOnce \"done\", \"result\" holds exactly what the synchronous endpoint would have answered.",
+      fr: "L'URL d'interrogation fait foi, avec ou sans callback.\nUne fois « done », « result » contient exactement ce que l'endpoint synchrone aurait répondu." },
+    params: [{ name: "id", type: "path", required: true, desc: { en: "Job identifier returned on submission.", fr: "Identifiant de travail renvoyé à la soumission." } }],
+    fields: [{ name: "id", type: "text", label: "id", required: true, placeholder: "jb_…", value: "" }],
+    buildPath: (v) => `/api/jobs/${encodeURIComponent(v.id || "")}`,
+    example: {
+      response: { job_id: "jb_4c1e…", status: "done", kind: "ocr", poll_url: "/api/jobs/jb_4c1e…", result: { asset: { id: "as_77aa…", kind: "pdf", pages: 24 }, pages: 24 } },
+    },
+    statuses: [["200", "JobView"], ["401", ST.unauthorized], ["404", { en: "Unknown or expired job", fr: "Travail inconnu ou expiré" }]],
+  },
+
+  // ────────────────────────────────────────── compte et clés ──────────────
+
+  // Ces huit endpoints s'authentifient par le cookie de session, jamais par
+  // X-API-Key : `auth: false` dit qu'aucune clé n'est attendue, et la session
+  // requise est dite dans chaque description.
+  {
+    key: "signup", method: "POST", path: "/api/auth/signup", json: true, auth: false, group: "account",
+    title: { en: "Create an account", fr: "Créer un compte" },
+    icon: "M16 20v-2a4 4 0 00-8 0v2M12 12a4 4 0 100-8 4 4 0 000 8zM19 8v6M22 11h-6",
+    card: { en: "Creates the account and opens the session in one call: the cookie ships with the answer, there is no second step.",
+      fr: "Crée le compte et ouvre la session dans le même appel : le cookie part avec la réponse, il n'y a pas de deuxième étape." },
+    desc: { en: "The address is lower-cased and trimmed, and is the account identifier. The password is at least 10 characters and is hashed with PBKDF2-HMAC-SHA256.\nTwo sign-ups racing on the same address cannot both win: the second gets a 400.",
+      fr: "L'adresse est mise en minuscules et nettoyée, et sert d'identifiant du compte. Le mot de passe fait 10 caractères au minimum et est haché en PBKDF2-HMAC-SHA256.\nDeux inscriptions simultanées sur la même adresse ne peuvent pas gagner toutes les deux : la seconde reçoit un 400." },
+    params: [
+      { name: "email", type: "string", required: true, desc: { en: "The login. Normalised before anything else.", fr: "L'identifiant. Normalisée avant toute chose." } },
+      { name: "password", type: "string", required: true, desc: { en: "10 characters at least.", fr: "10 caractères au minimum." } },
+      { name: "name", type: "string", desc: { en: "Optional display name.", fr: "Nom affiché, facultatif." } },
+    ],
+    fields: [
+      { name: "email", type: "text", label: "email", required: true, placeholder: "jean@exemple.fr", value: "" },
+      { name: "password", type: "text", label: "password", required: true, value: "" },
+      { name: "name", type: "text", label: "name", value: "" },
+    ],
+    example: {
+      request: { email: "jean@exemple.fr", password: "un mot de passe assez long", name: "Jean Dupont" },
+      response: { account: { id: "acc_9f2c…", email: "jean@exemple.fr", plan: "free", created_at: "2026-08-19T12:02:11Z" } },
+    },
+    statuses: [["201", { en: "Account created, session open", fr: "Compte créé, session ouverte" }], ["400", { en: "Implausible address, password too short, or address already taken", fr: "Adresse invraisemblable, mot de passe trop court, ou adresse déjà prise" }]],
+  },
+
+  {
+    key: "login", method: "POST", path: "/api/auth/login", json: true, auth: false, group: "account",
+    title: { en: "Sign in", fr: "Se connecter" },
+    icon: "M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3",
+    card: { en: "Sets the mdpdf_session cookie: HttpOnly, SameSite=Lax, and Secure as soon as the connection is HTTPS.",
+      fr: "Pose le cookie mdpdf_session : HttpOnly, SameSite=Lax, et Secure dès que la connexion est en HTTPS." },
+    desc: { en: "Checks the address and the password, then opens a session. The \"name\" field is ignored here.\nA refusal never says which of the two was wrong — otherwise the endpoint becomes a directory of registered addresses.",
+      fr: "Vérifie l'adresse et le mot de passe, puis ouvre une session. Le champ « name » est ignoré ici.\nUn refus ne dit jamais laquelle des deux valeurs était fausse — sinon l'endpoint devient un annuaire d'adresses inscrites." },
+    params: [
+      { name: "email", type: "string", required: true, desc: { en: "The account address.", fr: "L'adresse du compte." } },
+      { name: "password", type: "string", required: true, desc: { en: "The password.", fr: "Le mot de passe." } },
+    ],
+    fields: [
+      { name: "email", type: "text", label: "email", required: true, placeholder: "jean@exemple.fr", value: "" },
+      { name: "password", type: "text", label: "password", required: true, value: "" },
+    ],
+    example: {
+      request: { email: "jean@exemple.fr", password: "un mot de passe assez long" },
+      response: { account: { id: "acc_9f2c…", email: "jean@exemple.fr", plan: "free", created_at: "2026-08-19T12:02:11Z" } },
+    },
+    statuses: [["200", { en: "Session open", fr: "Session ouverte" }], ["401", { en: "Wrong address or password", fr: "Adresse ou mot de passe incorrects" }]],
+  },
+
+  {
+    key: "logout", method: "POST", path: "/api/auth/logout", auth: false, group: "account",
+    title: { en: "Sign out", fr: "Se déconnecter" },
+    icon: "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
+    card: { en: "Invalidates the session server-side and drops the cookie.",
+      fr: "Invalide la session côté serveur et retire le cookie." },
+    desc: { en: "Answers 204 even with no cookie: signing out twice is not an error.",
+      fr: "Répond 204 même sans cookie : se déconnecter deux fois n'est pas une erreur." },
+    params: [],
+    fields: [],
+    example: { responseNote: { en: "Empty body", fr: "Corps vide" } },
+    statuses: [["204", { en: "Session closed", fr: "Session fermée" }]],
+  },
+
+  {
+    key: "me", method: "GET", path: "/api/auth/me", auth: false, group: "account",
+    title: { en: "The current account", fr: "Le compte connecté" },
+    icon: "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z",
+    card: { en: "Who the session cookie belongs to. Needs the cookie, not an API key.",
+      fr: "À qui appartient le cookie de session. Demande le cookie, pas une clé d'API." },
+    desc: { en: "Returns the account attached to the mdpdf_session cookie.\n401 rather than a redirect: this is a JSON endpoint, and sending someone to a sign-in page is a page's job.",
+      fr: "Renvoie le compte attaché au cookie mdpdf_session.\n401 plutôt qu'une redirection : c'est un endpoint JSON, et renvoyer quelqu'un vers une page de connexion est le travail d'une page." },
+    params: [],
+    fields: [],
+    example: { response: { account: { id: "acc_9f2c…", email: "jean@exemple.fr", plan: "free", name: "Jean Dupont", created_at: "2026-08-19T12:02:11Z" } } },
+    statuses: [["200", "SessionResponse"], ["401", { en: "No session — sign in first", fr: "Aucune session — se connecter d'abord" }]],
+  },
+
+  {
+    key: "key-create", method: "POST", path: "/api/keys", json: true, auth: false, group: "account",
+    title: { en: "Create an API key", fr: "Créer une clé d'API" },
+    icon: "M15 7a5 5 0 11-4.6 3H3v4h3v-2h2v2h2.4",
+    card: { en: "Self-service keys. The secret travels once, here, and is stored hashed — so it can never be shown again.",
+      fr: "Des clés en libre-service. Le secret ne circule qu'ici, et n'est stocké que haché — il ne pourra jamais être réaffiché." },
+    desc: { en: "Creates a named key for the signed-in account. Only its hash is kept, exactly like a password: a copy of the store is not a copy of the keys.\nTwenty keys per account at most; past that one has to be revoked.",
+      fr: "Crée une clé nommée pour le compte connecté. Seul son hachage est conservé, exactement comme un mot de passe : une copie du magasin n'est pas une copie des clés.\nVingt clés par compte au plus ; au-delà, il faut en révoquer une." },
+    params: [
+      { name: "name", type: "string", required: true, desc: { en: "What the key is for, so it can be told apart in the list.", fr: "À quoi sert la clé, pour la reconnaître dans la liste." } },
+    ],
+    fields: [
+      { name: "name", type: "text", label: "name", required: true, placeholder: "zapier", value: "" },
+    ],
+    example: {
+      request: { name: "zapier" },
+      response: { key: { id: "key_9f2c…", name: "zapier", created_at: "2026-08-19T12:02:11Z", hint: "sk_9f2c1d84" }, secret: "sk_9f2c1d84e6b74a01bd35c7f0a1e2d3c4", notice: "Copy this key now: it is stored hashed and cannot be shown again." },
+    },
+    statuses: [["201", { en: "Key created — the secret is in this answer and nowhere else", fr: "Clé créée — le secret est dans cette réponse et nulle part ailleurs" }], ["400", { en: "Invalid name, or twentieth key already reached", fr: "Nom invalide, ou vingtième clé déjà atteinte" }], ["401", { en: "No session", fr: "Aucune session" }]],
+  },
+
+  {
+    key: "key-list", method: "GET", path: "/api/keys", auth: false, group: "account",
+    title: { en: "List your API keys", fr: "Lister ses clés d'API" },
+    icon: "M4 6h16M4 12h16M4 18h10",
+    card: { en: "Name, creation date, last use, and the first characters of each secret.",
+      fr: "Nom, date de création, dernière utilisation, et les premiers caractères de chaque secret." },
+    desc: { en: "The keys of the signed-in account. The hint is the first eleven characters of the secret: enough to tell two keys apart, not enough to use one.",
+      fr: "Les clés du compte connecté. Le hint reprend les onze premiers caractères du secret : assez pour distinguer deux clés, pas assez pour s'en servir." },
+    params: [],
+    fields: [],
+    example: { response: { keys: [{ id: "key_9f2c…", name: "zapier", created_at: "2026-08-19T12:02:11Z", last_used: "2026-08-19T13:40:02Z", hint: "sk_9f2c1d84" }] } },
+    statuses: [["200", "KeyList"], ["401", { en: "No session", fr: "Aucune session" }]],
+  },
+
+  {
+    key: "key-revoke", method: "DELETE", path: "/api/keys/{id}", auth: false, group: "account",
+    title: { en: "Revoke an API key", fr: "Révoquer une clé d'API" },
+    icon: "M6 6l12 12M18 6L6 18",
+    card: { en: "Immediate and final. A key belonging to another account is a 404, not a 403.",
+      fr: "Immédiate et définitive. Une clé d'un autre compte est un 404, pas un 403." },
+    desc: { en: "Revokes one key of the signed-in account.\nThe existence of a key that is not yours is none of your business, which is why the answer is 404 and not 403.",
+      fr: "Révoque une clé du compte connecté.\nL'existence d'une clé qui n'est pas la vôtre ne vous regarde pas, d'où le 404 plutôt qu'un 403." },
+    params: [{ name: "id", type: "path", required: true, desc: { en: "Key identifier, <code>key_</code> followed by 32 hexadecimal characters.", fr: "Identifiant de clé, <code>key_</code> suivi de 32 caractères hexadécimaux." } }],
+    fields: [{ name: "id", type: "text", label: "id", required: true, placeholder: "key_…", value: "" }],
+    buildPath: (v) => `/api/keys/${encodeURIComponent(v.id || "")}`,
+    example: { responseNote: { en: "Empty body", fr: "Corps vide" } },
+    statuses: [["204", { en: "Key revoked", fr: "Clé révoquée" }], ["401", { en: "No session", fr: "Aucune session" }], ["404", { en: "Unknown key for this account", fr: "Clé inconnue pour ce compte" }]],
+  },
+
+  {
+    key: "history", method: "GET", path: "/api/history", auth: false, group: "account",
+    title: { en: "Quality record", fr: "Registre de qualité" },
+    icon: "M4 5h16M4 12h16M4 19h10",
+    card: { en: "What this account did, newest first, with the verdict of each operation.",
+      fr: "Ce que ce compte a fait, du plus récent au plus ancien, avec le verdict de chaque opération." },
+    desc: { en: "Their history is a list of files; this one is a list of what each operation cost.\nWritten automatically whenever an operation is authenticated by one of the account's keys. An anonymous visitor leaves no trace — that is the counterpart of a free tier that asks for no account. Five hundred entries are kept per account, and this endpoint returns the hundred most recent.",
+      fr: "Leur historique est une liste de fichiers ; celui-ci est une liste de ce que chaque opération a coûté.\nÉcrit automatiquement dès qu'une opération est authentifiée par une clé du compte. Un visiteur anonyme ne laisse aucune trace — c'est la contrepartie d'un palier gratuit qui ne demande pas de compte. Cinq cents entrées sont conservées par compte, et cet endpoint renvoie les cent plus récentes." },
+    params: [],
+    fields: [],
+    example: { response: { entries: [{ id: "op_9f3a", tool: "compress", at: "2026-08-19T20:42:54Z", file: "contrat.pdf", bytes: 798720, pages: 12, verdict: { status: "ok", score: 100, summary: "4.2 MB → 780 kB, text intact, 12 pages" } }] } },
+    statuses: [["200", { en: "The operations, newest first", fr: "Les opérations, la plus récente d'abord" }], ["401", { en: "No session", fr: "Aucune session" }]],
+  },
+
+  {
+    key: "history-clear", method: "DELETE", path: "/api/history", auth: false, group: "account",
+    title: { en: "Clear the record", fr: "Effacer le registre" },
+    icon: "M6 7h12M9 7V5h6v2M8 7l1 13h6l1-13",
+    card: { en: "Empties the history without touching the account.",
+      fr: "Vide l'historique sans toucher au compte." },
+    desc: { en: "\"Delete my history\" is something people ask without wanting to leave: it deserves its own button.",
+      fr: "« Effacer mon historique » est une demande qu'on fait sans vouloir partir : elle mérite son propre bouton." },
+    params: [],
+    fields: [],
+    example: { responseNote: { en: "Empty body", fr: "Corps vide" } },
+    statuses: [["204", { en: "Record cleared", fr: "Registre vidé" }], ["401", { en: "No session", fr: "Aucune session" }]],
+  },
+
+  {
+    key: "usage", method: "GET", path: "/api/usage", auth: false, group: "account",
+    title: { en: "Plan and limits", fr: "Palier et limites" },
+    icon: "M4 19h16M7 16V9M12 16V5M17 16v-6",
+    card: { en: "What the plan allows, so a 429 is never the first time someone hears about a limit.",
+      fr: "Ce que le palier autorise, pour qu'un 429 ne soit jamais la première fois qu'on entend parler d'une limite." },
+    desc: { en: "The plan of the signed-in account, its number of keys, and the ceilings that go with it: file size, retention, requests per minute.",
+      fr: "Le palier du compte connecté, son nombre de clés, et les plafonds qui vont avec : taille de fichier, rétention, requêtes par minute." },
+    params: [],
+    fields: [],
+    example: { response: { plan: "free", keys: 2, limits: { max_file_mb: 100, retention_hours: 2, requests_per_minute: "unlimited" } } },
+    statuses: [["200", "Usage"], ["401", { en: "No session", fr: "Aucune session" }]],
+  },
+
+  // ────────────────────────────────────────── la surface agent ────────────
+
+  {
+    key: "mcp-describe", method: "GET", path: "/mcp", auth: false, group: "agents",
+    title: { en: "Describe the MCP server", fr: "Décrire le serveur MCP" },
+    icon: "M12 3a9 9 0 100 18 9 9 0 000-18zM3.6 9h16.8M3.6 15h16.8M12 3c2.5 2.4 3.8 5.4 3.8 9s-1.3 6.6-3.8 9c-2.5-2.4-3.8-5.4-3.8-9S9.5 5.4 12 3z",
+    card: { en: "What this MCP server is: protocol, transport, methods and the tool catalogue. No token — an integrator has to see the endpoint before configuring the key that opens it.",
+      fr: "Ce qu'est ce serveur MCP : protocole, transport, méthodes et catalogue d'outils. Sans token — un intégrateur doit voir l'endpoint avant de configurer la clé qui l'ouvre." },
+    desc: { en: "Name, version, protocol revision, transport, the JSON-RPC methods implemented and the twelve tools with their descriptions.\nOpen even when API_KEY is set: it carries no data, and an endpoint nobody can see is an endpoint nobody configures.",
+      fr: "Nom, version, révision du protocole, transport, les méthodes JSON-RPC implémentées et les douze outils avec leur description.\nOuvert même quand API_KEY est configurée : il ne porte aucune donnée, et un endpoint que personne ne voit est un endpoint que personne ne configure." },
+    params: [],
+    fields: [],
+    example: {
+      response: {
+        name: "md-to-pdf", product: "AI SmartTalk Documents", version: "0.2.0",
+        protocol: "Model Context Protocol", protocolVersion: "2025-06-18",
+        methods: ["initialize", "notifications/initialized", "ping", "tools/list", "tools/call"],
+        tools: [{ name: "document_render", description: "Render Markdown … into a PDF…" }],
+      },
+    },
+    statuses: [["200", { en: "Server description", fr: "Description du serveur" }]],
+  },
+
+  {
+    key: "mcp", method: "POST", path: "/mcp", json: true, group: "agents",
+    title: { en: "Model Context Protocol", fr: "Model Context Protocol" },
+    icon: "M9 4H5v6h4zM19 4h-4v6h4zM14 14h-4v6h4zM7 10v2h10v-2M12 12v2",
+    card: { en: "The agent surface: an assistant connects, reads the catalogue and drives the engine itself — with your key, so its consumption is attributed like any other integration.",
+      fr: "La surface agent : un assistant se connecte, lit le catalogue et pilote le moteur lui-même — avec votre clé, donc sa consommation est attribuée comme n'importe quelle intégration." },
+    desc: { en: "JSON-RPC 2.0 over streamable HTTP, with a plain JSON reply: this server never pushes, so it never opens an SSE stream. Methods: initialize, notifications/initialized, ping, tools/list, tools/call. A batch is accepted and answers one response per request that carried an id.\n" +
+        "Twelve tools: document_render, document_preview, document_audit, document_compose, document_compress, document_ocr, document_extract, document_pages, document_convert_office, document_attest, document_verify, themes_list. Their input schemas come from tools/list, which is the source of truth.\n" +
+        "A tool that fails answers isError: true inside its result, not a JSON-RPC error — a protocol error is invisible to a model, a readable result is a mistake it can correct. Every file produced comes back as an asset://, except document_preview, which returns PNG image blocks.",
+      fr: "JSON-RPC 2.0 sur streamable HTTP, avec une réponse JSON simple : ce serveur ne pousse jamais rien, donc il n'ouvre aucun flux SSE. Méthodes : initialize, notifications/initialized, ping, tools/list, tools/call. Un batch est accepté et répond une réponse par requête portant un id.\n" +
+        "Douze outils : document_render, document_preview, document_audit, document_compose, document_compress, document_ocr, document_extract, document_pages, document_convert_office, document_attest, document_verify, themes_list. Leurs schémas d'entrée viennent de tools/list, qui fait foi.\n" +
+        "Un outil qui échoue répond isError: true dans son résultat, pas une erreur JSON-RPC — une erreur de protocole est invisible pour un modèle, un résultat lisible est une faute qu'il corrige. Tout fichier produit revient en asset://, sauf document_preview, qui renvoie des blocs image PNG." },
+    params: [
+      { name: "jsonrpc", type: "string", required: true, desc: { en: "Exactly <code>\"2.0\"</code>.", fr: "Exactement <code>« 2.0 »</code>." } },
+      { name: "id", type: "number|string", desc: { en: "Echoed back in the answer. Leave it out and the call is a notification: nothing comes back, and a body holding only notifications answers <code>202</code>.", fr: "Repris dans la réponse. Omis, l'appel est une notification : rien ne revient, et un corps ne portant que des notifications répond <code>202</code>." } },
+      { name: "method", type: "enum", required: true, desc: { en: "<code>initialize</code>, <code>notifications/initialized</code>, <code>ping</code>, <code>tools/list</code> or <code>tools/call</code>.", fr: "<code>initialize</code>, <code>notifications/initialized</code>, <code>ping</code>, <code>tools/list</code> ou <code>tools/call</code>." } },
+      { name: "params", type: "object", desc: { en: "For <code>tools/call</code>: <code>{ \"name\": \"&lt;tool&gt;\", \"arguments\": { … } }</code>.", fr: "Pour <code>tools/call</code> : <code>{ \"name\": \"&lt;outil&gt;\", \"arguments\": { … } }</code>." } },
+    ],
+    fields: [
+      { type: "row", fields: [
+        { name: "jsonrpc", type: "text", label: "jsonrpc", required: true, value: "2.0" },
+        { name: "id", type: "number", label: "id", value: "1" },
+      ]},
+      { name: "method", type: "select", label: "method",
+        options: ["tools/list", "tools/call", "initialize", "ping"], value: "tools/list" },
+      { name: "params", type: "json", rows: 8, label: "params",
+        hint: { en: "for tools/call only", fr: "pour tools/call uniquement" }, value: "" },
+    ],
+    example: {
+      request: { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "document_render", arguments: { markdown: "# Rapport", options: { theme: "report" } } } },
+      response: { jsonrpc: "2.0", id: 2, result: { isError: false, content: [{ type: "text", text: "{ \"asset\": { \"id\": \"as_9f2c…\" }, \"pages\": 4 }" }] } },
+    },
+    statuses: [["200", { en: "JSON-RPC response, or an array of them for a batch", fr: "Réponse JSON-RPC, ou un tableau pour un batch" }], ["202", { en: "Notifications only: nothing to answer", fr: "Notifications seules : rien à répondre" }], ["400", { en: "Body is not JSON", fr: "Corps non JSON" }], ["401", ST.unauthorized], ["429", { en: "Quota exceeded for the key", fr: "Quota dépassé pour la clé" }]],
+  },
+
   {
     key: "themes", method: "GET", path: "/api/themes", group: "service",
     title: { en: "Available themes", fr: "Thèmes disponibles" },
@@ -675,8 +1574,15 @@ const BY_KEY = Object.fromEntries(ENDPOINTS.map((e) => [e.key, e]));
 // celui de la liste ci-dessous ; un endpoint sans groupe connu finit en fin.
 const GROUPS = [
   { id: "generate", title: { en: "Generate", fr: "Génération" } },
+  { id: "contract", title: { en: "Contract and proof", fr: "Contrat et preuve" } },
   { id: "process", title: { en: "Post-processing", fr: "Post-traitement" } },
+  { id: "organize", title: { en: "Pages", fr: "Pages" } },
+  { id: "optimize", title: { en: "Optimise and repair", fr: "Optimiser et réparer" } },
+  { id: "convert", title: { en: "Conversions", fr: "Conversions" } },
   { id: "files", title: { en: "Files", fr: "Fichiers" } },
+  { id: "jobs", title: { en: "Asynchronous jobs", fr: "Travaux asynchrones" } },
+  { id: "agents", title: { en: "Agents (MCP)", fr: "Agents (MCP)" } },
+  { id: "account", title: { en: "Account and keys", fr: "Compte et clés" } },
   { id: "service", title: { en: "Service", fr: "Service" } },
   { id: "legacy", title: { en: "Compatibility", fr: "Compatibilité" } },
 ];

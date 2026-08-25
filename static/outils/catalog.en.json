@@ -1,0 +1,1624 @@
+{
+  "index": {
+    "title": "Free online PDF tools — compress, merge, convert | AI SmartTalk",
+    "meta_description": "Compress, merge, split, convert, sign off on your PDFs. Every tool hands back the document and a verdict on it. Files deleted after 2 hours.",
+    "h1": "",
+    "lede": "Twenty-one tools that read your file, do the work, and then tell you what it cost: pages kept, text still selectable, what the operation had to give up. You get a document, not just a download.",
+    "claims": [
+      "A measured verdict on every result, free, always",
+      "No watermark on anything we hand back, ever",
+      "Files erased after 2 hours, no model training, no human reading",
+      "Sovereign hosting, and the same API behind every page"
+    ]
+  },
+  "tools": [
+    {
+      "slug": "compress-pdf",
+      "group": "optimise",
+      "title": "Compress PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "Compress a PDF",
+      "meta_description": "Shrink a PDF and see exactly what it cost: size before and after, pages kept, text still selectable. A file that grows is refused.",
+      "lede": "Ghostscript presets, run in a sandbox, on a file you upload. The difference is what comes back with it: a measurement of what the compression actually did to your document.",
+      "endpoint": "/api/compress",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [
+        {
+          "name": "level",
+          "type": "select",
+          "label": "Level",
+          "options": [
+            [
+              "ebook",
+              "Balanced"
+            ],
+            [
+              "screen",
+              "Smallest file"
+            ],
+            [
+              "printer",
+              "Print quality"
+            ],
+            [
+              "prepress",
+              "Prepress"
+            ]
+          ],
+          "default": "ebook",
+          "help": "Balanced is the default and suits reading on screen and printing at home. Smallest file downsamples images hardest; prepress keeps the most detail."
+        },
+        {
+          "name": "dpi",
+          "type": "number",
+          "label": "Image resolution (dpi)",
+          "placeholder": "150",
+          "help": "Optional, 36 to 1200. Overrides the resolution carried by the level above. Leave empty to keep the preset."
+        }
+      ],
+      "steps": [
+        "Drop the PDF you want to make lighter.",
+        "Pick a level. Balanced is right for almost every document that will be read on screen.",
+        "Run the compression, read the verdict, download the file — or chain another tool on it without uploading again."
+      ],
+      "verdict_says": "It measures the same three things before and after: pages, characters of selectable text, and bytes. You get the reduction rate, and a failure — not a smaller file — if the compression rasterised the pages and cost you a searchable document. And if the compressed file comes out larger than the original, you get the original back, with the verdict saying the document was already optimised.",
+      "faq": [
+        {
+          "q": "Will the text still be selectable and searchable?",
+          "a": "The verdict answers that for your specific file, by counting the extractable characters before and after. Above 98 % kept it reports the text as intact; below 50 % it reports a failure, because the compression rasterised the pages. Nobody has to open the file to find out."
+        },
+        {
+          "q": "What if my PDF is already compressed?",
+          "a": "Ghostscript still runs, but the result is compared to the source. If the attempt is bigger than the original, the original is what you receive, and the verdict says so in as many words. You never get a heavier file back under the name of a compression."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "They are erased 2 hours after upload, automatically. You can also delete them straight away from the result panel. No model is trained on them and nobody reads them."
+        },
+        {
+          "q": "Is there a size limit?",
+          "a": "100 MB and 2000 pages per file. Beyond that the upload is refused with the reason, rather than failing halfway through the work."
+        }
+      ],
+      "related": [
+        "repair-pdf",
+        "pdf-to-pdfa",
+        "ocr-pdf",
+        "crop-pdf"
+      ],
+      "icon": "compress",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Compress PDF",
+      "alt_slug": "compresser-pdf"
+    },
+    {
+      "slug": "merge-pdf",
+      "group": "organise",
+      "title": "Merge PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "Merge PDF files",
+      "meta_description": "Join several PDFs into one, in the order you set. A file that is not a readable PDF is named and refused before anything is joined.",
+      "lede": "Drop two files or twenty; they are joined in the order they appear in the list. Nothing is re-encoded, so every page arrives exactly as it left.",
+      "endpoint": "/api/merge",
+      "accept": ".pdf,application/pdf",
+      "multiple": true,
+      "file_param": "pdfs",
+      "output": "binary",
+      "params": [],
+      "steps": [
+        "Drop at least two PDFs. The order of the list is the order of the merged document.",
+        "Run the merge.",
+        "Download the joined file, or delete everything from our servers straight away."
+      ],
+      "verdict_says": "Joining pages cannot damage them, so this tool answers with the document rather than a verdict card. What it does check is the input: a file whose bytes are not a PDF is refused by name and by type — \"this endpoint needs a PDF\" — before a single page is joined. You never receive a merged document quietly missing one of its sources.",
+      "faq": [
+        {
+          "q": "How many files can I merge at once?",
+          "a": "Two at minimum, twenty in one go from this page. Each of them may weigh up to 100 MB and hold up to 2000 pages."
+        },
+        {
+          "q": "Is the quality of the pages affected?",
+          "a": "No. The pages are copied, not re-rendered: fonts, images and the text layer arrive untouched, and the merged file is the sum of its sources."
+        },
+        {
+          "q": "In what order are the files joined?",
+          "a": "The order they appear in the list under the drop zone. Remove a file and add it again to move it to the end."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately if you use the delete button on the result. No model training, no human reading, sovereign hosting."
+        }
+      ],
+      "related": [
+        "split-pdf",
+        "extract-pdf-pages",
+        "reorder-pdf-pages",
+        "add-page-numbers"
+      ],
+      "icon": "merge",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Merge PDF",
+      "alt_slug": "fusionner-pdf"
+    },
+    {
+      "slug": "split-pdf",
+      "group": "organise",
+      "title": "Split PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "Split a PDF",
+      "meta_description": "Cut one PDF into several files, every N pages or at the cut points you name. Each part comes back separately, ready to download.",
+      "lede": "One document in, several out. Either a fixed number of pages per file, or the exact points where the cut should fall.",
+      "endpoint": "/api/pages",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [
+        {
+          "name": "op",
+          "type": "select",
+          "label": "Operation",
+          "options": [
+            [
+              "split",
+              "Split into several files"
+            ]
+          ],
+          "default": "split",
+          "required": true
+        },
+        {
+          "name": "every",
+          "type": "number",
+          "label": "Pages per file",
+          "default": 1,
+          "help": "One file per page by default. Ignored when cut points are given below."
+        },
+        {
+          "name": "pages",
+          "type": "string",
+          "label": "Cut points",
+          "placeholder": "4,9,15",
+          "help": "Optional. The pages a new file starts at. \"4,9\" on a 12-page document gives 1-3, 4-8 and 9-12."
+        }
+      ],
+      "steps": [
+        "Drop the document to cut.",
+        "Give a number of pages per file, or the cut points if the parts are uneven.",
+        "Run it: every part comes back as its own file, each with its page count."
+      ],
+      "verdict_says": "Cutting a document cannot alter a page, so this tool answers with the parts and their page counts rather than a verdict card. The range is checked against the real page count first: a cut point the document does not have is refused with your range quoted back, instead of a file that silently comes up a page short. At most 500 parts in one call.",
+      "faq": [
+        {
+          "q": "How do I get one file per chapter?",
+          "a": "Leave the pages-per-file field empty and write the cut points: the first page of each chapter, separated by commas. Each part then runs from one cut point to the page before the next."
+        },
+        {
+          "q": "Can I download all the parts at once?",
+          "a": "Yes. The result panel lists every part with its own download button, plus a button that downloads them all."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "The document you upload and every part produced are erased after 2 hours, and can be deleted immediately from the result panel."
+        },
+        {
+          "q": "Is there a limit?",
+          "a": "100 MB and 2000 pages per uploaded file, and 500 parts per split."
+        }
+      ],
+      "related": [
+        "merge-pdf",
+        "extract-pdf-pages",
+        "remove-pdf-pages",
+        "pdf-to-jpg"
+      ],
+      "icon": "split",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Split PDF",
+      "alt_slug": "diviser-pdf"
+    },
+    {
+      "slug": "extract-pdf-pages",
+      "group": "organise",
+      "title": "Extract pages online, free and watermark-free | AI SmartTalk",
+      "h1": "Extract pages from a PDF",
+      "meta_description": "Keep only the pages you name — 1,3,5-9, odd, even — in one new document. Ranges are checked against the real page count.",
+      "lede": "Name the pages you want to keep; everything else is left behind. The pages come out in document order, whatever order you wrote them in.",
+      "endpoint": "/api/pages",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [
+        {
+          "name": "op",
+          "type": "select",
+          "label": "Operation",
+          "options": [
+            [
+              "extract",
+              "Keep the pages named"
+            ]
+          ],
+          "default": "extract",
+          "required": true
+        },
+        {
+          "name": "pages",
+          "type": "string",
+          "label": "Pages to keep",
+          "placeholder": "1,3,5-9",
+          "required": true,
+          "help": "Commas and ranges: \"1,3,5-9\". \"2-\" means page 2 to the end. \"all\", \"odd\" and \"even\" are understood too."
+        }
+      ],
+      "steps": [
+        "Drop the document.",
+        "Write the pages to keep, as a list, ranges, or odd/even.",
+        "Run it, and download a document holding only those pages."
+      ],
+      "verdict_says": "This is a lossless selection, so the answer is the document and its page count rather than a verdict card. The safety net is in the reading of your range: a page number the document does not have, an inverted range, or a range that selects nothing at all are all refused — with the offending text quoted back — rather than returned as a document missing a page you thought you had.",
+      "faq": [
+        {
+          "q": "How do I write the range?",
+          "a": "\"1,3,5-9\" keeps pages 1, 3 and 5 through 9. \"2-\" keeps page 2 to the end. \"odd\" and \"even\" keep every other page, and \"all\" keeps everything."
+        },
+        {
+          "q": "Do the pages come out in the order I wrote them?",
+          "a": "No, extraction sorts them into document order and drops duplicates. To set a new order, use the reorder tool, which reads your list as the order itself."
+        },
+        {
+          "q": "Is the quality affected?",
+          "a": "No. The pages are copied as they are: text layer, fonts, images and bookmarks on the kept pages arrive untouched."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the delete button on the result. 100 MB and 2000 pages per file."
+        }
+      ],
+      "related": [
+        "remove-pdf-pages",
+        "split-pdf",
+        "reorder-pdf-pages",
+        "merge-pdf"
+      ],
+      "icon": "extract",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Extract pages",
+      "alt_slug": "extraire-pages-pdf"
+    },
+    {
+      "slug": "remove-pdf-pages",
+      "group": "organise",
+      "title": "Remove pages online, free and watermark-free | AI SmartTalk",
+      "h1": "Delete pages from a PDF",
+      "meta_description": "Drop the pages you name and keep the rest. A request that would empty the document is refused rather than answered.",
+      "lede": "Name the pages to remove; the rest of the document arrives unchanged, in its own order, with nothing re-encoded.",
+      "endpoint": "/api/pages",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [
+        {
+          "name": "op",
+          "type": "select",
+          "label": "Operation",
+          "options": [
+            [
+              "delete",
+              "Remove the pages named"
+            ]
+          ],
+          "default": "delete",
+          "required": true
+        },
+        {
+          "name": "pages",
+          "type": "string",
+          "label": "Pages to remove",
+          "placeholder": "2,7-9",
+          "required": true,
+          "help": "Commas and ranges: \"2,7-9\". \"5-\" removes page 5 to the end. \"odd\" and \"even\" are understood too."
+        }
+      ],
+      "steps": [
+        "Drop the document.",
+        "Write the pages to remove.",
+        "Run it, and download the document without them."
+      ],
+      "verdict_says": "The answer is the document and its new page count rather than a verdict card — removing pages cannot damage the ones that stay. Two refusals guard the operation: a page number outside the document is rejected with your range quoted back, and a request that would remove every page is refused outright, because an empty document is not a result anybody wants delivered.",
+      "faq": [
+        {
+          "q": "Can I remove every page?",
+          "a": "No. A selection covering the whole document is refused: the service will not hand back a file with no page in it."
+        },
+        {
+          "q": "What happens to the bookmarks?",
+          "a": "The kept pages arrive as they were. Bookmarks pointing at a removed page no longer lead anywhere, which is the ordinary consequence of removing a page rather than a defect of the tool."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the result panel. No model training, no human reading, sovereign hosting."
+        },
+        {
+          "q": "Is there a size limit?",
+          "a": "100 MB and 2000 pages per uploaded file."
+        }
+      ],
+      "related": [
+        "extract-pdf-pages",
+        "split-pdf",
+        "reorder-pdf-pages",
+        "crop-pdf"
+      ],
+      "icon": "delete-pages",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Remove pages",
+      "alt_slug": "supprimer-pages-pdf"
+    },
+    {
+      "slug": "reorder-pdf-pages",
+      "group": "organise",
+      "title": "Organise pages online, free and watermark-free | AI SmartTalk",
+      "h1": "Reorder the pages of a PDF",
+      "meta_description": "Set a new page order for a PDF. The list has to name every page of the document, so no page can be lost by a typo.",
+      "lede": "Write the pages in the order you want them. The document is rebuilt in that order, and nothing else changes.",
+      "endpoint": "/api/pages",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [
+        {
+          "name": "op",
+          "type": "select",
+          "label": "Operation",
+          "options": [
+            [
+              "reorder",
+              "Reorder the pages"
+            ]
+          ],
+          "default": "reorder",
+          "required": true
+        },
+        {
+          "name": "order",
+          "type": "string",
+          "label": "New order",
+          "placeholder": "3,1,2,4-8",
+          "required": true,
+          "help": "Every page of the document, in the order you want them. Ranges are allowed: \"3,1,2,4-8\" on an 8-page document."
+        }
+      ],
+      "steps": [
+        "Drop the document.",
+        "Write the complete new order, page by page or in ranges.",
+        "Run it, and download the document in that order."
+      ],
+      "verdict_says": "The answer is the reordered document rather than a verdict card, because the guard sits before the work: your list must name every page of the document. A list of the wrong length is refused with both counts — how many pages the document has, how many you listed — so a page can never disappear because a number was missed. Order is preserved exactly as written, and a repeated page is kept once.",
+      "faq": [
+        {
+          "q": "Do I have to list every page?",
+          "a": "Yes, and that is deliberate. A partial list is how pages get lost silently. If the count does not match, the request is refused and tells you both numbers."
+        },
+        {
+          "q": "How do I move the last page to the front on a 10-page document?",
+          "a": "Write \"10,1-9\". Ranges and single pages can be mixed freely."
+        },
+        {
+          "q": "Is the quality affected?",
+          "a": "No. The pages are copied in the order you gave: nothing is re-rendered or re-encoded."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the result panel."
+        }
+      ],
+      "related": [
+        "extract-pdf-pages",
+        "remove-pdf-pages",
+        "rotate-pdf",
+        "merge-pdf"
+      ],
+      "icon": "organize",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Organise pages",
+      "alt_slug": "organiser-pages-pdf"
+    },
+    {
+      "slug": "rotate-pdf",
+      "group": "organise",
+      "title": "Rotate PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "Rotate a PDF",
+      "meta_description": "Turn every page, or only the ones you name, by a quarter turn. Anything that is not a quarter turn is refused before the file is touched.",
+      "lede": "A scan that came in sideways is turned in one call, on the whole document or on the pages that need it.",
+      "endpoint": "/api/pages",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [
+        {
+          "name": "op",
+          "type": "select",
+          "label": "Operation",
+          "options": [
+            [
+              "rotate",
+              "Rotate the pages"
+            ]
+          ],
+          "default": "rotate",
+          "required": true
+        },
+        {
+          "name": "angle",
+          "type": "number",
+          "label": "Angle (degrees)",
+          "default": 90,
+          "required": true,
+          "help": "A quarter turn, clockwise: 90, 180 or 270. Write -90, -180 or -270 to turn the other way. Anything else is refused before the file is opened."
+        },
+        {
+          "name": "pages",
+          "type": "string",
+          "label": "Pages",
+          "placeholder": "all",
+          "help": "Empty means every page. Otherwise \"1,3,5-9\", \"2-\", \"odd\" or \"even\"."
+        }
+      ],
+      "steps": [
+        "Drop the document.",
+        "Choose the angle, and the pages if only some of them are the wrong way round.",
+        "Run it, and download the turned document."
+      ],
+      "verdict_says": "Rotation writes an attribute on the page rather than rebuilding it, so the answer is the document itself and not a verdict card. The refusals are strict on purpose: an angle that is not 90, 180, 270 or one of their negatives is rejected before the file is opened, and a page range outside the document is rejected with the range quoted back.",
+      "faq": [
+        {
+          "q": "Is the content re-rendered?",
+          "a": "No. Rotation sets the page's rotation attribute; the text layer, the fonts and the images are the ones from your file, at their original quality."
+        },
+        {
+          "q": "Can I turn just one page?",
+          "a": "Yes. Write its number in the pages field. Everything left out keeps its current orientation."
+        },
+        {
+          "q": "Why only quarter turns?",
+          "a": "Because that is what a PDF page can record. Any other angle would mean re-rendering the page as an image, and losing a searchable document to fix an orientation is a bad trade."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the result panel."
+        }
+      ],
+      "related": [
+        "crop-pdf",
+        "reorder-pdf-pages",
+        "extract-pdf-pages",
+        "add-page-numbers"
+      ],
+      "icon": "rotate",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Rotate PDF",
+      "alt_slug": "pivoter-pdf"
+    },
+    {
+      "slug": "crop-pdf",
+      "group": "edit",
+      "title": "Crop PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "Crop a PDF",
+      "meta_description": "Trim the margins of a PDF automatically, or to an exact box in points. The verdict names the pages that could not be measured.",
+      "lede": "Automatic mode measures where the text actually sits on each page and cuts to it, with a margin. Or give the box yourself, in PostScript points.",
+      "endpoint": "/api/crop",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [
+        {
+          "name": "box",
+          "type": "json",
+          "label": "Crop box",
+          "default": "auto",
+          "help": "\"auto\" measures the content of each page. Otherwise four numbers in points, left to top: [50, 50, 545, 790]."
+        },
+        {
+          "name": "margin",
+          "type": "number",
+          "label": "Margin kept (pt)",
+          "default": 12,
+          "help": "Automatic mode only. The white space left around the measured content, 0 to 500 points. 28 pt is about a centimetre."
+        },
+        {
+          "name": "pages",
+          "type": "string",
+          "label": "Pages",
+          "placeholder": "all",
+          "help": "Empty means every page. Pages left out keep their box untouched."
+        }
+      ],
+      "steps": [
+        "Drop the document with margins to trim.",
+        "Leave the box on \"auto\" and adjust the margin, or write the four coordinates yourself.",
+        "Run it, read which pages were actually cropped, and download."
+      ],
+      "verdict_says": "The verdict says how many pages of how many were really cropped, and names the pages whose content could not be measured — a blank or fully graphic page keeps its original box rather than being cropped to nothing. A box you gave that reached past the edge of the page is clamped to the page and reported, and if nothing could be cropped the source is handed back unchanged with that said plainly.",
+      "faq": [
+        {
+          "q": "How does automatic mode know where to cut?",
+          "a": "It reads the position of every word on the page and takes the smallest rectangle containing them, plus your margin. That is a measurement of the actual text, not a guess from the page size."
+        },
+        {
+          "q": "What happens to a page with no text?",
+          "a": "It keeps its original box, and the verdict names it. Cropping a page whose content cannot be measured would produce a blank page, which is worse than not cropping."
+        },
+        {
+          "q": "Is the content lost or just hidden?",
+          "a": "Cropping changes the visible box of the page; the underlying objects are still in the file. If the point is to remove information for good, use the redaction tool, which destroys it."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the result panel."
+        }
+      ],
+      "related": [
+        "rotate-pdf",
+        "compress-pdf",
+        "add-page-numbers",
+        "redact-pdf"
+      ],
+      "icon": "crop",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Crop PDF",
+      "alt_slug": "rogner-pdf"
+    },
+    {
+      "slug": "add-page-numbers",
+      "group": "edit",
+      "title": "Add page numbers online, free | AI SmartTalk",
+      "h1": "Add page numbers to a PDF",
+      "meta_description": "Number the pages of an existing PDF, in the position and format you choose, without touching its text layer.",
+      "lede": "A numbering layer is rendered and laid over your document. The pages underneath are not rebuilt, so the text stays selectable.",
+      "endpoint": "/api/pages/number",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [
+        {
+          "name": "format",
+          "type": "string",
+          "label": "Format",
+          "default": "{page}",
+          "help": "Plain text with two tokens: {page} and {pages}. For example \"Page {page} of {pages}\". No HTML."
+        },
+        {
+          "name": "position",
+          "type": "select",
+          "label": "Position",
+          "options": [
+            [
+              "bottom-center",
+              "Bottom centre"
+            ],
+            [
+              "bottom-right",
+              "Bottom right"
+            ],
+            [
+              "bottom-left",
+              "Bottom left"
+            ],
+            [
+              "top-center",
+              "Top centre"
+            ],
+            [
+              "top-right",
+              "Top right"
+            ],
+            [
+              "top-left",
+              "Top left"
+            ]
+          ],
+          "default": "bottom-center"
+        },
+        {
+          "name": "start",
+          "type": "number",
+          "label": "First number",
+          "default": 1,
+          "help": "The number printed on the first numbered page, when the document continues another one."
+        },
+        {
+          "name": "from_page",
+          "type": "number",
+          "label": "Start numbering at page",
+          "default": 1,
+          "help": "Pages before this one get no number — a cover page, for instance."
+        },
+        {
+          "name": "font_size",
+          "type": "number",
+          "label": "Font size (pt)",
+          "default": 10,
+          "help": "Between 4 and 72."
+        },
+        {
+          "name": "margin",
+          "type": "string",
+          "label": "Margin",
+          "default": "1.5cm",
+          "help": "Distance from the edge of the page. Units: pt, mm, cm, in, px."
+        }
+      ],
+      "steps": [
+        "Drop the document to number.",
+        "Choose the format, the position, and the page numbering should start on.",
+        "Run it, check the verdict, and download."
+      ],
+      "verdict_says": "The verdict checks the one thing an overlay can silently break: the page count. A document that comes out with a different number of pages than it went in is reported as a failure, not as a numbered file. It also reports whether the numbering layer has exactly one page per source page, names the pages whose size differs from page one — the layer follows page one and is scaled to fit the others — and says how many pages were numbered, from which page, starting at which number.",
+      "faq": [
+        {
+          "q": "Does it damage the existing text?",
+          "a": "No. The numbers are a separate layer laid over your pages; the text underneath keeps its fonts and stays selectable and searchable."
+        },
+        {
+          "q": "Can I skip the cover page?",
+          "a": "Yes. Set \"start numbering at page\" to 2. If you also want the second page to read 1, set the first number to 1 — the two settings are independent."
+        },
+        {
+          "q": "What if my pages are not all the same size?",
+          "a": "The numbering layer is built for the size of page one and scaled onto the others. The verdict names how many pages have another size, so you can check the result on those."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the result panel."
+        }
+      ],
+      "related": [
+        "watermark-pdf",
+        "merge-pdf",
+        "crop-pdf",
+        "reorder-pdf-pages"
+      ],
+      "icon": "number",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Add page numbers",
+      "alt_slug": "numeroter-pages-pdf"
+    },
+    {
+      "slug": "watermark-pdf",
+      "group": "edit",
+      "title": "Watermark PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "Watermark a PDF",
+      "meta_description": "Lay a diagonal text watermark over every page of a PDF, with the opacity and angle you choose. The text layer stays untouched.",
+      "lede": "\"Draft\", \"Confidential\", a client name: the text is rendered as a layer and laid over the document, which is left exactly as it was underneath.",
+      "endpoint": "/api/watermark",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "binary",
+      "params": [
+        {
+          "name": "text",
+          "type": "string",
+          "label": "Watermark text",
+          "placeholder": "CONFIDENTIAL",
+          "required": true
+        },
+        {
+          "name": "opacity",
+          "type": "number",
+          "label": "Opacity",
+          "default": 0.06,
+          "help": "Between 0 and 1. The default, 0.06, stays readable without getting in the way of the text."
+        },
+        {
+          "name": "angle",
+          "type": "number",
+          "label": "Angle (degrees)",
+          "default": -45,
+          "help": "Between -360 and 360. -45 is the usual diagonal."
+        }
+      ],
+      "steps": [
+        "Drop the document to mark.",
+        "Write the text, and adjust the opacity and angle if the default is not right.",
+        "Run it and download the marked document."
+      ],
+      "verdict_says": "The watermark is a layer laid over your pages, not a re-render of them: the text underneath keeps its fonts and stays selectable and searchable, which the tools that flatten a document to stamp it cannot say. Opacity and angle are checked against their bounds before anything is rendered, so a value out of range comes back as a clear refusal rather than an invisible mark. This endpoint predates our verdict card and answers with the file itself.",
+      "faq": [
+        {
+          "q": "Does the watermark make the text unselectable?",
+          "a": "No. The pages are not rasterised: the watermark sits above them as its own layer, and your text layer is the original one."
+        },
+        {
+          "q": "Can the watermark be removed?",
+          "a": "A watermark is a visual mark, not a protection — anyone with the right tool can lift a layer. To make information genuinely disappear, use the redaction tool, which rebuilds the pages from pixels."
+        },
+        {
+          "q": "Do you add a watermark of your own?",
+          "a": "Never, on any tool, on any plan. The only mark on your file is the one you asked for."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the result panel."
+        }
+      ],
+      "related": [
+        "protect-pdf",
+        "add-page-numbers",
+        "redact-pdf",
+        "compress-pdf"
+      ],
+      "icon": "watermark",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Watermark PDF",
+      "alt_slug": "filigraner-pdf"
+    },
+    {
+      "slug": "protect-pdf",
+      "group": "secure",
+      "title": "Protect PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "Password protect a PDF",
+      "meta_description": "Encrypt a PDF with AES-256 and a password of your choosing. The password is never stored and never appears in a process list.",
+      "lede": "The document is encrypted by qpdf with 256-bit AES. Without the password it cannot be opened, by us or by anyone else.",
+      "endpoint": "/api/protect",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "binary",
+      "params": [
+        {
+          "name": "password",
+          "type": "string",
+          "label": "Password",
+          "required": true,
+          "help": "Becomes both the opening password and the permissions password. It is used once and kept nowhere — write it down before you run the tool."
+        }
+      ],
+      "steps": [
+        "Drop the document to protect.",
+        "Type the password. Keep it somewhere safe: nothing here can recover it.",
+        "Run it and download the encrypted document."
+      ],
+      "verdict_says": "The encryption is AES-256, and the password is handled the way a password should be: qpdf reads it from a temporary argument file rather than the command line, so it never shows up in the process list of the machine, and it is written to no log and no database. A password containing a line break is refused, because it could otherwise smuggle in an extra option. This endpoint predates our verdict card and answers with the file itself.",
+      "faq": [
+        {
+          "q": "Can you recover my password if I lose it?",
+          "a": "No. It is used for the single call and kept nowhere. A lost password means a document nobody can open, which is exactly what the encryption is for."
+        },
+        {
+          "q": "How strong is the encryption?",
+          "a": "256-bit AES, the strongest level the PDF format defines. Your password becomes both the user password and the owner password."
+        },
+        {
+          "q": "Does the file still work everywhere?",
+          "a": "Yes. Any current PDF reader asks for the password and opens the document; nothing beyond the encryption is changed."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the result panel. The password is never part of what is stored."
+        }
+      ],
+      "related": [
+        "unlock-pdf",
+        "redact-pdf",
+        "watermark-pdf",
+        "pdf-to-pdfa"
+      ],
+      "icon": "lock",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Protect PDF",
+      "alt_slug": "proteger-pdf"
+    },
+    {
+      "slug": "unlock-pdf",
+      "group": "secure",
+      "title": "Unlock PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "Unlock a PDF",
+      "meta_description": "Remove the password from a PDF you already have the password for. No password is ever guessed, searched for or broken here.",
+      "lede": "For a document you can open but that asks for its password every time. You supply the password; the encryption is removed.",
+      "endpoint": "/api/unlock",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [
+        {
+          "name": "password",
+          "type": "string",
+          "label": "Current password",
+          "required": true,
+          "help": "The password that opens the document today. Required: this tool removes a protection you already hold, it never recovers one."
+        }
+      ],
+      "steps": [
+        "Drop the protected document.",
+        "Type the password that opens it.",
+        "Run it, and download a document that opens without one."
+      ],
+      "verdict_says": "The verdict confirms, on the produced file, that its pages are no longer password protected, and passes on anything qpdf remarked — including the case where the file was not encrypted at all and the password was simply ignored. A password that does not open the document comes back as a plain refusal saying so, not as a tool failure. And no password is ever guessed here: an empty password is refused, because this endpoint removes a protection you hold, it does not break one.",
+      "faq": [
+        {
+          "q": "Can you open a document whose password I do not have?",
+          "a": "No, and that is a design decision, not a limitation. No password is searched for, guessed or broken. Without the password the request is refused."
+        },
+        {
+          "q": "What if the document was not actually encrypted?",
+          "a": "You get the document back and the verdict says the file was not encrypted and the password was ignored, rather than pretending work was done."
+        },
+        {
+          "q": "Is my password logged?",
+          "a": "No. It travels to qpdf through a temporary argument file, appears in no process list, and is written to no log."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the result panel."
+        }
+      ],
+      "related": [
+        "protect-pdf",
+        "repair-pdf",
+        "compress-pdf",
+        "pdf-to-word"
+      ],
+      "icon": "unlock",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Unlock PDF",
+      "alt_slug": "deverrouiller-pdf"
+    },
+    {
+      "slug": "repair-pdf",
+      "group": "optimise",
+      "title": "Repair PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "Repair a damaged PDF",
+      "meta_description": "Rebuild a PDF that no longer opens. The verdict says which method worked and how many pages were actually recovered.",
+      "lede": "Two attempts, in order: rebuild the file's internal tables, and if that fails, rewrite the document entirely. The difference matters, so it is reported.",
+      "endpoint": "/api/repair",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [],
+      "steps": [
+        "Drop the file that will not open.",
+        "Run the repair.",
+        "Read the verdict — how many pages came back, and by which method — then download."
+      ],
+      "verdict_says": "The verdict names the method, because the two are not equivalent. Rebuilt by qpdf means the cross-reference tables were repaired and the objects are still your original ones. Rewritten by Ghostscript means qpdf could not read the file at all, and it comes back as a warning: annotations, form fields and attachments may not have survived. It also compares the page count with the damaged file's, when that file still reported one, and says how many pages were recovered.",
+      "faq": [
+        {
+          "q": "Can every damaged PDF be repaired?",
+          "a": "No. If neither method can read a single page, the request fails and says so, rather than handing back an empty file that looks like a result."
+        },
+        {
+          "q": "What is the difference between the two methods?",
+          "a": "The first repairs the file's index and keeps your objects untouched. The second rebuilds the document from what can still be rendered — the pages come back, but what is not page content may not."
+        },
+        {
+          "q": "Will I get all my pages back?",
+          "a": "The verdict answers for your file: it compares the recovered page count with the one the damaged file declared, and warns when pages are missing."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the result panel."
+        }
+      ],
+      "related": [
+        "compress-pdf",
+        "unlock-pdf",
+        "pdf-to-pdfa",
+        "ocr-pdf"
+      ],
+      "icon": "repair",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Repair PDF",
+      "alt_slug": "reparer-pdf"
+    },
+    {
+      "slug": "ocr-pdf",
+      "group": "optimise",
+      "title": "OCR PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "OCR a scanned PDF",
+      "meta_description": "Add a searchable text layer to a scanned PDF. The verdict names, page by page, every page that came back unreadable.",
+      "lede": "A scan becomes a document you can search, select and copy from. And you are told which pages the recognition struggled with, instead of finding out later.",
+      "endpoint": "/api/ocr",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [
+        {
+          "name": "languages",
+          "type": "strings",
+          "label": "Languages",
+          "default": "eng,fra",
+          "help": "Comma separated, in order of likelihood. Installed: eng, fra, deu, spa, ita."
+        },
+        {
+          "name": "mode",
+          "type": "select",
+          "label": "Mode",
+          "options": [
+            [
+              "auto",
+              "Only the pages without text"
+            ],
+            [
+              "force",
+              "Read every page again"
+            ],
+            [
+              "redo",
+              "Replace an existing OCR layer"
+            ]
+          ],
+          "default": "auto",
+          "help": "Automatic leaves pages that already carry a text layer alone. Force rasterises and reads everything again."
+        },
+        {
+          "name": "pdfa",
+          "type": "boolean",
+          "label": "Produce a PDF/A archive file",
+          "help": "Adds the archival identification in the same pass."
+        }
+      ],
+      "steps": [
+        "Drop the scanned document.",
+        "Pick the languages it is written in, and a mode if the default does not fit.",
+        "Run it, read which pages came back weak, and download a searchable document."
+      ],
+      "verdict_says": "The verdict says how many pages were read, how many already carried a text layer and were left alone, and then it names — one by one, with their page number and their character count — the pages where fewer than fifty characters were recognised: a blank page, a photograph, or a scan too degraded to read. Every remark from the recognition engine is passed on rather than swallowed. An OCR that hands back a file without mentioning the two pages that came out empty is an OCR that lies.",
+      "faq": [
+        {
+          "q": "Which languages are available?",
+          "a": "English, French, German, Spanish and Italian, and they can be combined: a document mixing two languages is read with both dictionaries loaded."
+        },
+        {
+          "q": "Is there a page limit?",
+          "a": "300 pages per call, on top of the general limits of 100 MB and 2000 pages per uploaded file. Recognition is the most expensive operation here, and the ceiling is what keeps it available to everyone."
+        },
+        {
+          "q": "Will the pages look different afterwards?",
+          "a": "In automatic mode, pages that already have text are not touched at all. Pages that are read get an invisible text layer laid under the image — what you see stays the scan you sent."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the result panel. No model is trained on your documents and nobody reads them."
+        }
+      ],
+      "related": [
+        "pdf-to-word",
+        "compress-pdf",
+        "pdf-to-pdfa",
+        "redact-pdf"
+      ],
+      "icon": "ocr",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "OCR PDF",
+      "alt_slug": "ocr-pdf"
+    },
+    {
+      "slug": "office-to-pdf",
+      "group": "convert",
+      "title": "Office to PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "Word, Excel or PowerPoint to PDF",
+      "meta_description": "Convert a Word, Excel, PowerPoint or OpenDocument file to PDF, and see how much selectable text made it across.",
+      "lede": "The document is laid out by LibreOffice, in a sandbox with no network and no macros. What comes back is a PDF, and a measurement of its text layer.",
+      "endpoint": "/api/office-to-pdf",
+      "accept": ".docx,.xlsx,.pptx,.odt,.ods,.odp,.doc,.xls,.ppt,.csv",
+      "multiple": false,
+      "file_param": "file",
+      "output": "asset",
+      "params": [],
+      "steps": [
+        "Drop the Word, Excel, PowerPoint, OpenDocument or CSV file.",
+        "Run the conversion.",
+        "Check the verdict, then download the PDF or chain another tool on it."
+      ],
+      "verdict_says": "The verdict is read from the produced PDF, not assumed from a successful exit code: how many pages came out, how many characters are selectable and searchable in them, and a warning naming how many pages carry no extractable text at all — the sign of a document that is entirely graphic, or whose font could not be embedded. Your file is opened without macros and without network access, in a container that cannot reach anything.",
+      "faq": [
+        {
+          "q": "Which formats are accepted?",
+          "a": "docx, xlsx, pptx, the OpenDocument formats odt, ods and odp, the legacy doc, xls and ppt, and csv. The type is read from the file's first bytes, not its extension."
+        },
+        {
+          "q": "Will the layout be identical?",
+          "a": "It is laid out by LibreOffice, which is faithful for the great majority of documents. The verdict tells you how many pages came out and how much text survived, so a document that fell apart shows up immediately."
+        },
+        {
+          "q": "Are macros executed?",
+          "a": "No. The converter runs with macros disabled, no network, and a throwaway profile. A hostile document has nothing to reach."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the result panel. 100 MB per file."
+        }
+      ],
+      "related": [
+        "pdf-to-word",
+        "markdown-to-pdf",
+        "pdf-to-pdfa",
+        "merge-pdf"
+      ],
+      "icon": "office",
+      "accepts": [
+        "docx",
+        "xlsx",
+        "pptx",
+        "odt",
+        "ods",
+        "odp",
+        "ole",
+        "csv"
+      ],
+      "label": "Office to PDF",
+      "alt_slug": "office-en-pdf"
+    },
+    {
+      "slug": "pdf-to-word",
+      "group": "convert",
+      "title": "PDF to Word online, free and watermark-free | AI SmartTalk",
+      "h1": "PDF to Word, Excel or PowerPoint",
+      "meta_description": "Turn a PDF into an editable document, and get a measurement of how much of the text was actually recovered.",
+      "lede": "A PDF holds glyphs at coordinates, not paragraphs and tables — those have to be guessed. This tool says so, and then measures how well the guess went.",
+      "endpoint": "/api/pdf-to-office",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [
+        {
+          "name": "to",
+          "type": "select",
+          "label": "Target format",
+          "options": [
+            [
+              "docx",
+              "Word (.docx)"
+            ],
+            [
+              "xlsx",
+              "Excel (.xlsx)"
+            ],
+            [
+              "pptx",
+              "PowerPoint (.pptx)"
+            ]
+          ],
+          "default": "docx",
+          "required": true
+        }
+      ],
+      "steps": [
+        "Drop the PDF to convert.",
+        "Choose the target format.",
+        "Read the verdict before you reuse the file, then download it."
+      ],
+      "verdict_says": "The produced document is rendered back to PDF and read again, because the only honest way to say what a reconstruction kept is to measure it. The verdict compares the characters recovered against the characters in your original — intact above 98 %, a warning with the exact percentage below that, a failure below half, meaning this PDF does not lend itself to being made editable. It also reports the repagination, and if the produced file cannot be re-read it says the fidelity was not verified rather than staying silent.",
+      "faq": [
+        {
+          "q": "Will the result look exactly like my PDF?",
+          "a": "No, and no tool can promise that. A PDF does not record paragraphs, tables or styles: they are inferred from where the characters sit. Read the file before you send it on — the verdict tells you how much of the text was recovered."
+        },
+        {
+          "q": "What about a scanned PDF?",
+          "a": "A scan has no text layer, so there is nothing to reconstruct and the verdict says so plainly. Run the OCR tool first, then convert the result."
+        },
+        {
+          "q": "Which formats can I convert to?",
+          "a": "Word (docx), Excel (xlsx) and PowerPoint (pptx). Pick the one matching the nature of the document: a spreadsheet reconstructed into Word is a poor result whatever the tool."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the result panel."
+        }
+      ],
+      "related": [
+        "ocr-pdf",
+        "office-to-pdf",
+        "pdf-to-jpg",
+        "repair-pdf"
+      ],
+      "icon": "word",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "PDF to Word",
+      "alt_slug": "pdf-en-word"
+    },
+    {
+      "slug": "pdf-to-jpg",
+      "group": "convert",
+      "title": "PDF to JPG online, free and watermark-free | AI SmartTalk",
+      "h1": "PDF to JPG",
+      "meta_description": "Turn the pages of a PDF into PNG or JPEG images, at the resolution you choose, each page as its own file.",
+      "lede": "A page to show in a viewer, a thumbnail, an image for something that cannot read PDF. Each page comes back as its own image.",
+      "endpoint": "/api/rasterize",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [
+        {
+          "name": "format",
+          "type": "select",
+          "label": "Image format",
+          "options": [
+            [
+              "png",
+              "PNG — lossless, best for text"
+            ],
+            [
+              "jpeg",
+              "JPEG — lighter, best for photographs"
+            ]
+          ],
+          "default": "png"
+        },
+        {
+          "name": "dpi",
+          "type": "number",
+          "label": "Resolution (dpi)",
+          "default": 150,
+          "help": "Between 36 and 300. 150 is comfortable on screen; 300 is print resolution and four times the weight."
+        },
+        {
+          "name": "pages",
+          "type": "string",
+          "label": "Pages",
+          "placeholder": "1-5",
+          "help": "Empty means the whole document, up to the per-call page ceiling. Otherwise \"1\", \"2-5\" or \"all\"."
+        }
+      ],
+      "steps": [
+        "Drop the PDF.",
+        "Choose the format, the resolution, and the pages if you do not want all of them.",
+        "Run it, and download the images one by one or all at once."
+      ],
+      "verdict_says": "Rasterising produces images rather than a document to judge, so this tool answers with the files and no verdict card. It does refuse to fail quietly: a request that asks for more pages than a single call allows comes back with the images plus a warning saying how many of how many were produced, and a combination of resolution and page count that would exceed the memory budget is refused before the work starts rather than dying halfway.",
+      "faq": [
+        {
+          "q": "How many pages can I convert at once?",
+          "a": "Up to the per-call ceiling configured on this deployment — twenty pages by default. Past that you get the pages that were produced and a warning saying how many were left."
+        },
+        {
+          "q": "PNG or JPEG?",
+          "a": "PNG for pages of text: it is lossless and the letters stay clean. JPEG for pages that are mostly photographs, where the file is much lighter for a difference nobody sees."
+        },
+        {
+          "q": "Which resolution should I pick?",
+          "a": "150 dpi reads well on screen. 300 dpi is print resolution and produces images about four times heavier. Below 100 dpi small type becomes hard to read."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "The PDF and every image produced are erased after 2 hours, or immediately from the result panel."
+        }
+      ],
+      "related": [
+        "jpg-to-pdf",
+        "split-pdf",
+        "compress-pdf",
+        "pdf-to-word"
+      ],
+      "icon": "image",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "PDF to JPG",
+      "alt_slug": "pdf-en-jpg"
+    },
+    {
+      "slug": "jpg-to-pdf",
+      "group": "convert",
+      "title": "JPG to PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "JPG to PDF",
+      "meta_description": "Gather JPEG, PNG or TIFF images into a single PDF, one page per image, at the paper size you choose.",
+      "lede": "Photographs of a document, screenshots, scans: they become one PDF, in the order of the list, with the images left untouched.",
+      "endpoint": "/api/images-to-pdf",
+      "accept": ".jpg,.jpeg,.png,.gif,.webp,.tif,.tiff,image/*",
+      "multiple": true,
+      "file_param": "images",
+      "output": "asset",
+      "params": [
+        {
+          "name": "paper_size",
+          "type": "select",
+          "label": "Paper size",
+          "options": [
+            [
+              "A4",
+              "A4"
+            ],
+            [
+              "A3",
+              "A3"
+            ],
+            [
+              "A5",
+              "A5"
+            ],
+            [
+              "A6",
+              "A6"
+            ],
+            [
+              "Letter",
+              "Letter"
+            ],
+            [
+              "Legal",
+              "Legal"
+            ],
+            [
+              "Tabloid",
+              "Tabloid"
+            ]
+          ],
+          "default": "A4",
+          "help": "Ignored when the fit below is set to the image's own size."
+        },
+        {
+          "name": "orientation",
+          "type": "select",
+          "label": "Orientation",
+          "options": [
+            [
+              "auto",
+              "Follow each image"
+            ],
+            [
+              "portrait",
+              "Portrait"
+            ],
+            [
+              "landscape",
+              "Landscape"
+            ]
+          ],
+          "default": "auto"
+        },
+        {
+          "name": "fit",
+          "type": "select",
+          "label": "Fit",
+          "options": [
+            [
+              "contain",
+              "Scale to the page"
+            ],
+            [
+              "actual",
+              "One page the size of the image"
+            ]
+          ],
+          "default": "contain"
+        },
+        {
+          "name": "margin",
+          "type": "number",
+          "label": "Margin (pt)",
+          "placeholder": "0",
+          "help": "0 to 144 points. 28 pt is about a centimetre."
+        }
+      ],
+      "steps": [
+        "Drop your images. The order of the list is the order of the pages.",
+        "Choose the paper size, or ask for pages the exact size of each image.",
+        "Run it and download the PDF."
+      ],
+      "verdict_says": "Collating images produces a document with nothing measurable to compare it to, so there is no verdict card here. The check that matters happens on the way in: the type of every file is read from its first bytes, never from its name, and a spreadsheet renamed as a photograph is refused by position in the list and by real type — before it reaches an image library that would answer with a stack trace.",
+      "faq": [
+        {
+          "q": "Which image formats are accepted?",
+          "a": "JPEG, PNG, GIF, WebP and TIFF. The kind is read from the file's bytes, so a wrong extension is caught rather than causing a cryptic failure."
+        },
+        {
+          "q": "How many images at once?",
+          "a": "Up to 200 per document, each up to 100 MB."
+        },
+        {
+          "q": "Are the images recompressed?",
+          "a": "No. They are placed in the PDF as they are, which is why the page count and the image quality are exactly what you sent."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "The images and the PDF produced are erased after 2 hours, or immediately from the result panel."
+        }
+      ],
+      "related": [
+        "pdf-to-jpg",
+        "merge-pdf",
+        "compress-pdf",
+        "ocr-pdf"
+      ],
+      "icon": "image-to-doc",
+      "accepts": [
+        "png",
+        "jpeg",
+        "gif",
+        "webp",
+        "tiff"
+      ],
+      "label": "JPG to PDF",
+      "alt_slug": "jpg-en-pdf"
+    },
+    {
+      "slug": "redact-pdf",
+      "group": "secure",
+      "title": "Redact PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "Redact a PDF",
+      "meta_description": "Remove text from a PDF for good: the pages are rebuilt from pixels, so the redacted strings are gone from the file, not hidden.",
+      "lede": "A black rectangle drawn over a word leaves the word in the file. This tool rebuilds each page from its pixels, so what was redacted no longer exists in the document.",
+      "endpoint": "/api/redact",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "binary",
+      "params": [
+        {
+          "name": "patterns",
+          "type": "strings",
+          "label": "Exact strings",
+          "placeholder": "Jane Doe, FR76 3000 1000 64",
+          "help": "Comma separated, matched literally — not as regular expressions. Up to 64 strings."
+        },
+        {
+          "name": "entities",
+          "type": "strings",
+          "label": "Structured data",
+          "placeholder": "email,iban,phone",
+          "help": "Among email, iban, phone, siret, credit_card. Found and validated by checksum, wherever they appear."
+        },
+        {
+          "name": "dpi",
+          "type": "number",
+          "label": "Resolution (dpi)",
+          "default": 200,
+          "help": "Between 72 and 400. The resolution the pages are rebuilt at: higher means a sharper, heavier document."
+        }
+      ],
+      "steps": [
+        "Drop the document, and name the strings or the kinds of data to remove.",
+        "Run it: each page is rasterised, the areas are painted, and the page is rebuilt from the result.",
+        "Check the count of areas painted per page, then download."
+      ],
+      "verdict_says": "You get the number of areas painted on each page, and a notice stating exactly what was traded away: the pages are rebuilt from images, so the redacted strings are gone from the file — and so are its text layer, bookmarks, annotations, attachments and metadata, while the result is no longer selectable and is heavier than the original. Structured data is validated by checksum, which is what keeps a fourteen-digit invoice number from being taken for a company registration number.",
+      "faq": [
+        {
+          "q": "Is the text really removed?",
+          "a": "Yes. The page is rasterised, the areas are painted on the image, and the page is rebuilt from that image. There is no text layer left to copy the hidden words out of, because there is no text layer at all."
+        },
+        {
+          "q": "What do I lose in exchange?",
+          "a": "The whole document becomes images: not searchable, not selectable, and larger. Bookmarks, annotations, attachments and metadata from the source are gone too. The response says so every time, rather than letting you discover it."
+        },
+        {
+          "q": "Can I use a regular expression?",
+          "a": "No, and a pattern that looks like one is refused rather than matched literally — a caller who sent an expression and got back a document with nothing painted would believe the job was done. Use the structured data list for emails, IBANs, phone numbers and the like."
+        },
+        {
+          "q": "Is there a page limit?",
+          "a": "200 pages per call: every page is rasterised, repainted and rasterised again, which is the most expensive operation offered here."
+        }
+      ],
+      "related": [
+        "protect-pdf",
+        "ocr-pdf",
+        "watermark-pdf",
+        "crop-pdf"
+      ],
+      "icon": "redact",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Redact PDF",
+      "alt_slug": "caviarder-pdf"
+    },
+    {
+      "slug": "pdf-to-pdfa",
+      "group": "secure",
+      "title": "PDF to PDF/A online, free and watermark-free | AI SmartTalk",
+      "h1": "Convert a PDF to PDF/A",
+      "meta_description": "Produce the archival form of a PDF, and read every adjustment the conversion had to make before you deposit the file.",
+      "lede": "PDF/A is the form a legal archive accepts. The conversion changes things in your document — and every one of those changes is reported.",
+      "endpoint": "/api/pdfa",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "params": [
+        {
+          "name": "variant",
+          "type": "select",
+          "label": "Variant",
+          "options": [
+            [
+              "pdf/a-2b",
+              "PDF/A-2B — the usual choice"
+            ],
+            [
+              "pdf/a-1b",
+              "PDF/A-1B — the strictest"
+            ],
+            [
+              "pdf/a-3b",
+              "PDF/A-3B — allows attachments"
+            ]
+          ],
+          "default": "pdf/a-2b",
+          "help": "Level B only: level A requires a tagged reading order that cannot be invented from an untagged document."
+        }
+      ],
+      "steps": [
+        "Drop the document to archive.",
+        "Choose the variant your archive requires — PDF/A-2B if you have no instruction.",
+        "Read the adjustments listed in the verdict, then download."
+      ],
+      "verdict_says": "The verdict opens the produced file and looks for the PDF/A identification inside it: if the converter gave up and wrote an ordinary PDF under an archival name, that is reported as a failure, which is the one conformance error detectable without a validator. Every adjustment made along the way is listed — an annotation dropped, a transparency flattened, a font substituted. And the summary states its own limit in as many words: the file is declared conforming by the converter, not proven conforming, because no PDF/A validator runs on this service.",
+      "faq": [
+        {
+          "q": "Is the file guaranteed to be valid PDF/A?",
+          "a": "No, and we say so rather than implying otherwise. This service produces PDF/A and verifies the identification is present, but runs no validator. For a deposit that demands proof, have the file checked by a validator such as veraPDF."
+        },
+        {
+          "q": "Which variant should I choose?",
+          "a": "PDF/A-2B unless your archive names another. PDF/A-1B is the strictest and refuses transparency; PDF/A-3B is the only one that lets you keep attached files."
+        },
+        {
+          "q": "Why only level B?",
+          "a": "Level A requires a tagged reading order for accessibility. It cannot be invented from an untagged document, and declaring a level we cannot produce would be worse than refusing it."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "Erased after 2 hours, or immediately from the result panel."
+        }
+      ],
+      "related": [
+        "ocr-pdf",
+        "compress-pdf",
+        "repair-pdf",
+        "office-to-pdf"
+      ],
+      "icon": "archive",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "PDF to PDF/A",
+      "alt_slug": "pdf-en-pdfa"
+    },
+    {
+      "slug": "markdown-to-pdf",
+      "group": "create",
+      "title": "Markdown to PDF online, free and watermark-free | AI SmartTalk",
+      "h1": "Markdown to PDF",
+      "meta_description": "Produce a laid-out PDF from Markdown: headings, tables, code, charts and diagrams, with a house style and a layout score.",
+      "lede": "This is where the service started, and what the others do not do: not transforming a file, but producing a document — from text, with a style, and a report on its layout.",
+      "endpoint": "/api/convert",
+      "accept": "",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "binary",
+      "params": [
+        {
+          "name": "markdown",
+          "type": "text",
+          "label": "Markdown source",
+          "required": true,
+          "placeholder": "# Title — then your text",
+          "help": "Headings, lists, tables, code, footnotes, plus chart and mermaid blocks rendered as vector diagrams."
+        },
+        {
+          "name": "options.theme",
+          "type": "string",
+          "label": "Theme",
+          "placeholder": "aismarttalk@1",
+          "help": "A versioned brand kit: aismarttalk@1, report@1, minimal@1. Empty means the default style."
+        },
+        {
+          "name": "options.paper_size",
+          "type": "select",
+          "label": "Paper size",
+          "options": [
+            [
+              "a4",
+              "A4"
+            ],
+            [
+              "a3",
+              "A3"
+            ],
+            [
+              "letter",
+              "Letter"
+            ]
+          ],
+          "default": "a4"
+        },
+        {
+          "name": "options.toc",
+          "type": "boolean",
+          "label": "Table of contents"
+        },
+        {
+          "name": "options.page_numbers",
+          "type": "boolean",
+          "label": "Page numbers"
+        },
+        {
+          "name": "options.autolayout",
+          "type": "boolean",
+          "label": "Inspect and correct the layout",
+          "help": "Renders, inspects the result, applies a corrective pass, and returns the layout score."
+        }
+      ],
+      "steps": [
+        "Write or paste your Markdown.",
+        "Choose a theme and the page options; turn on the layout inspection if the document has to be presentable.",
+        "Produce the PDF and download it."
+      ],
+      "verdict_says": "With the layout inspection turned on, the rendered PDF is opened and read back: you get a score out of 100 and the issues located on the page — a table overflowing its column, a line running past the margin, an orphaned heading — plus a corrective pass applied automatically before the file is handed over. No language model is involved anywhere in this: the render is deterministic, which is what makes the same source always produce the same document.",
+      "faq": [
+        {
+          "q": "Which Markdown is supported?",
+          "a": "Headings, lists, tables, code with syntax highlighting, footnotes and images, plus chart and mermaid blocks rendered as vector diagrams inside the document."
+        },
+        {
+          "q": "Can I apply my own house style?",
+          "a": "Yes. Themes are versioned brand kits: a given version always renders the same way, so a document produced today can be reproduced identically tomorrow."
+        },
+        {
+          "q": "Is a language model involved?",
+          "a": "No. Rendering is entirely deterministic — same source, same options, same PDF. That is what makes the result cacheable, comparable and attestable."
+        },
+        {
+          "q": "Are my files kept?",
+          "a": "The produced document is erased after 2 hours, or immediately from the result panel. No model is trained on what you write."
+        }
+      ],
+      "related": [
+        "office-to-pdf",
+        "add-page-numbers",
+        "watermark-pdf",
+        "pdf-to-pdfa"
+      ],
+      "icon": "markdown",
+      "accepts": [],
+      "label": "Markdown to PDF",
+      "alt_slug": "markdown-en-pdf"
+    }
+  ]
+}

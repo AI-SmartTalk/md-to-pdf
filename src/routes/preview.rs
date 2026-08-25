@@ -3,7 +3,7 @@
 //! A request that names none of the new fields gets exactly what it always got: page 1,
 //! 150 dpi, `image/png`. Everything below only happens when the caller asks for it.
 
-use crate::auth::ApiKey;
+use crate::auth::PublicOrKey;
 use crate::config::config;
 use crate::exec;
 use crate::helpers::{self, base64, PREVIEW_DPI};
@@ -73,7 +73,7 @@ pub struct PreviewPage {
 
 #[post("/preview", format = "json", data = "<req>")]
 pub async fn preview(
-    _key: ApiKey,
+    _key: PublicOrKey,
     trace: RequestId,
     req: Json<PreviewParams>,
 ) -> Result<Either<(ContentType, Vec<u8>), Json<PreviewPages>>, AppError> {

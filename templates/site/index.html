@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% import "icons.html" as icons %}
+
+{% block head_extra %}
+{# L'index des outils, pour le sélecteur du héros : il lit le type du fichier déposé et
+   propose ce qu'on peut en faire. Servi en JSON dans la page plutôt que par un appel
+   supplémentaire — c'est une centaine de lignes, et la page de conversion ne doit pas
+   attendre une requête de plus pour devenir utile. #}
+<script type="application/json" id="tool-index">
+[{% for group in nav_groups %}{% for tool in group.tools %}{% set name = tool.label | default(value=tool.h1) %}
+{"slug":{{ tool.slug | json_encode | safe }},"label":{{ name | json_encode | safe }},"icon":{{ tool.icon | default(value="") | json_encode | safe }},"accepts":{{ tool.accepts | json_encode | safe }},"multiple":{{ tool.multiple | json_encode | safe }}}{% if not loop.last %},{% endif %}{% endfor %}{% if not loop.last %},{% endif %}{% endfor %}]
+</script>
+
+{# La page d'accueil est ce qu'un moteur lit pour comprendre ce qu'est le site. Le dire en
+   données structurées lui évite de le deviner à partir de vingt-et-une cartes. #}
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebApplication",
+ "name":"AI SmartTalk Documents",
+ "url":"{{ canonical | safe }}",
+ "applicationCategory":"BusinessApplication",
+ "operatingSystem":"Web",
+ "description":{{ page_description | json_encode | safe }},
+ "offers":{"@type":"Offer","price":"0","priceCurrency":"EUR",
+           "description":{% if lang == "fr" %}"Tous les outils gratuitement, sans compte et sans filigrane."{% else %}"Every tool for free, no account and no watermark."{% endif %}},
+ "featureList":[{% for group in nav_groups %}{% for tool in group.tools %}{% set name = tool.label | default(value=tool.h1) %}{{ name | json_encode | safe }}{% if not loop.last %},{% endif %}{% endfor %}{% if not loop.last %},{% endif %}{% endfor %}]}
+</script>
+{% endblock head_extra %}
+
+{% block content %}
+
+{# ── Le héros : un fichier avant une phrase ──────────────────────────────────────────
+   Aucun texte à lire au-dessus de la zone de dépôt. Le visiteur n'a pas non plus à
+   choisir un outil d'abord : le service lit le type du fichier aux octets et propose la
+   suite. C'est l'étape que les concurrents imposent et que nous supprimons. #}
+<section class="hero hero-drop">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="wrap">
+    <h1>{% if index.h1 %}{{ index.h1 }}{% else %}{% if lang == "fr" %}Vos PDF, réglés en une minute{% else %}Your PDFs, sorted in a minute{% endif %}{% endif %}</h1>
+
+    <section class="drop-hero"
+             data-picker
+             data-accept=".pdf,application/pdf,image/*,.docx,.xlsx,.pptx,.odt,.ods,.odp,.doc,.xls,.ppt"
+             data-max-mb="{{ max_mb }}"
+             data-tools-root="{{ root | safe }}">
+      <label class="dropzone dropzone-lg" data-role="drop">
+        <input type="file" data-role="input" multiple
+               accept=".pdf,application/pdf,image/*,.docx,.xlsx,.pptx,.odt,.ods,.odp,.doc,.xls,.ppt">
+        <span class="drop-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor"
+               stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 16V4"/><path d="M8 8l4-4 4 4"/>
+            <path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/>
+          </svg>
+        </span>
+        <strong>{% if lang == "fr" %}Déposez vos fichiers ici{% else %}Drop your files here{% endif %}</strong>
+        <span>{% if lang == "fr" %}ou cliquez pour choisir · PDF, Word, Excel, PowerPoint, images{% else %}or click to choose · PDF, Word, Excel, PowerPoint, images{% endif %}</span>
+      </label>
+
+      <p class="drop-hint">
+        {%- if lang == "fr" -%}
+        On lit ce que c'est, et on vous propose quoi en faire. Pas besoin de choisir un outil d'abord.
+        {%- else -%}
+        We read what it is and suggest what to do with it. No need to pick a tool first.
+        {%- endif -%}
+      </p>
+    </section>
+
+    {# ── La réassurance, juste sous le dépôt, à l'endroit où l'on hésite ── #}
+    <ul class="trust-bar">
+      <li>{{ icons::trust(name="no-watermark") }}<span>{% if lang == "fr" %}Aucun filigrane, jamais{% else %}No watermark, ever{% endif %}</span></li>
+      <li>{{ icons::trust(name="clock") }}<span>{% if lang == "fr" %}Fichiers effacés après <span data-role="retention-hours" data-member-hours="{{ member_retention_hours }}">{{ retention_hours }}</span> h{% else %}Files deleted after <span data-role="retention-hours" data-member-hours="{{ member_retention_hours }}">{{ retention_hours }}</span> h{% endif %}</span></li>
+      <li>{{ icons::trust(name="flag") }}<span>{% if lang == "fr" %}Hébergé en France{% else %}Hosted in France{% endif %}</span></li>
+      <li>{{ icons::trust(name="shield") }}<span>{% if lang == "fr" %}Aucun entraînement de modèle{% else %}No model training{% endif %}</span></li>
+    </ul>
+  </div>
+</section>
+
+{# ── Les outils, scannables ─────────────────────────────────────────────────────────── #}
+<section class="section" id="outils">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>{% if lang == "fr" %}Tous les outils{% else %}Every tool{% endif %}</h2>
+      <p>
+        {%- if lang == "fr" -%}
+        {{ tools | length }} outils gratuits, sans compte. {{ max_mb }} Mo par fichier.
+        {%- else -%}
+        {{ tools | length }} free tools, no account. {{ max_mb }} MB per file.
+        {%- endif -%}
+      </p>
+    </div>
+
+    <div class="tool-groups">
+      {% for group in nav_groups %}
+      <section class="tool-group" data-group="{{ group.name | slugify }}">
+        <h3>{{ group.name }}</h3>
+        <div class="tool-grid">
+          {% for tool in group.tools %}
+          <a class="tool-card" href="{{ root | safe }}/{{ tool.slug }}" data-slug="{{ tool.slug }}">
+            <span class="tool-card-icon">{{ icons::tool(name=tool.icon | default(value="")) }}</span>
+            <h4>{{ tool.label | default(value=tool.h1) }}</h4>
+            <p>{{ tool.meta_description }}</p>
+          </a>
+          {% endfor %}
+        </div>
+      </section>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ── Ce qui nous distingue, montré après coup et non promis d'avance ─────────────────── #}
+<section class="section tinted">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>{% if lang == "fr" %}On vérifie, et on vous le dit{% else %}We check, and we tell you{% endif %}</h2>
+      <p>{{ index.lede }}</p>
+    </div>
+    <div class="proof-grid">
+      {% for claim in index.claims %}
+      <div class="proof-card">{{ icons::trust(name="check") }}<p>{{ claim }}</p></div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ── L'autre public, adressé sans encombrer celui-ci ─────────────────────────────────── #}
+<section class="section">
+  <div class="wrap">
+    <div class="dev-strip">
+      <div>
+        <p class="kicker">{% if lang == "fr" %}Pour les développeurs{% else %}For developers{% endif %}</p>
+        <h2>{% if lang == "fr" %}Le même moteur, par API{% else %}The same engine, over an API{% endif %}</h2>
+        <p>
+          {%- if lang == "fr" -%}
+          43 endpoints, un contrat OpenAPI, un serveur MCP natif pour vos agents, et la
+          preuve de provenance signée. Le verdict que vous voyez ici, en JSON.
+          {%- else -%}
+          43 endpoints, one OpenAPI contract, a native MCP server for your agents, and
+          signed provenance. The verdict you see here, in JSON.
+          {%- endif -%}
+        </p>
+        <p class="dev-links">
+          <a class="btn" href="/dev#/api">{% if lang == "fr" %}Référence de l'API{% else %}API reference{% endif %}</a>
+          <a class="btn ghost" href="/dev#/console">{% if lang == "fr" %}Console de test{% else %}Test console{% endif %}</a>
+        </p>
+      </div>
+      <pre class="dev-snippet"><code>curl -X POST {{ base | safe }}/api/compress \
+  -H 'X-API-Key: …' -H 'Content-Type: application/json' \
+  -d '{"pdf":"asset://as_…","level":"ebook"}'
+
+{"verdict":{"status":"ok","score":100,
+  "summary":"4.2 MB → 780 kB, text intact, 12 pages"}}</code></pre>
+    </div>
+  </div>
+</section>
+{% endblock content %}

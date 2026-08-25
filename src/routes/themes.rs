@@ -1,4 +1,4 @@
-use crate::auth::ApiKey;
+use crate::auth::PublicOrKey;
 use crate::cache;
 use crate::helpers::PREVIEW_DPI;
 use crate::pipeline::{self, RenderSpec, Source};
@@ -18,7 +18,7 @@ pub struct ThemesResponse {
 }
 
 #[get("/themes")]
-pub fn list_themes(_key: ApiKey) -> Json<ThemesResponse> {
+pub fn list_themes(_key: PublicOrKey) -> Json<ThemesResponse> {
     Json(ThemesResponse {
         themes: themes::list(),
     })
@@ -30,7 +30,7 @@ pub fn list_themes(_key: ApiKey) -> Json<ThemesResponse> {
 /// what `options.cover` produces without rendering a document of one's own.
 #[get("/themes/<name>/<version>/preview.png?<cover>")]
 pub async fn theme_preview(
-    _key: ApiKey,
+    _key: PublicOrKey,
     name: &str,
     version: &str,
     cover: Option<bool>,

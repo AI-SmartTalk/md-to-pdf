@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% import "icons.html" as icons %}
+
+{% block head_extra %}
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Product",
+ "name":"AI SmartTalk Documents",
+ "description":{{ page_description | json_encode | safe }},
+ "brand":{"@type":"Brand","name":"AI SmartTalk"},
+ "offers":[{% for plan in plans %}{"@type":"Offer","name":{{ plan.name | json_encode | safe }},"priceCurrency":"EUR","price":{{ plan.price | replace(from=" €", to="") | replace(from="sur mesure", to="0") | replace(from="custom", to="0") | json_encode | safe }},"url":"{{ canonical | safe }}"}{% if not loop.last %},{% endif %}{% endfor %}]}
+</script>
+{% endblock head_extra %}
+
+{% block content %}
+<div class="wrap">
+
+<section class="hero hero-short">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <h1>{% if lang == "fr" %}Le gratuit est vraiment gratuit{% else %}Free really means free{% endif %}</h1>
+  <p class="lede">
+    {%- if lang == "fr" -%}
+    Tous les outils, sans compte, sans filigrane et sans limite de tâches. On ne facture
+    pas la frustration : on facture ce qui coûte cher à produire — la reconnaissance de
+    texte en volume, votre charte documentaire, et la preuve que le document vient de vous.
+    {%- else -%}
+    Every tool, no account, no watermark and no task limit. We do not charge for
+    frustration: we charge for what is genuinely expensive — OCR at volume, your document
+    brand kit, and proof that a document came from you.
+    {%- endif -%}
+  </p>
+</section>
+
+<section class="section">
+  <div class="plan-grid">
+    {% for plan in plans %}
+    <div class="plan-card{% if plan.featured %} featured{% endif %}">
+      {% if plan.featured %}<span class="plan-flag">{% if lang == "fr" %}Le plus choisi{% else %}Most chosen{% endif %}</span>{% endif %}
+      <h2>{{ plan.name }}</h2>
+      {# « sur mesure » n'est pas un chiffre : au corps d'un prix il déséquilibre la rangée. #}
+      <p class="plan-price{% if plan.price | length > 6 %} plan-price-words{% endif %}">
+        <strong>{{ plan.price }}</strong><span>{{ plan.period }}</span>
+      </p>
+      <p class="plan-pitch">{{ plan.pitch }}</p>
+      <ul class="plan-features">
+        {% for feature in plan.features %}
+        <li>{{ icons::trust(name="check") }}<span>{{ feature }}</span></li>
+        {% endfor %}
+      </ul>
+      {# Trois paliers sur quatre commencent par un compte, et il est gratuit : c'est là
+         que mène le bouton. Le palier API garde le sien — la documentation existe et se
+         lit sans compte. Ce qui n'existe pas encore, c'est le paiement en libre-service ;
+         la mention sous la grille le dit, et aucun bouton ne prétend le contraire. #}
+      {%- set account_cta = loop.index0 < 3 -%}
+      <a class="btn {% if plan.featured %}primary {% endif %}block"
+         href="{% if account_cta %}/inscription{% else %}{{ plan.cta_href | safe }}{% endif %}">
+        {%- if not account_cta -%}
+          {{ plan.cta }}
+        {%- elif loop.first -%}
+          {% if lang == "fr" %}Commencer, c'est gratuit{% else %}Start now, it is free{% endif %}
+        {%- else -%}
+          {% if lang == "fr" %}Créer un compte{% else %}Create an account{% endif %}
+        {%- endif -%}
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+
+  <p class="notice plan-note">
+    {%- if lang == "fr" -%}
+    Les paliers payants ne sont pas encore ouverts en libre-service : créez d'abord votre
+    compte — il est gratuit et donne déjà accès aux vingt-et-un outils — puis écrivez-nous,
+    et nous ouvrons le palier à la main. Nous préférons le dire plutôt que d'afficher un
+    bouton de paiement qui ne mènerait nulle part.
+    {%- else -%}
+    Paid tiers are not self-service yet: create your account first — it is free and already
+    unlocks all twenty-one tools — then write to us and we open the tier by hand. We would
+    rather say so than show a payment button that leads nowhere.
+    {%- endif -%}
+  </p>
+</section>
+
+<section class="section tinted">
+  <div class="section-head">
+    <h2>{% if lang == "fr" %}Questions de tarif{% else %}Pricing questions{% endif %}</h2>
+  </div>
+  <div class="faq">
+    <details open>
+      <summary>{% if lang == "fr" %}Pourquoi aucun filigrane, même gratuitement ?{% else %}Why no watermark, even on the free tier?{% endif %}</summary>
+      <p>
+        {%- if lang == "fr" -%}
+        Parce qu'un filigrane n'est pas une limite technique, c'est une dégradation
+        délibérée du travail de quelqu'un d'autre. Notre coût marginal est celui du
+        processeur, pas celui d'un modèle : nous n'avons aucune raison de l'imposer.
+        {%- else -%}
+        Because a watermark is not a technical limit, it is a deliberate degradation of
+        somebody else's work. Our marginal cost is CPU time, not a model licence: we have
+        no reason to impose one.
+        {%- endif -%}
+      </p>
+    </details>
+    <details>
+      <summary>{% if lang == "fr" %}Le contrôle de qualité est-il payant ?{% else %}Is the quality check a paid feature?{% endif %}</summary>
+      <p>
+        {%- if lang == "fr" -%}
+        Non, et il ne le sera pas. C'est ce qui nous distingue : le mettre derrière un
+        paiement reviendrait à vendre l'honnêteté à la découpe. Les paliers payants
+        ajoutent le rapport détaillé et l'attestation signée, pas le contrôle lui-même.
+        {%- else -%}
+        No, and it will not be. It is what sets us apart: putting it behind a paywall
+        would be selling honesty by the slice. Paid tiers add the detailed report and the
+        signed attestation, not the check itself.
+        {%- endif -%}
+      </p>
+    </details>
+    <details>
+      <summary>{% if lang == "fr" %}Que devient un fichier que je dépose ?{% else %}What happens to a file I upload?{% endif %}</summary>
+      <p>
+        {%- if lang == "fr" -%}
+        Il est supprimé automatiquement au bout de {{ retention_hours }} heures sans compte,
+        {{ member_retention_hours }} heures avec un compte gratuit, et vous pouvez l'effacer
+        immédiatement. Il ne sert à entraîner aucun modèle, il n'est lu
+        par personne, et il est hébergé en France.
+        {%- else -%}
+        It is deleted automatically after {{ retention_hours }} hours without an account,
+        {{ member_retention_hours }} hours with a free one, and you can erase it at once. It trains no model, it is read by nobody, and it is hosted in France.
+        {%- endif -%}
+      </p>
+    </details>
+  </div>
+</section>
+
+</div>
+{% endblock content %}

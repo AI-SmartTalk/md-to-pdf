@@ -13,6 +13,10 @@ services:
       # ses propres règles dans iptables.
       - "127.0.0.1:8000:8000"
     restart: unless-stopped
+    # Le service tourne en PID 1, et un PID 1 qui n'est pas un init ne récolte pas les
+    # orphelins : chaque conversion tuée au timeout laisse un zombie de plus dans la
+    # table des processus. `init: true` interpose le init de Docker, qui les récolte.
+    init: true
     environment:
       # Obligatoire : sans clé, /api/* est ouvert à quiconque atteint le service.
       # La forme `:?` fait échouer `docker compose up` plutôt que de démarrer une
@@ -34,6 +38,43 @@ services:
       PDF_CACHE_TTL_SECS: "${PDF_CACHE_TTL_SECS:-604800}"
       PDF_LAYOUT_MAX_PASSES: "${PDF_LAYOUT_MAX_PASSES:-1}"
       PDF_PREVIEW_MAX_PAGES: "${PDF_PREVIEW_MAX_PAGES:-20}"
+
+      # Quota par clé nommée, en requêtes par minute. 0 = aucun plafond, ce qui
+      # est le comportement historique de la clé unique.
+      API_QUOTA_PER_MINUTE: "${API_QUOTA_PER_MINUTE:-0}"
+
+      # Palier gratuit des pages publiques. À false, un déploiement fermé le
+      # reste : c'est la valeur qui ne change rien à l'existant.
+      #
+      # Palier gratuit des pages publiques : POST /api/files devient ouvert à
+      # Internet, donc Ghostscript, LibreOffice, Tesseract et img2pdf reçoivent des
+      # octets choisis par un inconnu.
+      #
+      # Ces parseurs ne tournent plus ici : le service md-to-pdf-worker ci-dessous
+      # les exécute dans un conteneur SANS RÉSEAU (network_mode: none). C'est ce qui
+      # rend ce drapeau tenable — un parseur qu'on retourne n'a plus de sortie par
+      # laquelle emporter quoi que ce soit. Voir src/sandbox.rs.
+      #
+      # Reste vrai malgré tout : ne pas l'allumer si le worker n'est pas démarré.
+      # /api/health répond alors "degraded" avec sandbox="unreachable".
+      PUBLIC_TOOLS: "${PUBLIC_TOOLS:-false}"
+      PUBLIC_QUOTA_PER_MINUTE: "${PUBLIC_QUOTA_PER_MINUTE:-20}"
+
+      # Fichiers déposés par les appelants. La durée de vie est la promesse de
+      # rétention faite sur le site public : la changer ici la change là-bas.
+      ASSET_TTL_SECS: "${ASSET_TTL_SECS:-7200}"
+      ASSET_TTL_MEMBER_SECS: "${ASSET_TTL_MEMBER_SECS:-86400}"
+      AUTH_ATTEMPTS_PER_MINUTE: "${AUTH_ATTEMPTS_PER_MINUTE:-10}"
+      ASSET_MAX_MB: "${ASSET_MAX_MB:-100}"
+      ASSET_MAX_PAGES: "${ASSET_MAX_PAGES:-2000}"
+      JOB_TTL_SECS: "${JOB_TTL_SECS:-3600}"
+
+      # Signature des attestations de rendu. Sans valeur, une clé est tirée au
+      # démarrage et les attestations cessent d'être vérifiables au redéploiement.
+      ATTESTATION_SECRET: "${ATTESTATION_SECRET:-}"
+
+      # Base publique utilisée par /sitemap.xml et /robots.txt.
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-https://pdf.aismarttalk.tech}"
 
       # Anti-SSRF. Une liste d'hôtes vide vaut « tout hôte public » ; les
       # adresses privées et les endpoints de métadonnées restent refusés.
@@ -61,6 +102,14 @@ services:
       LOG420_INGEST_TOKEN: "${LOG420_INGEST_TOKEN:-}"
       LOG420_REGION: "${LOG420_REGION:-eu}"
       SERVICE_NAME: "${SERVICE_NAME:-md-to-pdf}"
+
+      # Bac à sable : le chemin du spool partagé avec le worker. Défini, l'API
+      # n'exécute plus aucun convertisseur elle-même — elle les demande au worker.
+      # Vide, tout se passe dans ce conteneur, comme avant ce service.
+      SANDBOX_SPOOL: "${SANDBOX_SPOOL:-/home/rocket/spool}"
+      # Les temporaires doivent être visibles des DEUX conteneurs : un fichier que
+      # l'API écrit dans /tmp n'existe pas pour le worker, chacun ayant son tmpfs.
+      TMPDIR: /home/rocket/work
     volumes:
       # Les PDFs sauvegardés doivent survivre à un redéploiement, sinon chaque
       # download_url déjà distribué devient un 404.
@@ -68,6 +117,27 @@ services:
       # Le cache de rendu est adressé par contenu : sans volume il repart à zéro
       # à chaque déploiement et le premier rendu de chaque document se repaie.
       - pdf-cache:/home/rocket/public/cache
+      # Les fichiers déposés par les appelants. Volume distinct de pdf-storage à
+      # dessein : ce sont des données personnelles à durée de vie courte
+      # (ASSET_TTL_SECS, 2 h par défaut), et non des documents que le service a
+      # produits. Les séparer permet de les purger, les chiffrer ou les effacer
+      # sans toucher aux download_url déjà distribués.
+      - pdf-assets:/home/rocket/public/assets
+      # Comptes, clés d'API hachées et registre de qualité. Sans ce volume, chaque
+      # redéploiement effacerait tous les comptes du service — c'est le premier état
+      # durable qu'il détient, et il ne se reconstruit pas.
+      - pdf-accounts:/home/rocket/public/accounts
+      # Les sessions ouvertes. Sans volume, tout le monde est déconnecté à chaque
+      # mise en ligne, ce qu'aucun visiteur ne relie jamais à un déploiement.
+      - pdf-sessions:/home/rocket/public/sessions
+      # Partagés avec le worker : la boîte aux lettres et les temporaires. Les deux
+      # sont adossés à de la mémoire (voir la section volumes) — ils ne survivent pas
+      # à un redémarrage, et n'ont aucune raison de le faire.
+      - pdf-spool:/home/rocket/spool
+      - pdf-work:/home/rocket/work
+    depends_on:
+      md-to-pdf-worker:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
       interval: 30s
@@ -81,6 +151,30 @@ services:
     mem_limit: "${MEM_LIMIT:-1g}"
     cpus: ${CPUS:-2.0}
     pids_limit: 256
+
+    # Depuis que le service ingère des fichiers, cinq parseurs (Ghostscript,
+    # LibreOffice, Tesseract, img2pdf, poppler) travaillent sur des octets qu'un
+    # inconnu a choisis. Aucun n'a besoin d'une capacité noyau ni du droit
+    # d'élever ses privilèges : le lui retirer ne coûte rien et retire une marche
+    # à toute évasion.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    # Les temporaires de rendu, le profil jetable de LibreOffice et les caches de
+    # polices vivent en mémoire, bornés : un fichier hostile qui gonfle remplit un
+    # tmpfs plafonné, pas le disque de l'hôte.
+    tmpfs:
+      - /tmp:size=2g,mode=1777
+      - /home/rocket/.cache:size=256m
+
+    # Étape suivante, à activer après un essai en préproduction : `read_only: true`.
+    # Le conteneur n'écrit qu'ici — public/pdf, public/cache, public/assets (des
+    # volumes), /tmp et ~/.cache (les tmpfs ci-dessus). Non activé par défaut faute
+    # d'avoir pu l'éprouver ; l'activer sans essai, c'est risquer un service qui
+    # démarre et échoue au premier rendu.
+    # read_only: true
     stop_grace_period: 30s
     logging:
       driver: "json-file"
@@ -90,9 +184,109 @@ services:
     networks:
       - ai-toolkit-network
 
+  # ────────────────────────────────────────────────────────────────────────────
+  # Le worker : les treize convertisseurs, sans aucune sortie réseau
+  #
+  # Même image, même binaire, autre rôle. Ghostscript, LibreOffice, Tesseract,
+  # pandoc, WeasyPrint, poppler, qpdf et img2pdf s'exécutent ici, sur des octets
+  # qu'un inconnu a choisis — et `network_mode: none` fait que ce conteneur n'a pas
+  # d'interface réseau du tout. Un parseur qu'on retourne n'a donc plus de sortie
+  # par laquelle appeler quoi que ce soit ni emporter quoi que ce soit.
+  #
+  # Ce que l'API garde pour elle, parce qu'elle en a réellement besoin : Mermaid
+  # Studio, log420, les rappels de tâche et le récupérateur d'URL gardé. Ce sont
+  # des appels que le processus Rust émet lui-même, jamais un convertisseur.
+  # ────────────────────────────────────────────────────────────────────────────
+  md-to-pdf-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: md-to-pdf:local
+    container_name: md-to-pdf-worker
+    restart: unless-stopped
+    # Le worker est celui qui tient les convertisseurs : c'est lui qui accumulerait
+    # le plus de zombies sans récolteur. Voir la note sur le service d'API.
+    init: true
+    # Aucune interface, donc aucune sortie possible. C'est toute la mesure.
+    network_mode: none
+    environment:
+      MDPDF_ROLE: worker
+      SANDBOX_SPOOL: "${SANDBOX_SPOOL:-/home/rocket/spool}"
+      TMPDIR: /home/rocket/work
+      RUST_LOG: "${RUST_LOG:-info}"
+      # Autant de fils que la file de rendu de l'API : plus étroit, le worker
+      # deviendrait la vraie limite sans que personne l'ait décidé.
+      PDF_MAX_CONCURRENCY: "${PDF_MAX_CONCURRENCY:-}"
+    volumes:
+      - pdf-spool:/home/rocket/spool
+      - pdf-work:/home/rocket/work
+      # Les fichiers sur lesquels il travaille. Il ne monte NI les comptes NI les
+      # sessions : il n'a aucune raison de voir une empreinte de mot de passe.
+      - pdf-assets:/home/rocket/public/assets
+      - pdf-cache:/home/rocket/public/cache
+      - pdf-storage:/home/rocket/public/pdf
+    healthcheck:
+      # Pas de surface HTTP ici : le worker touche un fichier depuis sa boucle de
+      # service, et on regarde son âge. Chercher le processus ne prouverait que
+      # « quelque chose tourne » ; l'âge du fichier prouve que la boucle tourne,
+      # ce qui n'est pas la même chose quand un worker se coince.
+      test:
+        - CMD-SHELL
+        - test $$(( $$(date +%s) - $$(stat -c %Y /home/rocket/spool/heartbeat) )) -lt 30
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    mem_limit: "${WORKER_MEM_LIMIT:-1g}"
+    cpus: ${WORKER_CPUS:-2.0}
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # `read_only: true` a été essayé et retiré, pas oublié. Le service désigne ses
+    # fichiers par des chemins relatifs (public/assets/..., public/pdf/...), donc les
+    # convertisseurs doivent tourner depuis /home/rocket ; et pandoc écrit un
+    # temporaire dans son répertoire courant, quel que soit TMPDIR. Sceller la racine
+    # fait échouer toute conversion par « openTempFile: permission denied ».
+    # L'activer demanderait de rendre ces chemins absolus, ce qui touche le service
+    # entier — et n'ajouterait rien à ce qui compte ici : ce conteneur n'a pas de
+    # réseau, donc rien à exfiltrer par.
+    #
+    # Les temporaires vivent en mémoire, bornés : un fichier hostile qui gonfle
+    # remplit un tmpfs plafonné, pas le disque de l'hôte.
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+      - /home/rocket/.cache:size=256m
+    stop_grace_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   pdf-storage:
   pdf-cache:
+  pdf-assets:
+  pdf-accounts:
+  pdf-sessions:
+  # La boîte aux lettres et les temporaires, adossés à la mémoire plutôt qu'au
+  # disque : un fichier hostile qui gonfle remplit un tmpfs plafonné, et un volume
+  # nommé de ce type est partageable entre conteneurs, ce qu'un `tmpfs:` ne serait
+  # pas. C'est ce qui permet de garder la protection tout en la partageant.
+  pdf-spool:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=64m,mode=1777"
+  pdf-work:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=${WORK_TMPFS_SIZE:-2g},mode=1777"
 
 networks:
   ai-toolkit-network:

@@ -29,6 +29,20 @@ RUN apt-get update \
       poppler-utils \
       qpdf \
       curl \
+      # Ingestion of documents the service did not produce. Each one is a parser that will
+      # be handed hostile bytes, which is why every call site pins what it can: Ghostscript
+      # always runs with -dSAFER, LibreOffice with a throwaway profile seeded to refuse
+      # remote references and macros (src/routes/office.rs), ocrmypdf with a page ceiling.
+      #
+      # None of that isolates the processes. What does is where they run: in production
+      # these binaries execute in the md-to-pdf-worker container, which has no network
+      # interface at all (docker-compose.prod.yml, `network_mode: none`). See
+      # src/sandbox.rs for how the work gets there, and PLAN-METAMORPHOSE.md §5.2.
+      ghostscript \
+      ocrmypdf tesseract-ocr tesseract-ocr-fra tesseract-ocr-eng tesseract-ocr-deu tesseract-ocr-spa tesseract-ocr-ita \
+      libreoffice-writer libreoffice-calc libreoffice-impress \
+      img2pdf \
+      fonts-dejavu fonts-liberation2 \
  && rm -rf /var/lib/apt/lists/* \
  # https://stackoverflow.com/questions/75608323/how-do-i-solve-error-externally-managed-environment-every-time-i-use-pip-3
  && pip3 install --no-cache-dir --break-system-packages weasyprint \
@@ -76,11 +90,30 @@ COPY --chown=rocket:rocket templates /home/rocket/templates
 # requête portant "theme" répond 404.
 COPY --chown=rocket:rocket themes /home/rocket/themes
 
-# Les PDF générés sont écrits ici ; monter un volume dessus garde les URL de
-# téléchargement valides d'un déploiement à l'autre. public/cache contient les rendus
-# adressés par contenu : sans volume, le cache repart à zéro à chaque déploiement.
-RUN mkdir -p /home/rocket/public/pdf /home/rocket/public/cache \
- && chown -R rocket:rocket /home/rocket/public
+# Tous les répertoires d'état, créés ici et possédés par `rocket`.
+#
+# Ce n'est pas de la coquetterie : quand docker-compose monte un volume nommé sur un
+# chemin qui N'EXISTE PAS dans l'image, Docker crée le point de montage en root:root,
+# et le service — qui tourne en rocket — ne peut plus rien y écrire. C'est ce qui
+# faisait échouer POST /api/files avec « Permission denied » sur tout déploiement
+# neuf, sans que rien ne le dise au démarrage.
+#
+#   pdf       les PDF produits, gardés pour que les download_url distribuées vivent
+#   cache     les rendus adressés par contenu
+#   assets    les fichiers déposés par les appelants
+#   accounts  comptes, clés d'API hachées, registre de qualité
+#   sessions  les sessions ouvertes
+#   work      les temporaires, partagés avec le worker (voir src/sandbox.rs)
+#   spool     la boîte aux lettres du worker
+RUN mkdir -p \
+      /home/rocket/public/pdf \
+      /home/rocket/public/cache \
+      /home/rocket/public/assets \
+      /home/rocket/public/accounts \
+      /home/rocket/public/sessions \
+      /home/rocket/work \
+      /home/rocket/spool \
+ && chown -R rocket:rocket /home/rocket/public /home/rocket/work /home/rocket/spool
 
 USER rocket
 

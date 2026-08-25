@@ -290,6 +290,11 @@ fn requests() -> &'static Requests {
     REQUESTS.get_or_init(Requests::default)
 }
 
+fn requests_by_key() -> &'static Requests {
+    static REQUESTS_BY_KEY: OnceLock<Requests> = OnceLock::new();
+    REQUESTS_BY_KEY.get_or_init(Requests::default)
+}
+
 fn failures() -> &'static Failures {
     static FAILURES: OnceLock<Failures> = OnceLock::new();
     FAILURES.get_or_init(Failures::default)
@@ -309,6 +314,21 @@ pub fn record_request(route: &str, status: u16) {
         return;
     }
     *map.entry(key).or_insert(0) += 1;
+}
+
+/// Attribute a request to the integration that made it.
+///
+/// A single shared secret could only ever answer "the service is busy". A named key
+/// answers "the Zapier integration is looping", which is the difference between a metric
+/// and an action. The label set is closed by construction: it can only contain the names
+/// `API_KEY` declared.
+pub fn record_request_key(key: &str, status: u16) {
+    let mut map = lock(requests_by_key());
+    let entry = (label(key), status);
+    if map.len() >= MAX_LABEL_SETS && !map.contains_key(&entry) {
+        return;
+    }
+    *map.entry(entry).or_insert(0) += 1;
 }
 
 /// `reason` must stay a short, closed set of identifiers (never a message or a filename)
@@ -352,6 +372,29 @@ pub fn metrics_text() -> String {
             out,
             "mdtopdf_requests_total{{route=\"{}\",status=\"{}\"}} {}",
             escape(route),
+            status,
+            count
+        );
+    }
+
+    // A job registry with no gauge is how an unbounded queue goes unnoticed until the
+    // container is killed for memory: this is the number the ceiling is there to hold down.
+    let _ = writeln!(
+        out,
+        "# HELP mdtopdf_jobs_tracked Asynchronous jobs held in memory, queued, running or \
+         awaiting collection.\n# TYPE mdtopdf_jobs_tracked gauge\nmdtopdf_jobs_tracked {}",
+        crate::jobs::tracked()
+    );
+
+    out.push_str(
+        "# HELP mdtopdf_requests_by_key_total Requests handled, by API key name and status.\n",
+    );
+    out.push_str("# TYPE mdtopdf_requests_by_key_total counter\n");
+    for ((key, status), count) in lock(requests_by_key()).iter() {
+        let _ = writeln!(
+            out,
+            "mdtopdf_requests_by_key_total{{key=\"{}\",status=\"{}\"}} {}",
+            escape(key),
             status,
             count
         );
@@ -499,7 +542,10 @@ impl Fairing for Observer {
         let bytes = res.body().preset_size().unwrap_or(0);
         let trace_id = request_id(req).0.clone();
 
+        let api_key = crate::auth::key_name(req).0;
+
         record_request(&route, status);
+        record_request_key(api_key, status);
 
         // Support tickets quote this header; it is the only way back to the request's events
         res.set_header(Header::new("X-Request-Id", trace_id.clone()));
@@ -515,6 +561,9 @@ impl Fairing for Observer {
             ("duration", json!(elapsed.as_millis())),
             ("trace_id", json!(trace_id)),
             ("bytes", json!(bytes)),
+            // Which integration this was, so a support ticket and a usage spike name the
+            // same thing. Never the secret itself — only the name it was declared under.
+            ("api_key", json!(api_key)),
         ];
 
         let level = if status >= 500 {

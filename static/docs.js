@@ -29,8 +29,8 @@ const Docs = (() => {
   // partageables sans fuiter la clé de celui qui les copie.
   const QUICKSTART = {
     curl: () => t({
-      en: `# The token is given to you by the team — never hard-coded
-export MDTOPDF_KEY='your-token'
+      en: `# Your key comes from your personal space — never hard-coded
+export MDTOPDF_KEY='your-key'
 
 # Markdown → PDF, binary response
 curl -X POST '${apiBase()}/api/convert' \\
@@ -46,10 +46,10 @@ curl -X POST '${apiBase()}/api/convert' \\
   -d '{"markdown": "# Hello", "client_id": "demo", "pdf_name": "hello"}'
 # {"download_url":"/download/demo/hello.pdf"}
 
-# Without a token: 401
+# Without a key: 401
 # {"error":"unauthorized","details":"missing or invalid API key"}`,
-      fr: `# Le token vous est fourni par l'équipe — jamais en dur dans le code
-export MDTOPDF_KEY='votre-token'
+      fr: `# Votre clé vient de votre espace personnel — jamais en dur dans le code
+export MDTOPDF_KEY='votre-cle'
 
 # Markdown → PDF, réponse binaire
 curl -X POST '${apiBase()}/api/convert' \\
@@ -65,7 +65,7 @@ curl -X POST '${apiBase()}/api/convert' \\
   -d '{"markdown": "# Bonjour", "client_id": "demo", "pdf_name": "hello"}'
 # {"download_url":"/download/demo/hello.pdf"}
 
-# Sans token : 401
+# Sans clé : 401
 # {"error":"unauthorized","details":"missing or invalid API key"}`,
     }),
 
@@ -82,7 +82,7 @@ curl -X POST '${apiBase()}/api/convert' \\
   }),
 });
 
-if (res.status === 401) throw new Error("md-to-pdf token missing or refused");
+if (res.status === 401) throw new Error("md-to-pdf key missing or refused");
 if (!res.ok) {
   const { error, details } = await res.json();
   throw new Error(\`\${error}: \${details}\`);
@@ -101,7 +101,7 @@ const pdf = await res.arrayBuffer();   // binary application/pdf body`,
   }),
 });
 
-if (res.status === 401) throw new Error("token md-to-pdf absent ou refusé");
+if (res.status === 401) throw new Error("clé md-to-pdf absente ou refusée");
 if (!res.ok) {
   const { error, details } = await res.json();
   throw new Error(\`\${error}: \${details}\`);
@@ -148,17 +148,17 @@ print(res.json()["download_url"])   # /download/demo/rapport.pdf`,
     }),
 
     health: () => t({
-      en: `# The service status needs no token
+      en: `# The service status needs no key
 curl -s ${apiBase()}/api/health
 # {"status":"ok","version":"0.2.0","engines":["weasyprint","wkhtmltopdf","pdflatex"]}
 
 # Fetching an already-saved PDF needs none either
 curl -s ${apiBase()}/download/demo/hello.pdf --output hello.pdf`,
-      fr: `# Le statut du service ne demande pas de token
+      fr: `# Le statut du service ne demande pas de clé
 curl -s ${apiBase()}/api/health
 # {"status":"ok","version":"0.2.0","engines":["weasyprint","wkhtmltopdf","pdflatex"]}
 
-# Un PDF déjà sauvegardé se récupère sans token non plus
+# Un PDF déjà sauvegardé se récupère sans clé non plus
 curl -s ${apiBase()}/download/demo/hello.pdf --output hello.pdf`,
     }),
   };

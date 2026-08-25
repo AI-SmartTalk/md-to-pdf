@@ -6,7 +6,7 @@
 //! the text survives, a copy-paste reveals it, and the caller believes the job is done.
 //! Offering the unsafe option next to the safe one only moves that mistake one field away.
 
-use crate::auth::ApiKey;
+use crate::auth::PublicOrKey;
 use crate::exec;
 use crate::helpers::{self, base64};
 use crate::obs::{self, RequestId};
@@ -88,13 +88,13 @@ than the original.";
 
 #[post("/redact", format = "json", data = "<req>")]
 pub async fn redact(
-    _key: ApiKey,
+    _key: PublicOrKey,
     trace: RequestId,
     req: Json<RedactRequest>,
 ) -> Result<Either<NamedFile, Json<RedactResponse>>, AppError> {
     let req = req.into_inner();
 
-    let source = helpers::resolve_pdf_path(&req.pdf)?;
+    let source = helpers::resolve_readable_pdf(&req.pdf)?;
     let patterns = compile_patterns(req.patterns.as_deref())?;
     let entities = parse_entities(req.entities.as_deref())?;
     let dpi = resolve_dpi(req.dpi)?;

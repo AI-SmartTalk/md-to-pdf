@@ -151,6 +151,37 @@ impl Budget {
                 .unwrap_or_default()
         })
     }
+
+    /// Bound one stretch of a job more tightly than the job itself, until the guard drops.
+    ///
+    /// For work that is worth having and not worth the request: a verification pass, a
+    /// second opinion, an optional enrichment. Without a cap, one of those can spend the
+    /// whole deadline and leave nothing for the part the caller actually asked for — which
+    /// is exactly what `/api/pdf-to-office` did, every single time, for sixty seconds.
+    ///
+    /// A cap only ever shortens. Handing it an hour inside a two-minute job changes nothing.
+    pub fn cap(most: Duration) -> Cap {
+        let previous = JOB_DEADLINE.get();
+        let capped = Instant::now() + most;
+
+        JOB_DEADLINE.set(Some(match previous {
+            Some(existing) => existing.min(capped),
+            None => capped,
+        }));
+
+        Cap(previous)
+    }
+}
+
+/// Restores the deadline a `Budget::cap` shortened. Holds the previous value rather than
+/// clearing it: a cap sits *inside* a job, and clearing would hand the rest of that job an
+/// unlimited budget.
+pub struct Cap(Option<Instant>);
+
+impl Drop for Cap {
+    fn drop(&mut self) {
+        JOB_DEADLINE.set(self.0);
+    }
 }
 
 impl Drop for Budget {
@@ -166,6 +197,44 @@ pub fn process_timeout() -> Duration {
         Some(remaining) => configured.min(remaining),
         None => configured,
     }
+}
+
+/// Start a child in a process group of its own, so the timeout can reach its descendants.
+///
+/// `Child::kill` signals one pid, and half the converters this service drives are not the
+/// process that does the work: `/usr/bin/soffice` is a shell script that execs `oosplash`,
+/// which forks `soffice.bin` and waits. Killing the pid we spawned leaves `soffice.bin`
+/// running — measured at 99.9% of a core, for hours, holding the stderr pipe open so the
+/// reader thread never returns either. One runaway conversion per timeout, and the host
+/// eventually has nothing left to render with.
+///
+/// A group of its own also means the signal cannot travel *up*: the group id is the child's
+/// own pid, so nothing this service needs is ever in range.
+pub fn own_process_group(cmd: &mut Command) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+}
+
+/// SIGKILL a timed-out child and everything it forked.
+///
+/// Safe to call on a child that has already exited: its group is then empty and `killpg`
+/// answers ESRCH, which is exactly the outcome wanted.
+pub fn kill_process_group(child: &mut Child) {
+    #[cfg(unix)]
+    {
+        // `own_process_group` made the child a group leader, so its pid is the group id.
+        // Nothing else can be in that group.
+        let group = child.id() as libc::pid_t;
+        unsafe { libc::killpg(group, libc::SIGKILL) };
+    }
+
+    // The direct child is signalled again — harmless — and, crucially, reaped: without a
+    // `wait` it stays a zombie for the life of the process.
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 /// Wait for a child process, draining stdout/stderr on dedicated threads (so a large
@@ -208,8 +277,10 @@ fn wait_with_timeout(
             Some(status) => break status,
             None => {
                 if Instant::now() >= deadline {
-                    let _ = child.kill();
-                    let _ = child.wait();
+                    kill_process_group(&mut child);
+                    // The reader threads are deliberately not joined: killing the group
+                    // closes the pipes, so they finish on their own, and a descendant that
+                    // somehow survived must not be able to hold this render slot hostage.
                     error!("{} timed out after {}s", label, timeout.as_secs());
                     return Err(AppError::Timeout(format!(
                         "{} exceeded the {}s time limit",
@@ -322,20 +393,80 @@ fn apply_latex_sandbox(cmd: &mut Command) {
         .arg("--pdf-engine-opt=-no-shell-escape");
 }
 
+/// Variables a child process genuinely needs. Everything else is left behind.
+const INHERITED_ENV: [&str; 6] = ["PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TERM"];
+
+/// Hand a child only the environment it needs.
+///
+/// Until this service accepted uploads, every process it spawned worked on content it had
+/// written itself. Now Ghostscript, LibreOffice and Tesseract parse bytes chosen by
+/// strangers — and they inherited the whole environment of the service, `API_KEY`,
+/// `ATTESTATION_SECRET` and the log420 token included. Ghostscript has a history of sandbox
+/// escapes and LibreOffice runs macros; making sure whatever runs in there finds nothing
+/// worth stealing costs a dozen lines.
+///
+/// Variables the caller set on the command survive, and win: that is how the urlguard
+/// policy and the TeX lockdown reach the child.
+fn sanitize_env(cmd: &mut Command) {
+    let explicit: Vec<(OsString, Option<OsString>)> = cmd
+        .get_envs()
+        .map(|(key, value)| (key.to_os_string(), value.map(|value| value.to_os_string())))
+        .collect();
+
+    cmd.env_clear();
+
+    for key in INHERITED_ENV {
+        if let Some(value) = env::var_os(key) {
+            cmd.env(key, value);
+        }
+    }
+
+    for (key, value) in explicit {
+        match value {
+            Some(value) => cmd.env(key, value),
+            None => cmd.env_remove(key),
+        };
+    }
+}
+
 /// Spawn a command with piped stdio and wait for it under the global timeout
 fn run_command(cmd: &mut Command, label: &str) -> Result<Output, AppError> {
+    spawn_and_wait(cmd, None, label)
+}
+
+/// The one place in this service where an external program starts.
+///
+/// Both spawn sites — `run_command` and `run_pandoc`, which differs only by feeding stdin —
+/// come through here, and that is what made the sandbox possible without touching thirteen
+/// routes: when `SANDBOX_SPOOL` is set the child runs in a container with no network, and
+/// the caller cannot tell the difference. Unset, it runs here exactly as it always has,
+/// which is what development and every existing deployment get.
+fn spawn_and_wait(
+    cmd: &mut Command,
+    stdin_data: Option<Vec<u8>>,
+    label: &str,
+) -> Result<Output, AppError> {
     budget_check(label)?;
+    sanitize_env(cmd);
 
-    let child = cmd
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| {
-            error!("Failed to spawn {}: {}", label, e);
-            AppError::Io(e)
-        })?;
+    if crate::sandbox::enabled() {
+        // The remaining budget travels with the job: the worker holds the process, so it is
+        // the only side that can enforce a deadline on it.
+        return crate::sandbox::run(cmd, stdin_data, label, process_timeout());
+    }
 
-    wait_with_timeout(child, None, label)
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    if stdin_data.is_some() {
+        cmd.stdin(Stdio::piped());
+    }
+    own_process_group(cmd);
+
+    let child = cmd.spawn().map_err(|e| {
+        error!("Failed to spawn {}: {}", label, e);
+        AppError::Io(e)
+    })?;
+
+    wait_with_timeout(child, stdin_data, label)
 }
 
 /// Turn a failed process into an AppError carrying its stderr
@@ -595,18 +726,7 @@ pub fn run_pandoc(
         warn!("HTML header/footer are ignored with the pdflatex engine");
     }
 
-    cmd.stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    budget_check("pandoc")?;
-
-    let child = cmd.spawn().map_err(|e| {
-        error!("Failed to spawn pandoc: {}", e);
-        AppError::Io(e)
-    })?;
-
-    let output = wait_with_timeout(child, Some(markdown.as_bytes().to_vec()), "pandoc")?;
+    let output = spawn_and_wait(&mut cmd, Some(markdown.as_bytes().to_vec()), "pandoc")?;
 
     if !output.status.success() {
         return Err(process_error(&output, "Pandoc conversion failed"));
@@ -623,6 +743,29 @@ pub fn run_weasyprint(html: &str, css_path: &str) -> Result<tempfile::TempPath, 
 /// Same, for HTML that carries its own `<style>` and needs no stylesheet
 pub fn run_weasyprint_plain(html: &str) -> Result<tempfile::TempPath, AppError> {
     weasyprint(html, None)
+}
+
+/// The invocation, built apart from the running so it can be asserted on.
+fn weasyprint_command(html: &str, pdf: &str, css: Option<&str>, base_url: &str) -> Command {
+    let mut cmd = Command::new("weasyprint");
+    cmd.arg(html).arg(pdf);
+
+    if let Some(css) = css {
+        cmd.arg("--stylesheet").arg(css);
+    }
+
+    cmd.arg("--base-url").arg(base_url);
+
+    // Stating a fact, not making a guess: the document reaching this function came out of a
+    // Rust `String`, which is UTF-8 by construction, and `write_temp_html` wrote those exact
+    // bytes. Without the flag WeasyPrint applies the HTML5 default for a document that
+    // declares nothing — windows-1252 — and every accented character in a caller's HTML came
+    // back as mojibake: `Modèle` rendered as `ModÃ¨le`, silently, with a 200. Markdown never
+    // showed it because pandoc emits a `<meta charset>` of its own; `/api/html-to-pdf` and
+    // `/api/render` had no such luck.
+    cmd.arg("--encoding").arg("utf-8");
+
+    cmd
 }
 
 fn weasyprint(html: &str, css_path: Option<&str>) -> Result<tempfile::TempPath, AppError> {
@@ -643,12 +786,7 @@ fn weasyprint(html: &str, css_path: Option<&str>) -> Result<tempfile::TempPath, 
         base_url.push('/');
     }
 
-    let mut cmd = Command::new("weasyprint");
-    cmd.arg(html_path_str).arg(&pdf_path);
-    if let Some(css_path) = css_path {
-        cmd.arg("--stylesheet").arg(css_path);
-    }
-    cmd.arg("--base-url").arg(&base_url);
+    let mut cmd = weasyprint_command(html_path_str, &pdf_path, css_path, &base_url);
     apply_urlguard_env(&mut cmd, css_path);
 
     run_capture(&mut cmd, "weasyprint", "Weasyprint conversion failed")?;
@@ -683,27 +821,6 @@ pub fn save_pdf(pdf_path: &Path, client_id: &str, pdf_name: &str) -> Result<Stri
     Ok(format!("/download/{}/{}", client_id, final_pdf_name))
 }
 
-/// Hand a produced PDF back the way every route does: the file itself, or the JSON
-/// `download_url` when the caller asked for it to be saved.
-pub async fn deliver(
-    pdf: tempfile::TempPath,
-    download_url: Option<String>,
-) -> Result<
-    rocket::Either<rocket::fs::NamedFile, rocket::serde::json::Json<ConvertResponse>>,
-    AppError,
-> {
-    match download_url {
-        Some(url) => Ok(rocket::Either::Right(rocket::serde::json::Json(
-            ConvertResponse::new(url),
-        ))),
-        None => Ok(rocket::Either::Left(
-            rocket::fs::NamedFile::open(&pdf)
-                .await
-                .map_err(AppError::Io)?,
-        )),
-    }
-}
-
 /// Save the PDF when the caller named a destination. Filesystem work like the tool run it
 /// follows, so it belongs on the same blocking thread.
 pub fn save_if_requested(
@@ -715,6 +832,69 @@ pub fn save_if_requested(
         (Some(client_id), Some(pdf_name)) => Ok(Some(save_pdf(pdf, &client_id, &pdf_name)?)),
         _ => Ok(None),
     }
+}
+
+/// Decide what a tool hands back, from inside the blocking closure that produced it.
+///
+/// The three destinations are not exclusive by accident: a caller can want the file saved
+/// under a stable download URL *and* an asset handle to feed the next tool. What is
+/// exclusive is streaming the binary, which only happens when nothing else was asked for.
+///
+/// `save_if_requested` runs first because `assets::store` moves the file away.
+pub fn finish_tool(
+    produced: &Path,
+    client_id: Option<String>,
+    pdf_name: Option<String>,
+    output: ToolOutput,
+    name_hint: &str,
+) -> Result<ToolResponse, AppError> {
+    let download_url = save_if_requested(produced, client_id, pdf_name)?;
+
+    let asset = match output {
+        ToolOutput::Asset => Some(crate::assets::store(produced, name_hint)?),
+        ToolOutput::Binary => None,
+    };
+
+    // Who this work belongs to can only be read here, on the worker thread that carries the
+    // owner scope. The record itself is written later, in `deliver_tool`, because the verdict
+    // — the only reason the record is worth keeping — is not attached to the response until
+    // after this function has returned.
+    let account = crate::accounts::account_for_owner(&crate::assets::current_owner_name());
+
+    Ok(ToolResponse {
+        download_url,
+        asset,
+        account,
+        source_name: crate::assets::current_source_name(),
+        ..Default::default()
+    })
+}
+
+/// Hand a tool result back: JSON when the caller asked for a URL or an asset, the file
+/// itself otherwise. Mirrors `deliver`, which the older routes keep using.
+pub async fn deliver_tool(
+    produced: tempfile::TempPath,
+    response: ToolResponse,
+    tool: &str,
+) -> Result<rocket::Either<rocket::fs::NamedFile, rocket::serde::json::Json<ToolResponse>>, AppError>
+{
+    // The quality record is written here because this is the one place that sees the whole
+    // operation: the file, the page count, and the verdict the route attached after
+    // `finish_tool` returned. Writing it earlier is what made every entry verdictless.
+    crate::history::record(&response, tool);
+
+    let wants_json =
+        response.download_url.is_some() || response.asset.is_some() || response.assets.is_some();
+
+    if wants_json {
+        return Ok(rocket::Either::Right(rocket::serde::json::Json(response)));
+    }
+
+    Ok(rocket::Either::Left(
+        rocket::fs::NamedFile::open(&produced)
+            .await
+            .map_err(AppError::Io)?,
+    ))
 }
 
 /// Resolution the preview has always been rendered at
@@ -762,6 +942,152 @@ pub fn resolve_pdf_path(url: &str) -> Result<PathBuf, AppError> {
     Ok(canonical)
 }
 
+/// Resolve any reference a caller may hand us to a file on disk.
+///
+/// Two forms are accepted, and the order matters only for readability: `asset://as_…` for
+/// something that was uploaded, and `/download/<client_id>/<name>.pdf` for something this
+/// service produced. The second form is `resolve_pdf_path` untouched — every route that
+/// existed before uploads did keeps working byte for byte, which is the whole point of
+/// adding a function rather than changing one.
+pub fn resolve_source(reference: &str) -> Result<PathBuf, AppError> {
+    match crate::assets::strip_scheme(reference) {
+        Some(id) => {
+            // The one place every tool passes through with the *caller's* name still in
+            // hand — see `assets::note_source_name` for why the record needs it.
+            if let Ok(meta) = crate::assets::meta(id) {
+                crate::assets::note_source_name(&meta.name);
+            }
+            crate::assets::path(id)
+        }
+        None => resolve_pdf_path(reference),
+    }
+}
+
+/// Same, plus the guarantee that what came back is a PDF.
+///
+/// An asset can be a spreadsheet or a photograph. Handing one of those to qpdf produces a
+/// confusing parser error three layers down; saying so here produces a 400 the caller can
+/// act on.
+pub fn resolve_pdf_source(reference: &str) -> Result<PathBuf, AppError> {
+    if let Some(id) = crate::assets::strip_scheme(reference) {
+        let meta = crate::assets::meta(id)?;
+        if meta.kind != crate::assets::AssetKind::Pdf {
+            return Err(AppError::BadRequest(format!(
+                "Asset {} is a {} file, this endpoint needs a PDF",
+                meta.id,
+                meta.kind.as_str()
+            )));
+        }
+    }
+
+    resolve_source(reference)
+}
+
+/// The wordings the tools of this image use for that one refusal — poppler says
+/// `Command Line Error: Incorrect password`, qpdf `invalid password`, Ghostscript
+/// `This file requires a password for access`. Reading the sentence rather than the exit
+/// code is what keeps a genuine breakdown a 500: nothing else in these streams says
+/// "password".
+pub fn refused_for_password(stderr: &str) -> bool {
+    const REFUSALS: [&str; 4] = [
+        "incorrect password",
+        "invalid password",
+        "requires a password",
+        "password required",
+    ];
+
+    let stderr = stderr.to_lowercase();
+    REFUSALS.iter().any(|refusal| stderr.contains(refusal))
+}
+
+/// Same, plus the guarantee that the PDF can actually be opened.
+///
+/// A document a stranger uploaded and poppler cannot parse is not a fault of this service,
+/// and answering 500 with `pdfinfo failed` and three lines of poppler's stderr says the
+/// opposite: it tells the caller to retry, tells the operator to investigate, and tells
+/// nobody what to do about it. Measured across the toolbelt, that was fourteen endpoints
+/// answering 500 to the same five malformed files.
+///
+/// The check is free in the ordinary case. The asset store already counts a PDF's pages when
+/// it takes the file in, so a stored PDF with no page count is one nothing will be able to
+/// read; only that already-broken path pays for a diagnosis.
+///
+/// `/api/repair` and `/api/unlock` deliberately do **not** use this: accepting a document
+/// nothing else can open is their entire purpose.
+pub fn resolve_readable_pdf(reference: &str) -> Result<PathBuf, AppError> {
+    let path = resolve_pdf_source(reference)?;
+
+    if !counted_at_rest(reference) {
+        return Err(why_unreadable(&path));
+    }
+
+    Ok(path)
+}
+
+/// Did the store manage to read this document when it came in?
+///
+/// Only asset references can answer: a `/download/…` path names a file this service produced
+/// itself, and one of those that cannot be read is a bug here, not a bad upload — it must
+/// stay the 500 it is.
+fn counted_at_rest(reference: &str) -> bool {
+    let Some(id) = crate::assets::strip_scheme(reference) else {
+        return true;
+    };
+
+    match crate::assets::meta(id) {
+        Ok(meta) => meta.kind != crate::assets::AssetKind::Pdf || meta.pages.is_some(),
+        // The asset is gone or unreadable; `resolve_pdf_source` above already failed on it
+        Err(_) => true,
+    }
+}
+
+/// Ask why, once, on the path where the answer is already bad news.
+///
+/// Two causes, two remedies, and the difference matters to the caller: a document that asks
+/// for a password is opened with `/api/unlock`, one whose structure is damaged with
+/// `/api/repair`. Telling someone to repair a file that merely needed its password is how a
+/// service earns a support ticket.
+fn why_unreadable(pdf: &Path) -> AppError {
+    let refusal = match run_capture(
+        Command::new("pdfinfo").arg(match path_to_str(pdf) {
+            Ok(path) => path,
+            Err(err) => return err,
+        }),
+        "pdfinfo",
+        "pdfinfo failed",
+    ) {
+        // pdfinfo read it after all — the store's failure was transient. Nothing to refuse.
+        Ok(_) => {
+            return AppError::BadRequest(
+                "This PDF could not be read when it was uploaded. Upload it again.".to_string(),
+            )
+        }
+        Err(err) => err,
+    };
+
+    if let AppError::ProcessFailed { stderr, .. } = &refusal {
+        if refused_for_password(stderr) {
+            return AppError::BadRequest(
+                "This PDF is encrypted: it asks for a password before anything can be read \
+                 from it. Remove the protection with POST /api/unlock, which takes the \
+                 password, then send the file it hands back to this route."
+                    .to_string(),
+            );
+        }
+    }
+
+    // A timeout is a timeout: the document may be fine and the machine busy.
+    if matches!(refusal, AppError::Timeout(_)) {
+        return refusal;
+    }
+
+    AppError::BadRequest(
+        "This file is not a readable PDF: its structure is damaged, or it is not a PDF at \
+         all. POST /api/repair rebuilds what can be rebuilt and tells you what it recovered."
+            .to_string(),
+    )
+}
+
 fn non_utf8_path() -> AppError {
     AppError::BadRequest("Non UTF-8 path".to_string())
 }
@@ -769,6 +1095,25 @@ fn non_utf8_path() -> AppError {
 /// Borrow a path as &str, turning a non UTF-8 path into a proper API error
 pub fn path_to_str(path: &Path) -> Result<&str, AppError> {
     path.to_str().ok_or_else(non_utf8_path)
+}
+
+/// `<prefix>_` followed by 32 hexadecimal characters drawn from the kernel.
+///
+/// Used for asset and job identifiers. No `uuid` and no `rand` crate: the production image
+/// is audited dependency by dependency, and this is sixteen bytes read from a file.
+pub fn random_id(prefix: &str) -> Result<String, AppError> {
+    const ID_BYTES: usize = 16;
+
+    let mut buf = [0u8; ID_BYTES];
+    fs::File::open("/dev/urandom")?.read_exact(&mut buf)?;
+
+    let mut id = String::with_capacity(prefix.len() + 1 + ID_BYTES * 2);
+    id.push_str(prefix);
+    id.push('_');
+    for byte in buf {
+        id.push_str(&format!("{:02x}", byte));
+    }
+    Ok(id)
 }
 
 /// Is an external tool actually installed in this image?
@@ -829,6 +1174,208 @@ mod tests {
 
         assert_eq!(process_timeout(), configured);
         assert!(budget_check("pandoc").is_ok());
+    }
+
+    /// A verification pass that spends the whole job's deadline leaves nothing for the job
+    #[test]
+    fn a_cap_shortens_the_deadline_for_its_own_scope_and_gives_it_back() {
+        let _budget = Budget::start(Duration::from_secs(60));
+
+        {
+            let _cap = Budget::cap(Duration::from_secs(1));
+            assert!(Budget::remaining().unwrap() <= Duration::from_secs(1));
+        }
+
+        assert!(Budget::remaining().unwrap() > Duration::from_secs(30));
+    }
+
+    /// A cap is a ceiling, never a grant: it must not resurrect a budget already spent
+    #[test]
+    fn a_cap_never_extends_the_deadline_it_sits_inside() {
+        let _budget = Budget::start(Duration::from_millis(1));
+        thread::sleep(Duration::from_millis(5));
+
+        let _cap = Budget::cap(Duration::from_secs(600));
+        assert_eq!(Budget::remaining(), Some(Duration::ZERO));
+    }
+
+    /// Outside a job there is no deadline to shorten, and the cap becomes the only one
+    #[test]
+    fn a_cap_with_no_job_around_it_still_bounds_the_work() {
+        {
+            let _cap = Budget::cap(Duration::from_secs(2));
+            assert!(Budget::remaining().unwrap() <= Duration::from_secs(2));
+        }
+
+        assert_eq!(Budget::remaining(), None);
+    }
+
+    /// The regression that made every `soffice` timeout cost a core, permanently.
+    ///
+    /// The launcher stands in for `/usr/bin/soffice`: it forks the process that does the
+    /// work and then waits. `Child::kill` reaches the launcher only, so before the group
+    /// kill the forked half kept running — and kept writing.
+    #[cfg(unix)]
+    #[test]
+    fn a_timeout_takes_the_processes_the_child_forked_with_it() {
+        let marker = Builder::new()
+            .suffix(".alive")
+            .tempfile()
+            .unwrap()
+            .into_temp_path();
+
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg(format!(
+            "sh -c 'while :; do echo . >> {} ; sleep 0.02; done' & wait",
+            marker.display()
+        ));
+
+        // Short enough to keep the suite quick, long enough for the grandchild to have
+        // written something — an assertion on a file nothing ever touched proves nothing.
+        let _budget = Budget::start(Duration::from_millis(400));
+        let error = run_command(&mut cmd, "launcher").unwrap_err();
+        assert!(
+            matches!(error, AppError::Timeout(_)),
+            "expected a timeout, got {:?}",
+            error
+        );
+
+        let written = fs::metadata(&marker).unwrap().len();
+        assert!(
+            written > 0,
+            "the grandchild never ran, the test proves nothing"
+        );
+
+        thread::sleep(Duration::from_millis(300));
+        assert_eq!(
+            fs::metadata(&marker).unwrap().len(),
+            written,
+            "a process the timed-out child forked is still running"
+        );
+    }
+
+    /// A child that finishes on its own must not be disturbed by any of the above
+    #[cfg(unix)]
+    #[test]
+    fn a_child_in_its_own_group_still_reports_its_output_and_status() {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg("printf out; printf err >&2; exit 3");
+
+        let output = run_command(&mut cmd, "shell").unwrap();
+
+        assert_eq!(output.stdout, b"out");
+        assert_eq!(output.stderr, b"err");
+        assert_eq!(output.status.code(), Some(3));
+    }
+
+    /// The refusal these two routes hang a 400 on. Reading the sentence and not the exit
+    /// code is what keeps a genuine breakdown a 500 — so the sentence has to be right.
+    #[test]
+    fn the_wordings_the_three_tools_use_for_a_password_are_all_recognised() {
+        for stderr in [
+            "Command Line Error: Incorrect password",
+            "qpdf: in.pdf: invalid password",
+            "This file requires a password for access",
+            "GPL Ghostscript: password required",
+        ] {
+            assert!(refused_for_password(stderr), "{}", stderr);
+        }
+
+        for stderr in [
+            "Syntax Error: Couldn't find trailer dictionary",
+            "gs: out of memory",
+            "",
+        ] {
+            assert!(!refused_for_password(stderr), "{}", stderr);
+        }
+    }
+
+    /// A `/download/…` reference names a file this service produced. One of those that
+    /// cannot be read is a bug here, and must keep the 500 that says so.
+    #[test]
+    fn only_an_uploaded_document_is_held_to_the_readability_check() {
+        assert!(counted_at_rest("/download/client/report.pdf"));
+        assert!(counted_at_rest("report.pdf"));
+        // An asset the store cannot even name is `resolve_pdf_source`'s refusal, not this one
+        assert!(counted_at_rest("asset://as_does_not_exist"));
+    }
+
+    /// Without this flag WeasyPrint reads a document that declares no charset as
+    /// windows-1252, and `/api/html-to-pdf` returned `ModÃ¨le` for `Modèle` — with a 200.
+    #[test]
+    fn weasyprint_is_told_the_document_is_utf8_because_it_always_is() {
+        let cmd = weasyprint_command("/tmp/in.html", "/tmp/out.pdf", None, "file:///work/");
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+
+        let at = args
+            .iter()
+            .position(|a| a == "--encoding")
+            .unwrap_or_else(|| panic!("no --encoding in {:?}", args));
+        assert_eq!(args[at + 1], "utf-8");
+    }
+
+    #[test]
+    fn a_stylesheet_is_passed_only_when_there_is_one() {
+        let with = weasyprint_command("in", "out", Some("/tmp/a.css"), "base");
+        let args: Vec<String> = with
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.contains(&"--stylesheet".to_string()));
+        assert!(args.contains(&"/tmp/a.css".to_string()));
+
+        let without = weasyprint_command("in", "out", None, "base");
+        let args: Vec<String> = without
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert!(!args.contains(&"--stylesheet".to_string()));
+    }
+
+    /// A parser fed hostile bytes must not find the service's secrets next to it
+    #[test]
+    fn a_child_process_does_not_inherit_the_service_secrets() {
+        std::env::set_var("API_KEY", "s3cr3t-for-the-test");
+        std::env::set_var("PATH", "/usr/bin:/bin");
+
+        let mut cmd = Command::new("true");
+        cmd.env("PDF_ALLOWED_URL_HOSTS", "example.com");
+        sanitize_env(&mut cmd);
+
+        let passed: Vec<(String, Option<String>)> = cmd
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|v| v.to_string_lossy().into_owned()),
+                )
+            })
+            .collect();
+
+        let value_of = |name: &str| {
+            passed
+                .iter()
+                .find(|(k, _)| k == name)
+                .and_then(|(_, v)| v.clone())
+        };
+
+        assert_eq!(
+            value_of("API_KEY"),
+            None,
+            "the API key must not reach a child"
+        );
+        // What the caller set explicitly still gets through, and still wins
+        assert_eq!(
+            value_of("PDF_ALLOWED_URL_HOSTS"),
+            Some("example.com".to_string())
+        );
+        // …and the child keeps what it needs to run at all
+        assert_eq!(value_of("PATH"), Some("/usr/bin:/bin".to_string()));
+
+        std::env::remove_var("API_KEY");
     }
 
     #[test]

@@ -11,6 +11,12 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# Ces deux jobs lisent le dépôt et n'écrivent nulle part. Sans ce bloc, le
+# GITHUB_TOKEN arrive avec les droits par défaut du dépôt — droit d'écriture
+# compris — dans un job qui compile du code tiers depuis Cargo.lock.
+permissions:
+  contents: read
+
 jobs:
   # Compilation et lint sur le lockfile committé. L'ancienne version lançait
   # `cargo update` avant de compiler : la CI validait donc des dépendances que
@@ -44,6 +50,16 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --locked --all-targets -- -D warnings
+
+      # Cette étape manquait : le dépôt porte plus de cinq cents tests unitaires et
+      # `tests/api_surface.rs`, qui vérifie que swagger.yaml et spec.js décrivent
+      # exactement les routes montées par src/main.rs — et rien de tout cela ne
+      # tournait jamais ailleurs que sur la machine de qui pensait à le lancer.
+      #
+      # Après Clippy, parce que les deux compilent les mêmes cibles : la seconde
+      # invocation ne recompile rien.
+      - name: Tests
+        run: cargo test --locked --all-targets
 
   # Le test qui compte vraiment : l'image de production démarre, répond, et passe
   # la suite d'intégration. Un binaire qui compile mais dont l'image n'embarque

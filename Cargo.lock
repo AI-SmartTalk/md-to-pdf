@@ -1144,6 +1144,7 @@ name = "md-to-pdf"
 version = "0.2.0"
 dependencies = [
  "env_logger",
+ "libc",
  "log",
  "reqwest",
  "rocket",

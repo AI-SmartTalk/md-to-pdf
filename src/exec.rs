@@ -5,8 +5,24 @@ use crate::types::AppError;
 use rocket::tokio::sync::Semaphore;
 use rocket::tokio::task::spawn_blocking;
 use rocket::tokio::time::timeout;
+use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
+
+rocket::tokio::task_local! {
+    /// Key name the request being served presented, for as long as it is being served
+    static OWNER: String;
+}
+
+/// Attribute everything `future` offloads to `owner`.
+///
+/// A tool's output belongs to the caller as much as their upload does, but the code that
+/// stores it sits far below the handler and has no key to hand it. Rather than thread an
+/// owner through every request type — where a caller could forge it — a handler declares it
+/// once here, and `offload` carries it across to the blocking thread.
+pub async fn as_owner<F: Future>(owner: &str, future: F) -> F::Output {
+    OWNER.scope(owner.to_string(), future).await
+}
 
 static QUEUE_DEPTH: AtomicU64 = AtomicU64::new(0);
 static IN_FLIGHT: AtomicU64 = AtomicU64::new(0);
@@ -38,6 +54,9 @@ where
     T: Send + 'static,
 {
     let queue_timeout = config().queue_timeout;
+    // Read on the async side, where the task-local lives, and carried by value: the blocking
+    // thread is not the task, and cannot look it up for itself.
+    let owner = OWNER.try_with(|owner| owner.clone()).ok();
 
     let permit = {
         // The guard also covers the client hanging up while queued, which drops this future
@@ -71,6 +90,11 @@ where
         // One deadline for the whole job: per-process limits do not compose, and a job
         // that outlives the proxy timeout keeps its slot for a client that already left.
         let _budget = helpers::Budget::start(config().render_deadline);
+        // Anything this job stores belongs to the key that asked for it
+        let _owner = owner.as_deref().map(crate::assets::owned_by);
+        // Blocking threads are pooled: whatever the previous job was working on must not
+        // end up named in this one's record.
+        crate::assets::forget_source_name();
         f()
     })
     .await;
@@ -83,6 +107,50 @@ where
             error!("Render task did not complete: {}", err);
             Err(AppError::ProcessFailed {
                 message: "Rendering task failed".to_string(),
+                stderr: err.to_string(),
+            })
+        }
+    }
+}
+
+/// Run a blocking *computation* off the async executor, without taking a render slot.
+///
+/// Hashing a password is deliberately slow — six hundred thousand PBKDF2 rounds — so it
+/// cannot run on an async worker. But it spawns no process and touches no renderer, and
+/// putting it in the render queue was measurably wrong: under load, signing in was refused
+/// with "the service is saturated" because the service was busy compressing somebody's PDF,
+/// and a burst of sign-ins could equally starve the renderers. Two kinds of work, two
+/// queues.
+///
+/// Still bounded, and by the same width: unbounded PBKDF2 is its own denial of service.
+pub async fn offload_cpu<F, T>(f: F) -> Result<T, AppError>
+where
+    F: FnOnce() -> Result<T, AppError> + Send + 'static,
+    T: Send + 'static,
+{
+    static CPU: OnceLock<Arc<Semaphore>> = OnceLock::new();
+    let semaphore = CPU.get_or_init(|| Arc::new(Semaphore::new(config().max_concurrency)));
+
+    let permit = match timeout(config().queue_timeout, semaphore.clone().acquire_owned()).await {
+        Ok(Ok(permit)) => permit,
+        _ => {
+            return Err(AppError::TooManyRequests(
+                "Too many sign-ins at once: try again in a moment".to_string(),
+            ))
+        }
+    };
+
+    match spawn_blocking(move || {
+        let _permit = permit;
+        f()
+    })
+    .await
+    {
+        Ok(result) => result,
+        Err(err) => {
+            error!("Password task did not complete: {}", err);
+            Err(AppError::ProcessFailed {
+                message: "Could not process the credentials".to_string(),
                 stderr: err.to_string(),
             })
         }
