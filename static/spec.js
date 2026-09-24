@@ -450,7 +450,7 @@ const ENDPOINTS = [
       saveBlock(),
     ],
     example: {
-      request: () => ({ pdfs: ["/download/demo-client/a.pdf", "/download/demo-client/b.pdf"], client_id: "demo-client", pdf_name: t({ en: "complete-file", fr: "dossier-complet" }) }),
+      request: () => ({ pdfs: ["/download/demo-client/a.pdf?signature=SIGNED_VALUE", "/download/demo-client/b.pdf?signature=SIGNED_VALUE"], client_id: "demo-client", pdf_name: t({ en: "complete-file", fr: "dossier-complet" }) }),
       response: () => ({ download_url: "/download/demo-client/" + t({ en: "complete-file", fr: "dossier-complet" }) + ".pdf" }),
     },
     statuses: [["200", ST.pdfOrUrl], ["400", { en: "Fewer than 2 PDFs / invalid path", fr: "Moins de 2 PDFs / chemin invalide" }], ["401", ST.unauthorized], ["404", ST.notFound], ["500", { en: "pdfunite failed", fr: "Échec pdfunite" }], ["504", ST.timeout]],
@@ -481,7 +481,7 @@ const ENDPOINTS = [
       saveBlock(),
     ],
     example: {
-      request: () => ({ pdf: "/download/demo-client/report.pdf", text: t({ en: "CONFIDENTIAL", fr: "CONFIDENTIEL" }), opacity: 0.08 }),
+      request: () => ({ pdf: "/download/demo-client/report.pdf?signature=SIGNED_VALUE", text: t({ en: "CONFIDENTIAL", fr: "CONFIDENTIEL" }), opacity: 0.08 }),
       response: () => ({ download_url: "/download/demo-client/" + t({ en: "report-watermarked", fr: "report-filigrane" }) + ".pdf" }),
     },
     statuses: [["200", ST.pdfOrUrl], ["400", { en: "opacity / angle out of range", fr: "opacity / angle hors bornes" }], ["401", ST.unauthorized], ["404", ST.notFound], ["500", { en: "qpdf failed", fr: "Échec qpdf" }], ["504", ST.timeout]],
@@ -506,7 +506,7 @@ const ENDPOINTS = [
       saveBlock(),
     ],
     example: {
-      request: { pdf: "/download/demo-client/report.pdf", password: "s3cr3t" },
+      request: { pdf: "/download/demo-client/report.pdf?signature=SIGNED_VALUE", password: "s3cr3t" },
       response: () => ({ download_url: "/download/demo-client/" + t({ en: "report-protected", fr: "report-protege" }) + ".pdf" }),
     },
     statuses: [["200", ST.pdfOrUrl], ["400", { en: "Empty password", fr: "Mot de passe vide" }], ["401", ST.unauthorized], ["404", ST.notFound], ["500", { en: "qpdf failed", fr: "Échec qpdf" }], ["504", ST.timeout]],
@@ -545,7 +545,7 @@ const ENDPOINTS = [
       saveBlock(),
     ],
     example: {
-      request: () => ({ pdf: "/download/demo-client/contract.pdf", patterns: ["Jean Dupont"], entities: ["email", "iban"], client_id: "demo-client", pdf_name: t({ en: "contract-redacted", fr: "contract-caviarde" }) }),
+      request: () => ({ pdf: "/download/demo-client/contract.pdf?signature=SIGNED_VALUE", patterns: ["Jean Dupont"], entities: ["email", "iban"], client_id: "demo-client", pdf_name: t({ en: "contract-redacted", fr: "contract-caviarde" }) }),
       response: () => ({ download_url: "/download/demo-client/" + t({ en: "contract-redacted", fr: "contract-caviarde" }) + ".pdf", redactions: [{ page: 1, count: 3 }], pages: 2, mode: "flatten" }),
     },
     statuses: [["200", { en: "PDF or JSON { download_url, redactions, pages, mode, notice }", fr: "PDF ou JSON { download_url, redactions, pages, mode, notice }" }], ["400", { en: "Neither patterns nor entities / regex-looking pattern / unknown entity / dpi out of range", fr: "Ni patterns ni entities / motif regex / entité inconnue / dpi hors bornes" }], ["401", ST.unauthorized], ["404", ST.notFound], ["500", { en: "Non-conforming output (residual text)", fr: "Sortie non conforme (texte résiduel)" }], ["504", ST.timeout]],
@@ -566,7 +566,7 @@ const ENDPOINTS = [
       { name: "pdf", type: "pdfpick", label: "pdf", required: true, value: "" },
     ],
     example: {
-      request: { pdf: "/download/demo-client/report.pdf" },
+      request: { pdf: "/download/demo-client/report.pdf?signature=SIGNED_VALUE" },
       response: { pages: 4, score: 88, issues: [{ kind: "orphan_heading", severity: "warn", page: 2 }] },
     },
     statuses: [["200", "LayoutReport"], ["400", { en: "Invalid path", fr: "Chemin invalide" }], ["401", ST.unauthorized], ["404", ST.notFound], ["500", { en: "poppler failed", fr: "Échec poppler" }], ["504", ST.timeout]],
@@ -597,7 +597,7 @@ const ENDPOINTS = [
       { name: "images", type: "checkbox", label: { en: "images (highlight the changed areas)", fr: "images (surlignage des zones changées)" }, value: false },
     ],
     example: {
-      request: { before: "/download/demo-client/v1.pdf", after: "/download/demo-client/v2.pdf" },
+      request: { before: "/download/demo-client/v1.pdf?signature=SIGNED_VALUE", after: "/download/demo-client/v2.pdf?signature=SIGNED_VALUE" },
       response: { pages_total: 6, pages_changed: [4], changed_ratio: 0.00032, verdict: "changed", threshold: 0, dpi: 100 },
     },
     statuses: [["200", "DiffResponse"], ["400", { en: "Invalid path / dpi out of range", fr: "Chemin invalide / dpi hors bornes" }], ["401", ST.unauthorized], ["404", ST.notFound], ["500", { en: "poppler failed", fr: "Échec poppler" }], ["504", ST.timeout]],
@@ -752,7 +752,7 @@ const ENDPOINTS = [
       outputBlock(),
     ],
     example: {
-      request: { pdf: "/download/demo-client/report.pdf", format: "{page} / {pages}", position: "bottom-right", from_page: 2 },
+      request: { pdf: "/download/demo-client/report.pdf?signature=SIGNED_VALUE", format: "{page} / {pages}", position: "bottom-right", from_page: 2 },
       response: { pages: 12, verdict: { status: "ok", score: 100, summary: "12 pages numbered", checks: [] } },
     },
     statuses: [["200", ST.toolOk], ["400", { en: "Unknown token in format / position out of the list", fr: "Jeton inconnu dans format / position hors liste" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["500", { en: "qpdf failed", fr: "Échec qpdf" }], ["504", ST.timeout]],
@@ -921,7 +921,7 @@ const ENDPOINTS = [
       outputBlock(),
     ],
     example: {
-      request: { pdf: "/download/demo-client/report.pdf", variant: "pdf/a-2b" },
+      request: { pdf: "/download/demo-client/report.pdf?signature=SIGNED_VALUE", variant: "pdf/a-2b" },
       response: { pages: 12, verdict: { status: "ok", score: 100, summary: "pdf/a-2b, 12 pages, fonts embedded", checks: [] } },
     },
     statuses: [["200", ST.toolOk], ["400", { en: "Unknown variant", fr: "Variante inconnue" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["500", { en: "Ghostscript failed", fr: "Échec Ghostscript" }], ["504", ST.timeout]],
@@ -1153,7 +1153,7 @@ const ENDPOINTS = [
         hint: { en: "one per line", fr: "une par ligne" }, value: "" },
     ],
     example: {
-      request: { pdf: "/download/demo-client/report.pdf", theme: "report@1", operations: ["compress", "ocr"] },
+      request: { pdf: "/download/demo-client/report.pdf?signature=SIGNED_VALUE", theme: "report@1", operations: ["compress", "ocr"] },
       response: { attestation: "v1.eyJ…….", claims: { version: 1, service: "md-to-pdf", issued_at: "2026-08-19T12:04:00Z", output_sha256: "9f2c…", bytes: 184203, pages: 12, theme: "report@1", operations: ["compress", "ocr"] } },
     },
     statuses: [["200", { en: "{ attestation, claims }", fr: "{ attestation, claims }" }], ["400", { en: "Malformed source_sha256", fr: "source_sha256 malformé" }], ["401", ST.unauthorized], ["404", ST.sourceMissing], ["504", ST.timeout]],
@@ -1176,7 +1176,7 @@ const ENDPOINTS = [
       { name: "attestation", type: "textarea", rows: 3, label: "attestation", required: true, placeholder: "v1.…", value: "" },
     ],
     example: {
-      request: { pdf: "/download/demo-client/report.pdf", attestation: "v1.eyJ……." },
+      request: { pdf: "/download/demo-client/report.pdf?signature=SIGNED_VALUE", attestation: "v1.eyJ……." },
       response: { verdict: "valid", detail: "The signature matches and the file still hashes to what was sealed.", attestation: { output_sha256: "9f2c…", pages: 12, issued_at: "2026-08-19T12:04:00Z" } },
     },
     statuses: [["200", { en: "{ verdict: valid | altered | forged | unreadable, detail, attestation }", fr: "{ verdict : valid | altered | forged | unreadable, detail, attestation }" }], ["401", ST.unauthorized], ["404", ST.sourceMissing]],
@@ -1520,19 +1520,21 @@ const ENDPOINTS = [
     icon: "M12 4v10m0 0l-4-4m4 4l4-4M5 20h14",
     card: { en: "Fetches a saved PDF, served as an attachment with the right Content-Disposition.",
       fr: "Récupère un PDF sauvegardé, servi en pièce jointe avec le bon Content-Disposition." },
-    desc: { en: "Serves a previously saved PDF. Both segments are validated: escaping public/pdf is impossible.",
-      fr: "Sert un PDF précédemment sauvegardé. Les deux segments sont validés : impossible de sortir de public/pdf." },
+    desc: { en: "Serves a saved PDF only with the signed capability returned in download_url. Both path segments are validated.",
+      fr: "Sert un PDF uniquement avec la capacité signée renvoyée dans download_url. Les deux segments sont validés." },
     params: [
       { name: "client_id", type: "path", required: true, desc: { en: "URL segment.", fr: "Segment d'URL." } },
       { name: "pdf_name", type: "path", required: true, desc: { en: "URL segment, with the extension.", fr: "Segment d'URL, avec l'extension." } },
+      { name: "signature", type: "query", required: true, desc: { en: "The HMAC capability returned in download_url.", fr: "La preuve HMAC renvoyée dans download_url." } },
     ],
     fields: [
       { type: "row", fields: [
         { name: "client_id", type: "text", label: "client_id", required: true, value: "demo-client" },
         { name: "pdf_name", type: "text", label: "pdf_name", required: true, value: "mon-document.pdf" },
+        { name: "signature", type: "text", label: "signature", required: true, value: "" },
       ]},
     ],
-    buildPath: (v) => `/download/${encodeURIComponent(v.client_id || "")}/${encodeURIComponent(v.pdf_name || "")}`,
+    buildPath: (v) => `/download/${encodeURIComponent(v.client_id || "")}/${encodeURIComponent(v.pdf_name || "")}?signature=${encodeURIComponent(v.signature || "")}`,
     example: { responseNote: { en: "Binary application/pdf body", fr: "Corps binaire application/pdf" } },
     statuses: [["200", "application/pdf"], ["404", { en: "Unknown file", fr: "Fichier inconnu" }]],
   },

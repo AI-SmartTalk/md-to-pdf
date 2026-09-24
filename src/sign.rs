@@ -88,6 +88,18 @@ pub fn verify(payload: &[u8], signature: &str) -> bool {
     constant_time_eq(sign(payload).as_bytes(), signature.as_bytes())
 }
 
+/// Sign a stored-PDF path as a bearer capability. The domain prefix prevents a download
+/// token from being reused as an attestation or job callback signature.
+pub fn sign_download(client_id: &str, pdf_name: &str) -> String {
+    let payload = format!("md-to-pdf:download:v1\n{}\n{}", client_id, pdf_name);
+    sign(payload.as_bytes())
+}
+
+pub fn verify_download(client_id: &str, pdf_name: &str, signature: &str) -> bool {
+    let expected = sign_download(client_id, pdf_name);
+    constant_time_eq(expected.as_bytes(), signature.as_bytes())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,5 +147,13 @@ mod tests {
         assert!(constant_time_eq(b"abc", b"abc"));
         assert!(!constant_time_eq(b"abc", b"abd"));
         assert!(!constant_time_eq(b"abc", b"abcd"));
+    }
+
+    #[test]
+    fn a_download_signature_cannot_be_moved_to_another_file() {
+        let signature = sign_download("client-123", "report.pdf");
+        assert!(verify_download("client-123", "report.pdf", &signature));
+        assert!(!verify_download("client-123", "other.pdf", &signature));
+        assert!(!verify_download("another-client", "report.pdf", &signature));
     }
 }

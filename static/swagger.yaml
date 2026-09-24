@@ -13,7 +13,7 @@ info:
 
     | `client_id` + `pdf_name` | Réponse |
     |--------------------------|---------|
-    | **fournis** | Le PDF est sauvegardé sur le serveur et un JSON `{ "download_url": "/download/…" }` est retourné |
+    | **fournis** | Le PDF est sauvegardé sur le serveur et un JSON `{ "download_url": "/download/…?signature=…" }` est retourné |
     | **absents** | Le fichier PDF binaire est retourné directement dans le body |
 
     `client_id` et `pdf_name` servent à construire un chemin sur disque : ils doivent être
@@ -26,10 +26,11 @@ info:
 
     | Référence | Origine |
     |-----------|---------|
-    | `/download/{client_id}/{nom}.pdf` | un PDF que ce service a produit et sauvegardé |
+    | `/download/{client_id}/{nom}.pdf?signature=…` | un PDF sauvegardé, avec sa capacité signée |
     | `asset://as_…` | un fichier déposé par l'appelant via `POST /api/files` |
 
-    La première n'a pas changé et ne changera pas. La seconde est ce qui rend les outils
+    Transmettez le `download_url` complet, signature comprise : une référence sans signature
+    ne révèle ni ne permet de lire un fichier par devinette. La seconde forme rend les outils
     utilisables sur un document que le service n'a pas fabriqué lui-même.
 
     ## Sortie des outils
@@ -485,7 +486,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConvertResponse"
               example:
-                download_url: "/download/client-123/rapport-2024.pdf"
+                download_url: "/download/client-123/rapport-2024.pdf?signature=SIGNED_VALUE"
             application/pdf:
               schema:
                 type: string
@@ -695,8 +696,8 @@ paths:
               $ref: "#/components/schemas/MergeRequest"
             example:
               pdfs:
-                - "/download/client-123/doc1.pdf"
-                - "/download/client-123/doc2.pdf"
+                - "/download/client-123/doc1.pdf?signature=SIGNED_VALUE"
+                - "/download/client-123/doc2.pdf?signature=SIGNED_VALUE"
               client_id: "client-123"
               pdf_name: "merged-doc"
       responses:
@@ -707,7 +708,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConvertResponse"
               example:
-                download_url: "/download/client-123/merged-doc.pdf"
+                download_url: "/download/client-123/merged-doc.pdf?signature=SIGNED_VALUE"
             application/pdf:
               schema:
                 type: string
@@ -744,7 +745,7 @@ paths:
             schema:
               $ref: "#/components/schemas/WatermarkRequest"
             example:
-              pdf: "/download/client-123/rapport.pdf"
+              pdf: "/download/client-123/rapport.pdf?signature=SIGNED_VALUE"
               text: "BROUILLON"
               opacity: 0.1
               angle: -45
@@ -793,7 +794,7 @@ paths:
             schema:
               $ref: "#/components/schemas/ProtectRequest"
             example:
-              pdf: "/download/client-123/rapport.pdf"
+              pdf: "/download/client-123/rapport.pdf?signature=SIGNED_VALUE"
               password: "secret123"
               client_id: "client-123"
               pdf_name: "rapport-protege"
@@ -853,7 +854,7 @@ paths:
               entities:
                 summary: Caviarder les données personnelles
                 value:
-                  pdf: "/download/client-123/contrat.pdf"
+                  pdf: "/download/client-123/contrat.pdf?signature=SIGNED_VALUE"
                   entities: [email, iban, phone]
                   client_id: "client-123"
                   pdf_name: "contrat-caviarde"
@@ -1003,7 +1004,7 @@ paths:
               rotate:
                 summary: Pivoter les pages paires d'un quart de tour
                 value:
-                  pdf: "/download/client-123/rapport.pdf"
+                  pdf: "/download/client-123/rapport.pdf?signature=SIGNED_VALUE"
                   op: rotate
                   pages: even
                   angle: 90
@@ -1100,7 +1101,7 @@ paths:
               explicit:
                 summary: Boîte explicite, en points PostScript
                 value:
-                  pdf: "/download/client-123/rapport.pdf"
+                  pdf: "/download/client-123/rapport.pdf?signature=SIGNED_VALUE"
                   box: [40, 60, 555, 780]
                   pages: "2-5"
       responses:
@@ -1674,7 +1675,7 @@ paths:
             schema:
               $ref: "#/components/schemas/AttestRequest"
             example:
-              pdf: "/download/client-123/rapport.pdf"
+              pdf: "/download/client-123/rapport.pdf?signature=SIGNED_VALUE"
               engine: weasyprint
               theme: "report@1"
               operations: [convert, redact]
@@ -1720,7 +1721,7 @@ paths:
             schema:
               $ref: "#/components/schemas/VerifyRequest"
             example:
-              pdf: "/download/client-123/rapport.pdf"
+              pdf: "/download/client-123/rapport.pdf?signature=SIGNED_VALUE"
               attestation: "v1.eyJ2ZXJzaW9uIjox….a3f1…"
       responses:
         "200":
@@ -2374,8 +2375,9 @@ paths:
       tags: [Download]
       summary: Télécharger un PDF sauvegardé
       description: |
-        Télécharge un fichier PDF précédemment sauvegardé sur le serveur.
-        Le header `Content-Disposition` force le téléchargement.
+        Télécharge un fichier PDF précédemment sauvegardé sur le serveur. La signature HMAC
+        doit être celle renvoyée dans `download_url`. Ce lien est une capacité bearer : gardez-le
+        privé. Le header `Content-Disposition` force le téléchargement.
       operationId: downloadPdf
       parameters:
         - name: client_id
@@ -2392,6 +2394,13 @@ paths:
             type: string
           description: Nom du fichier PDF
           example: "rapport-2024.pdf"
+        - name: signature
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{64}$'
+          description: Capability HMAC produite dans le champ download_url.
       responses:
         "200":
           description: Fichier PDF
@@ -2406,7 +2415,7 @@ paths:
                 type: string
                 format: binary
         "404":
-          description: Fichier non trouvé
+          description: Fichier inconnu ou signature absente/invalide
 
   # ───────────────────────────────────────────────
   # Legacy  (POST / FormData)
@@ -2762,7 +2771,7 @@ components:
             `/download/{client_id}/{nom}.pdf` **ou** une référence `asset://as_…`, et les
             deux formes peuvent se mélanger dans la même liste.
           example:
-            - "/download/client-123/doc1.pdf"
+            - "/download/client-123/doc1.pdf?signature=SIGNED_VALUE"
             - "asset://as_9f2c4b1d8e6a03f75c21b40d9e8a1c37"
         client_id:
           type: string
@@ -3066,7 +3075,7 @@ components:
         download_url:
           type: string
           description: URL relative pour télécharger le PDF généré
-          example: "/download/client-123/rapport-2024.pdf"
+          example: "/download/client-123/rapport-2024.pdf?signature=SIGNED_VALUE"
         cached:
           type: boolean
           description: Présent (et vrai) uniquement quand le PDF vient du cache de rendu
@@ -3234,7 +3243,7 @@ components:
         download_url:
           type: string
           description: Présent quand `client_id` et `pdf_name` ont été fournis
-          example: "/download/client-123/rapport.pdf"
+          example: "/download/client-123/rapport.pdf?signature=SIGNED_VALUE"
         asset:
           allOf:
             - $ref: "#/components/schemas/AssetMeta"
@@ -4227,7 +4236,7 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
           example:
             error: "Not found"
-            details: "PDF not found: /download/client-123/missing.pdf"
+            details: "PDF not found: /download/client-123/missing.pdf?signature=SIGNED_VALUE"
 
     Unauthorized:
       description: Clé d'API manquante ou invalide (uniquement si `API_KEY` est configurée)

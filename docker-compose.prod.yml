@@ -69,8 +69,8 @@ services:
       ASSET_MAX_PAGES: "${ASSET_MAX_PAGES:-2000}"
       JOB_TTL_SECS: "${JOB_TTL_SECS:-3600}"
 
-      # Signature des attestations de rendu. Sans valeur, une clé est tirée au
-      # démarrage et les attestations cessent d'être vérifiables au redéploiement.
+      # Signature des attestations, callbacks et URLs de téléchargement. L'installateur
+      # en génère une persistante ; sans valeur, les liens cessent de fonctionner au reboot.
       ATTESTATION_SECRET: "${ATTESTATION_SECRET:-}"
 
       # Base publique utilisée par /sitemap.xml et /robots.txt.

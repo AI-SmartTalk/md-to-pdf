@@ -142,7 +142,7 @@ client never receives a PDF worse than the one it would have had.
 > it on for documents a human will read, not for a batch of ten thousand invoices.
 
 `POST /api/layout` runs the same analysis on a PDF that already exists, without touching
-it: `{"pdf": "/download/<client_id>/<name>.pdf"}` → a `LayoutReport`.
+it: `{"pdf": "/download/<client_id>/<name>.pdf?signature=…"}` → a `LayoutReport`.
 
 | `kind`           | Severity        | Meaning                                              |
 |------------------|-----------------|------------------------------------------------------|
@@ -200,7 +200,7 @@ Point a browser at the service root (`http://localhost:8000`) for the landing pa
 English and French), the full API reference and an interactive console that hits every
 endpoint for real. The contract is
 also published as OpenAPI 3.0 in [`static/swagger.yaml`](static/swagger.yaml), served at
-`/static/swagger.yaml`. Integration suite: `./test_api.sh [base_url]` (or `make test-api`)
+`/static/swagger.yaml`. Integration suite: `ATTESTATION_SECRET=<same-as-service> ./test_api.sh [base_url]` (or `make test-api ATTESTATION_SECRET=… API_KEY=…`)
 against a running server.
 
 ### Legacy endpoint — `POST /` (FormData)
@@ -243,7 +243,7 @@ curl --data-urlencode 'markdown=# Heading 1' \
 | `/api/themes`         | GET    | Themes available, with their tokens and preview URLs               |
 | `/api/themes/{name}/{version}/preview.png` | GET | Sample document rendered with that theme      |
 | `/api/metrics`        | GET    | Prometheus exposition (`text/plain; version=0.0.4`)                |
-| `/download/{client_id}/{pdf_name}` | GET | Fetch a saved PDF                                     |
+| `/download/{client_id}/{pdf_name}?signature=…` | GET | Fetch a saved PDF                                     |
 
 #### Ingestion — files the service did not produce
 
@@ -283,17 +283,21 @@ curl --data-urlencode 'markdown=# Heading 1' \
 | `/api/verify`     | POST   | Check a seal against a file: `valid`, `altered`, `forged`, `unreadable` |
 
 Every endpoint that produces a PDF returns the **binary PDF** by default, or
-`{"download_url": "/download/<client_id>/<pdf_name>.pdf"}` when both `client_id` and
+`{"download_url": "/download/<client_id>/<pdf_name>.pdf?signature=…"}` when both `client_id` and
 `pdf_name` are provided. `client_id` and `pdf_name` must be plain names
 (`[A-Za-z0-9._-]`, not starting with a dot).
+
+Saved-PDF URLs are signed bearer capabilities. Pass the complete `download_url`, including
+its `?signature=…` query, when downloading it or using it as input to another operation.
+Path-only references are refused so a caller cannot read a file by guessing its name.
 
 The tools added with the ingestion socle accept a third form: `"output": "asset"` answers
 `{"asset": {...}}` and keeps the result inside the service, so the next tool picks it up
 without a round trip. Five operations on one document is one upload, not five.
 
 **Everywhere a PDF is named — `pdf`, `before`, `after`, the entries of `pdfs` — two forms
-are accepted:** `/download/<client_id>/<name>.pdf` as before, and `asset://as_…` for a file
-that was uploaded. No existing request shape changed.
+are accepted:** the complete signed `/download/<client_id>/<name>.pdf?signature=…` URL, and `asset://as_…` for a file
+that was uploaded. The JSON field names stay unchanged.
 
 `options` accepts `paper_size` (`a4`, `a3`, `letter`), `orientation`, `margins`,
 `page_numbers`, `page_number_format`, `toc`, `toc_depth`, `watermark`, `theme`,
@@ -468,8 +472,9 @@ theme, layout score and timestamp. It travels as one header-safe line,
 no lookup in a database we would then have to keep, back up and eventually leak.
 
 ```bash
+DOWNLOAD_URL='/download/acme/contrat.pdf?signature=<copier-la-capacite-renvoyee>'
 curl -sH "X-API-Key: $API_KEY" -H 'Content-Type: application/json' \
-     -d '{"pdf":"/download/acme/contrat.pdf"}' localhost:8000/api/attest
+     -d "{\"pdf\":\"$DOWNLOAD_URL\"}" localhost:8000/api/attest
 # {"attestation":"v1.eyJ2ZXJz…","claims":{…}}
 ```
 
@@ -482,10 +487,11 @@ curl -sH "X-API-Key: $API_KEY" -H 'Content-Type: application/json' \
 | `forged`     | The **record** was rewritten, or came from another deployment           |
 | `unreadable` | Not an attestation this version can parse                              |
 
-Set `ATTESTATION_SECRET` in production. Without it a key is drawn at startup: attestations
-stay verifiable for the life of the process and stop verifying after a restart. That is the
-honest failure — an attestation nobody can check beats one anybody can forge — and the
-startup log says which situation you are in.
+Set `ATTESTATION_SECRET` in production. It signs attestations, callbacks and the bearer
+capabilities in returned `download_url` values. A download URL grants access to that one
+saved PDF; keep it private, and rotate or delete it when access should stop. Without a
+persistent secret, the key is drawn at startup and both attestations and download links stop
+verifying after a restart. `install.sh` generates and preserves a random value for you.
 
 #### Keys, attribution and quotas
 

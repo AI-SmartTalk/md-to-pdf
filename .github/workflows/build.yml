@@ -78,6 +78,7 @@ jobs:
           docker run -d --name md-to-pdf-ci \
             -p 8000:8000 \
             -e API_KEY=ci-test-key \
+            -e ATTESTATION_SECRET=ci-test-signing-key \
             -e RUST_LOG=info \
             md-to-pdf:ci
 
@@ -98,6 +99,7 @@ jobs:
       - name: Suite d'intégration
         env:
           API_KEY: ci-test-key
+          ATTESTATION_SECRET: ci-test-signing-key
         run: ./test_api.sh http://127.0.0.1:8000
 
       - name: Logs du service en cas d'échec

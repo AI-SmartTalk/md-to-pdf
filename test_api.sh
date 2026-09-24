@@ -2,12 +2,18 @@
 # Integration test script for md-to-pdf Document Engine API
 # Usage: ./test_api.sh [base_url]
 #
-# Set API_KEY when the server runs with authentication enabled.
+# Set API_KEY for API authentication and ATTESTATION_SECRET to the same persistent
+# signing secret as the server so the script can test saved-PDF capabilities.
 
 set -euo pipefail
 
 BASE_URL="${1:-http://localhost:8000}"
 API_KEY="${API_KEY:-}"
+ATTESTATION_SECRET="${ATTESTATION_SECRET:-}"
+if [ -z "$ATTESTATION_SECRET" ]; then
+  echo "ATTESTATION_SECRET must match the server to test signed download URLs." >&2
+  exit 2
+fi
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
@@ -26,10 +32,45 @@ yellow() { echo -e "\033[0;33m$1\033[0m"; }
 
 # curl wrapper adding the API key when one is configured
 api() {
+  local rewritten=()
+  while (($#)); do
+    case "$1" in
+      -d|--data|--data-raw|--data-binary)
+        local option="$1"
+        local body
+        body=$(python3 - "$2" "$ATTESTATION_SECRET" <<'PY'
+import hashlib
+import hmac
+import re
+import sys
+
+body, secret = sys.argv[1], sys.argv[2].encode()
+pattern = re.compile(r"/download/([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+)")
+
+def add_capability(match):
+    if body[match.end():].startswith("?signature="):
+        return match.group(0)
+    client_id, pdf_name = match.groups()
+    payload = f"md-to-pdf:download:v1\n{client_id}\n{pdf_name}".encode()
+    signature = hmac.new(secret, payload, hashlib.sha256).hexdigest()
+    return f"{match.group(0)}?signature={signature}"
+
+print(pattern.sub(add_capability, body))
+PY
+)
+        rewritten+=("$option" "$body")
+        shift 2
+        ;;
+      *)
+        rewritten+=("$1")
+        shift
+        ;;
+    esac
+  done
   if [ -n "$API_KEY" ]; then
-    curl -s -H "X-API-Key: $API_KEY" "$@"
+    curl -s -H "X-API-Key: $API_KEY" "${rewritten[@]}"
   else
-    curl -s "$@"
+    curl -s "${rewritten[@]}"
   fi
 }
 
@@ -534,10 +575,22 @@ echo
 # 11. GET /download — Download saved PDF
 # -----------------------------------------------------------
 echo "--- GET /download (saved PDF) ---"
+DOWNLOAD_URL=$(python3 - "$TMP_DIR/convert.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as response:
+    print(json.load(response)["download_url"])
+PY
+)
 CODE=$(curl -s -o "$TMP_DIR/downloaded.pdf" -w "%{http_code}" \
-  "$BASE_URL/download/test-client/test-convert.pdf")
-check "download saved PDF" 200 "$CODE"
+  "$BASE_URL$DOWNLOAD_URL")
+check "signed download URL retrieves saved PDF" 200 "$CODE"
 check_pdf "downloaded body" "$TMP_DIR/downloaded.pdf"
+
+CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+  "$BASE_URL/download/test-client/test-convert.pdf")
+check "unsigned saved-PDF URL is concealed" 404 "$CODE"
 echo
 
 # -----------------------------------------------------------

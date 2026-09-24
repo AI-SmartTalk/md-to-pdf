@@ -818,7 +818,11 @@ pub fn save_pdf(pdf_path: &Path, client_id: &str, pdf_name: &str) -> Result<Stri
     let out_path = client_dir.join(&final_pdf_name);
     fs::copy(pdf_path, &out_path)?;
 
-    Ok(format!("/download/{}/{}", client_id, final_pdf_name))
+    let signature = crate::sign::sign_download(&client_id, &final_pdf_name);
+    Ok(format!(
+        "/download/{}/{}?signature={}",
+        client_id, final_pdf_name, signature
+    ))
 }
 
 /// Save the PDF when the caller named a destination. Filesystem work like the tool run it
@@ -902,8 +906,19 @@ pub const PREVIEW_DPI: u32 = 150;
 
 /// Resolve a /download/... path to the actual filesystem path with validation
 pub fn resolve_pdf_path(url: &str) -> Result<PathBuf, AppError> {
-    // Accept paths like /download/client_id/file.pdf
-    let stripped = url.trim_start_matches('/');
+    // A saved-PDF reference is a bearer capability everywhere, including when it is passed
+    // to another API operation. Requiring the signature here prevents a caller from
+    // guessing another integration's client_id and file name.
+    let (path, query) = url.split_once('?').ok_or_else(|| {
+        AppError::NotFound("PDF not found or download capability is missing".to_string())
+    })?;
+    let signature = query
+        .strip_prefix("signature=")
+        .filter(|value| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .ok_or_else(|| {
+            AppError::NotFound("PDF not found or download capability is invalid".to_string())
+        })?;
+    let stripped = path.trim_start_matches('/');
     let stripped = stripped.strip_prefix("download/").unwrap_or(stripped);
 
     let mut segments = stripped.split('/');
@@ -919,6 +934,11 @@ pub fn resolve_pdf_path(url: &str) -> Result<PathBuf, AppError> {
 
     let client_id = sanitize_path_component(client_id, "client_id")?;
     let pdf_name = sanitize_path_component(pdf_name, "pdf_name")?;
+    if !crate::sign::verify_download(&client_id, &pdf_name, signature) {
+        return Err(AppError::NotFound(
+            "PDF not found or download capability is invalid".to_string(),
+        ));
+    }
 
     let root = pdf_root();
     // A fresh container has no public/pdf yet: create it so canonicalize() can succeed
