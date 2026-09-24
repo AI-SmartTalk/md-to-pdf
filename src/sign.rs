@@ -4,47 +4,20 @@
 //! edited on the way: the render attestation, and the signed callback an asynchronous job
 //! posts when it finishes. Both are the same primitive, so it lives here once.
 //!
-//! `sha2` is already a dependency (the render cache is content-addressed with it); HMAC is
-//! thirty lines on top of it, which is cheaper than auditing another crate in an image we
-//! read by hand.
+//! The HMAC construction comes from the small, established `hmac` crate; password hashes
+//! remain PBKDF2 and never use this fast message-authentication primitive.
 
+use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 use std::env;
 use std::sync::OnceLock;
 
-/// SHA-256 block size, in bytes
-const BLOCK: usize = 64;
-
 /// RFC 2104 HMAC over SHA-256
 pub fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
-    let mut block = [0u8; BLOCK];
-
-    // A key longer than the block is hashed first; a shorter one is zero-padded
-    if key.len() > BLOCK {
-        let digest = Sha256::digest(key);
-        block[..32].copy_from_slice(&digest);
-    } else {
-        block[..key.len()].copy_from_slice(key);
-    }
-
-    let mut inner_pad = [0u8; BLOCK];
-    let mut outer_pad = [0u8; BLOCK];
-    for i in 0..BLOCK {
-        inner_pad[i] = block[i] ^ 0x36;
-        outer_pad[i] = block[i] ^ 0x5c;
-    }
-
-    let mut inner = Sha256::new();
-    inner.update(inner_pad);
-    inner.update(message);
-    let inner_digest = inner.finalize();
-
-    let mut outer = Sha256::new();
-    outer.update(outer_pad);
-    outer.update(inner_digest);
-
+    let mut mac = Hmac::<Sha256>::new_from_slice(key).expect("HMAC accepts keys of any length");
+    mac.update(message);
     let mut out = [0u8; 32];
-    out.copy_from_slice(&outer.finalize());
+    out.copy_from_slice(&mac.finalize().into_bytes());
     out
 }
 

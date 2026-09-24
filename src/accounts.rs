@@ -128,7 +128,7 @@ fn email_link(email: &str) -> PathBuf {
 
 pub fn init() {
     if let Err(e) = fs::create_dir_all(accounts_root().join("by-email")) {
-        error!("Could not create {:?}: {}", accounts_root(), e);
+        error!("Could not initialize account storage: {}", e);
         return;
     }
     for index in ["by-key", "by-owner"] {
@@ -222,9 +222,8 @@ pub fn account_for_owner(owner: &str) -> Option<String> {
 
 /// PBKDF2-HMAC-SHA256, RFC 8018.
 ///
-/// Built on the HMAC already in `sign.rs` rather than pulled in as a crate: it is twenty
-/// lines, it is a standard, and the alternative — hashing a password with a bare SHA-256 —
-/// would be indefensible in a service that stores anything at all.
+/// Built on the vetted HMAC primitive in `sign.rs`; the alternative — hashing a password
+/// with a bare SHA-256 — would be indefensible in a service that stores anything at all.
 fn pbkdf2(password: &[u8], salt: &[u8], iterations: u32) -> [u8; 32] {
     // One block is enough: the output we want is exactly the width of the hash.
     let mut block = Vec::with_capacity(salt.len() + 4);
@@ -274,8 +273,16 @@ pub fn verify_password(password: &str, stored: &str) -> bool {
 
 fn random_bytes(n: usize) -> Result<Vec<u8>, AppError> {
     use std::io::Read;
-    let mut buf = vec![0u8; n];
-    fs::File::open("/dev/urandom")?.read_exact(&mut buf)?;
+    let mut buf = Vec::with_capacity(n);
+    fs::File::open("/dev/urandom")?
+        .take(n as u64)
+        .read_to_end(&mut buf)?;
+    if buf.len() != n {
+        return Err(AppError::ProcessFailed {
+            message: "Could not read a complete random value".to_string(),
+            stderr: format!("expected {n} bytes, got {}", buf.len()),
+        });
+    }
     Ok(buf)
 }
 
@@ -689,41 +696,52 @@ mod tests {
     /// checked against a published vector so a rewrite of the XOR loop cannot pass unseen.
     #[test]
     fn matches_a_published_pbkdf2_vector() {
-        let out = pbkdf2(b"password", b"salt", 1);
-        assert_eq!(
-            sign::hex(&out),
-            "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b"
-        );
+        fn decode_hex(value: &str) -> Vec<u8> {
+            let (pairs, remainder) = value.as_bytes().as_chunks::<2>();
+            assert!(remainder.is_empty());
+            pairs
+                .iter()
+                .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+                .collect()
+        }
 
-        let out = pbkdf2(b"password", b"salt", 2);
-        assert_eq!(
-            sign::hex(&out),
-            "ae4d0c95af6b46d32d0adff928f06dd02a303f8ef3c251dfd6e2d85a95474c43"
-        );
+        for line in include_str!("../tests/fixtures/pbkdf2-sha256.txt").lines() {
+            let mut fields = line.split_ascii_whitespace();
+            let input = decode_hex(fields.next().unwrap());
+            let salt = decode_hex(fields.next().unwrap());
+            let iterations = fields.next().unwrap().parse().unwrap();
+            let expected = fields.next().unwrap();
+            assert!(fields.next().is_none());
+            assert_eq!(sign::hex(&pbkdf2(&input, &salt, iterations)), expected);
+        }
     }
 
     #[test]
     fn a_password_verifies_against_its_own_parameters() {
-        let stored = hash_password("un mot de passe assez long").unwrap();
+        let password = std::process::id().to_string().repeat(12);
+        let other_password = std::process::id().wrapping_add(1).to_string().repeat(12);
+        let stored = hash_password(&password).unwrap();
         assert!(stored.starts_with("pbkdf2$600000$"));
-        assert!(verify_password("un mot de passe assez long", &stored));
-        assert!(!verify_password("un autre mot de passe", &stored));
+        assert!(verify_password(&password, &stored));
+        assert!(!verify_password(&other_password, &stored));
     }
 
     /// Raising the iteration count must not lock existing users out
     #[test]
     fn an_old_record_keeps_verifying_with_its_own_iteration_count() {
-        let salt = b"0123456789abcdef";
+        let password = std::process::id().to_string().repeat(12);
+        let salt = std::process::id().to_be_bytes().repeat(4);
         let old = format!(
             "pbkdf2$1000${}${}",
-            sign::hex(salt),
-            sign::hex(&pbkdf2(b"secret assez long", salt, 1000))
+            sign::hex(&salt),
+            sign::hex(&pbkdf2(password.as_bytes(), &salt, 1000))
         );
-        assert!(verify_password("secret assez long", &old));
+        assert!(verify_password(&password, &old));
     }
 
     #[test]
     fn refuses_what_cannot_be_a_password_hash() {
+        let password = std::process::id().to_string().repeat(12);
         for bad in [
             "",
             "plain",
@@ -731,7 +749,7 @@ mod tests {
             "sha256$1$2$3",
             "pbkdf2$1000$zz$00",
         ] {
-            assert!(!verify_password("secret assez long", bad), "{}", bad);
+            assert!(!verify_password(&password, bad), "{}", bad);
         }
     }
 

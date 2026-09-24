@@ -23,6 +23,7 @@ reqwest = { version = "0.12", default-features = false, features = [
     "rustls-tls",
 ] }
 sha2 = "0.10"
+hmac = "0.12"
 # Uniquement pour killpg : tuer un `soffice` sans tuer le `soffice.bin` qu'il a forké
 # demande de viser le groupe de processus, ce que std ne sait pas exprimer.
 [target.'cfg(unix)'.dependencies]
