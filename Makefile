@@ -77,7 +77,7 @@ test: ## Issue a dummy request against the API
 
 .PHONY: test-api
 test-api: ## Run the full API integration suite against a running server
-	./test_api.sh
+	ATTESTATION_SECRET="$(ATTESTATION_SECRET)" API_KEY="$(API_KEY)" ./test_api.sh
 
 .PHONY: logs
 logs: ## Show dev logs

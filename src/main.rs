@@ -151,11 +151,65 @@ fn rocket() -> _ {
                 routes::guides::guide_en,
                 routes::site::sitemap,
                 routes::site::robots,
+                routes::public_pages::old_blog_index,
+                routes::public_pages::old_blog_article,
+                routes::public_pages::old_converter,
+                routes::public_pages::old_api_page,
                 routes::site::og_image,
             ],
         )
         // Static files
         .mount("/static", FileServer::from("static"))
+        // Crawlable product pages and reviewed editorial content, served as complete HTML
+        // documents so search engines do not need client-side rendering.
+        .mount(
+            "/fr",
+            routes![
+                routes::public_pages::fr_product_landing,
+                routes::public_pages::fr_blog_index,
+                routes::public_pages::fr_article,
+            ],
+        )
+        .mount(
+            "/en",
+            routes![
+                routes::public_pages::en_product_landing,
+                routes::public_pages::en_blog_index,
+                routes::public_pages::en_article,
+            ],
+        )
+        .mount(
+            "/es",
+            routes![
+                routes::public_pages::es_product_landing,
+                routes::public_pages::es_blog_index,
+                routes::public_pages::es_article,
+            ],
+        )
+        .mount(
+            "/de",
+            routes![
+                routes::public_pages::de_product_landing,
+                routes::public_pages::de_blog_index,
+                routes::public_pages::de_article,
+            ],
+        )
+        .mount(
+            "/it",
+            routes![
+                routes::public_pages::it_product_landing,
+                routes::public_pages::it_blog_index,
+                routes::public_pages::it_article,
+            ],
+        )
+        .mount(
+            "/pt",
+            routes![
+                routes::public_pages::pt_product_landing,
+                routes::public_pages::pt_blog_index,
+                routes::public_pages::pt_article,
+            ],
+        )
         // Assets the console and the public site reference from the root (favicon, …).
         // Ranked below every declared route so /, /api and /download always win.
         .mount("/", FileServer::from("static").rank(20))

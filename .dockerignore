@@ -11,6 +11,11 @@
 .env.*
 !.env.example
 /credentials
+/secrets
+/public
+/content/blog/drafts
+/content/blog/briefs.json
+/static/blog-generated
 
 # Git et CI
 .git

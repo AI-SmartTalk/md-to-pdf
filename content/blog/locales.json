@@ -1,0 +1,175 @@
+{
+  "source_language": "fr",
+  "default_language": "en",
+  "cta_fallback_language": "en",
+  "languages": [
+    {
+      "code": "fr",
+      "name": "French",
+      "native_name": "Français",
+      "blog": {
+        "home": "Accueil",
+        "blog": "Guides",
+        "convert": "Convertir",
+        "api": "API",
+        "eyebrow": "GUIDE",
+        "cta_title": "Passer de l’exemple au document",
+        "cta_copy": "Essayez la conversion Markdown en PDF, puis automatisez vos rendus avec l’API md-to-pdf.",
+        "cta_link": "Continuer avec md-to-pdf →",
+        "index_title": "Guides PDF, Markdown et API | md-to-pdf",
+        "index_description": "Guides pratiques pour convertir Markdown en PDF, automatiser des documents et contrôler leur mise en page avec md-to-pdf.",
+        "index_heading": "Guides de génération PDF",
+        "index_lede": "Des conseils concrets pour transformer Markdown et données applicatives en documents prêts à partager.",
+        "read": "Lire le guide →",
+        "try": "À essayer",
+        "convert_link": "Convertir un document Markdown",
+        "api_link": "Intégrer l’API PDF",
+        "empty": "Les premiers guides arrivent bientôt."
+      },
+      "landing_paths": {
+        "converter": "/fr/convertir-markdown-pdf",
+        "api": "/fr/api-generation-pdf"
+      }
+    },
+    {
+      "code": "en",
+      "name": "English",
+      "native_name": "English",
+      "blog": {
+        "home": "Home",
+        "blog": "Guides",
+        "convert": "Convert",
+        "api": "API",
+        "eyebrow": "GUIDE",
+        "cta_title": "Turn the example into a document",
+        "cta_copy": "Try the Markdown to PDF tool, then automate document generation with the md-to-pdf API.",
+        "cta_link": "Continue with md-to-pdf →",
+        "index_title": "PDF, Markdown and API Guides | md-to-pdf",
+        "index_description": "Practical guides to convert Markdown to PDF, automate documents and inspect page layout with md-to-pdf.",
+        "index_heading": "PDF generation guides",
+        "index_lede": "Practical advice for turning Markdown and application data into documents ready to share.",
+        "read": "Read the guide →",
+        "try": "Try these tools",
+        "convert_link": "Convert a Markdown document",
+        "api_link": "Integrate the PDF API",
+        "empty": "New guides are coming soon."
+      },
+      "landing_paths": {
+        "converter": "/en/markdown-to-pdf",
+        "api": "/en/pdf-generation-api"
+      }
+    },
+    {
+      "code": "es",
+      "name": "Spanish",
+      "native_name": "Español",
+      "blog": {
+        "home": "Inicio",
+        "blog": "Guías",
+        "convert": "Convertir",
+        "api": "API",
+        "eyebrow": "GUÍA",
+        "cta_title": "Convierte el ejemplo en un documento",
+        "cta_copy": "Prueba la herramienta para pasar Markdown a PDF y automatiza documentos con la API de md-to-pdf.",
+        "cta_link": "Continuar con md-to-pdf →",
+        "index_title": "Guías de PDF, Markdown y API | md-to-pdf",
+        "index_description": "Guías prácticas para convertir Markdown a PDF, automatizar documentos y revisar su diseño con md-to-pdf.",
+        "index_heading": "Guías de generación de PDF",
+        "index_lede": "Consejos prácticos para convertir Markdown y datos de aplicaciones en documentos listos para compartir.",
+        "read": "Leer la guía →",
+        "try": "Prueba estas herramientas",
+        "convert_link": "Convertir un documento Markdown",
+        "api_link": "Integrar la API de PDF",
+        "empty": "Próximamente habrá nuevas guías."
+      },
+      "landing_paths": {
+        "converter": "/es/convertidor-markdown-pdf",
+        "api": "/es/api-generacion-pdf"
+      }
+    },
+    {
+      "code": "de",
+      "name": "German",
+      "native_name": "Deutsch",
+      "blog": {
+        "home": "Startseite",
+        "blog": "Leitfäden",
+        "convert": "Konvertieren",
+        "api": "API",
+        "eyebrow": "LEITFADEN",
+        "cta_title": "Vom Beispiel zum fertigen Dokument",
+        "cta_copy": "Teste die Markdown-zu-PDF-Konvertierung und automatisiere Dokumente mit der md-to-pdf-API.",
+        "cta_link": "Mit md-to-pdf fortfahren →",
+        "index_title": "PDF-, Markdown- und API-Leitfäden | md-to-pdf",
+        "index_description": "Praxisnahe Leitfäden zu Markdown-zu-PDF, automatisierten Dokumenten und Layout-Prüfungen mit md-to-pdf.",
+        "index_heading": "Leitfäden zur PDF-Erstellung",
+        "index_lede": "Tipps, um Markdown und Anwendungsdaten in fertige Dokumente zu verwandeln.",
+        "read": "Leitfaden lesen →",
+        "try": "Diese Werkzeuge testen",
+        "convert_link": "Markdown-Dokument konvertieren",
+        "api_link": "PDF-API integrieren",
+        "empty": "Neue Leitfäden folgen in Kürze."
+      },
+      "landing_paths": {
+        "converter": "/de/markdown-zu-pdf",
+        "api": "/de/pdf-generierungs-api"
+      }
+    },
+    {
+      "code": "it",
+      "name": "Italian",
+      "native_name": "Italiano",
+      "blog": {
+        "home": "Home",
+        "blog": "Guide",
+        "convert": "Converti",
+        "api": "API",
+        "eyebrow": "GUIDA",
+        "cta_title": "Trasforma l’esempio in un documento",
+        "cta_copy": "Prova lo strumento Markdown in PDF e automatizza i documenti con l’API md-to-pdf.",
+        "cta_link": "Continua con md-to-pdf →",
+        "index_title": "Guide PDF, Markdown e API | md-to-pdf",
+        "index_description": "Guide pratiche per convertire Markdown in PDF, automatizzare documenti e controllarne il layout con md-to-pdf.",
+        "index_heading": "Guide alla generazione di PDF",
+        "index_lede": "Consigli pratici per trasformare Markdown e dati applicativi in documenti pronti da condividere.",
+        "read": "Leggi la guida →",
+        "try": "Prova questi strumenti",
+        "convert_link": "Converti un documento Markdown",
+        "api_link": "Integrare l’API PDF",
+        "empty": "Nuove guide saranno disponibili a breve."
+      },
+      "landing_paths": {
+        "converter": "/it/markdown-in-pdf",
+        "api": "/it/api-generazione-pdf"
+      }
+    },
+    {
+      "code": "pt",
+      "name": "Portuguese",
+      "native_name": "Português",
+      "blog": {
+        "home": "Início",
+        "blog": "Guias",
+        "convert": "Converter",
+        "api": "API",
+        "eyebrow": "GUIA",
+        "cta_title": "Transforme o exemplo em um documento",
+        "cta_copy": "Experimente a conversão de Markdown para PDF e automatize documentos com a API md-to-pdf.",
+        "cta_link": "Continuar com md-to-pdf →",
+        "index_title": "Guias de PDF, Markdown e API | md-to-pdf",
+        "index_description": "Guias práticos para converter Markdown em PDF, automatizar documentos e revisar o layout com md-to-pdf.",
+        "index_heading": "Guias de geração de PDF",
+        "index_lede": "Dicas práticas para transformar Markdown e dados de aplicativos em documentos prontos para compartilhar.",
+        "read": "Ler o guia →",
+        "try": "Experimente estas ferramentas",
+        "convert_link": "Converter um documento Markdown",
+        "api_link": "Integrar a API de PDF",
+        "empty": "Novos guias estarão disponíveis em breve."
+      },
+      "landing_paths": {
+        "converter": "/pt/conversor-markdown-para-pdf",
+        "api": "/pt/api-geracao-pdf"
+      }
+    }
+  ]
+}

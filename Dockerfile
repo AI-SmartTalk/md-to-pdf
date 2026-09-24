@@ -84,6 +84,10 @@ RUN useradd --create-home rocket
 WORKDIR /home/rocket
 
 COPY --chown=rocket:rocket static /home/rocket/static
+COPY --chown=rocket:rocket scripts/build_localized_landings.py /home/rocket/scripts/build_localized_landings.py
+COPY --chown=rocket:rocket scripts/build_public_pages.py /home/rocket/scripts/build_public_pages.py
+COPY --chown=rocket:rocket content/blog/published /home/rocket/content/blog/published
+COPY --chown=rocket:rocket content/blog/locales.json /home/rocket/content/blog/locales.json
 COPY --chown=rocket:rocket Rocket.toml /home/rocket/Rocket.toml
 COPY --chown=rocket:rocket templates /home/rocket/templates
 # Sans ce répertoire le service démarre en annonçant « No theme loaded » et toute
@@ -113,7 +117,9 @@ RUN mkdir -p \
       /home/rocket/public/sessions \
       /home/rocket/work \
       /home/rocket/spool \
- && chown -R rocket:rocket /home/rocket/public /home/rocket/work /home/rocket/spool
+ && python3 /home/rocket/scripts/build_localized_landings.py \
+ && python3 /home/rocket/scripts/build_public_pages.py /home/rocket/static/blog-generated \
+ && chown -R rocket:rocket /home/rocket/public /home/rocket/work /home/rocket/spool /home/rocket/static/seo /home/rocket/static/blog-generated
 
 USER rocket
 

@@ -1,0 +1,144 @@
+name: Generate reviewed multilingual blog drafts
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: md-to-pdf-blog-drafts
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+
+      # Keep at most one editorial PR open. The branch content is never checked
+      # out or executed; generation always runs against the trusted base commit.
+      - name: Select the next reviewed topic
+        id: topic
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          open_prs="$(gh pr list --state open --json headRefName --jq '[.[] | select(.headRefName | startswith("automated/blog-drafts-"))] | length')"
+          if [ "$open_prs" != "0" ]; then
+            echo "group=" >> "$GITHUB_OUTPUT"
+            echo "An editorial draft PR is already open; wait for review before generating another."
+            exit 0
+          fi
+          group="$(python3 scripts/blog_pipeline.py available | sed -n '1p')"
+          echo "group=$group" >> "$GITHUB_OUTPUT"
+          if [ -z "$group" ]; then echo "No unused editorial brief is queued."; fi
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Generate and validate every localized article
+        if: steps.topic.outputs.group != ''
+        env:
+          GROUP: ${{ steps.topic.outputs.group }}
+          BLOG_LLM_CHAT_COMPLETIONS_URL: ${{ vars.BLOG_LLM_CHAT_COMPLETIONS_URL }}
+          BLOG_LLM_API_KEY: ${{ secrets.BLOG_LLM_API_KEY }}
+          BLOG_LLM_MODEL: ${{ vars.BLOG_LLM_MODEL }}
+        run: |
+          python3 scripts/blog_pipeline.py generate --group "$GROUP"
+          python3 scripts/blog_pipeline.py publish "$GROUP"
+
+      - name: Render and validate all localized routes before review
+        if: steps.topic.outputs.group != ''
+        env:
+          GROUP: ${{ steps.topic.outputs.group }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pandoc
+          output="$RUNNER_TEMP/md-to-pdf-blog-review"
+          python3 scripts/build_public_pages.py "$output"
+          python3 - "$GROUP" "$output" <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+          import xml.etree.ElementTree as ET
+
+          group, output = sys.argv[1], Path(sys.argv[2])
+          catalog = json.loads(Path("content/blog/locales.json").read_text(encoding="utf-8"))
+          site_url = "https://pdf.aismarttalk.tech"
+          routes = {}
+          for locale in catalog["languages"]:
+              language = locale["code"]
+              matches = []
+              for path in (Path("content/blog/published") / language).glob("*.json"):
+                  article = json.loads(path.read_text(encoding="utf-8"))
+                  if article.get("translation_group") == group:
+                      matches.append(article)
+              if len(matches) != 1:
+                  raise SystemExit(f"Expected one published candidate for {group}/{language}; found {len(matches)}")
+              slug = matches[0]["slug"]
+              route = f"/{language}/blog/{slug}"
+              page = output / language / f"{slug}.html"
+              rendered = page.read_text(encoding="utf-8")
+              if f'<html lang="{language}">' not in rendered:
+                  raise SystemExit(f"Wrong document language in {page}")
+              if f'<link rel="canonical" href="{site_url}{route}">' not in rendered:
+                  raise SystemExit(f"Missing canonical URL in {page}")
+              routes[language] = f"{site_url}{route}"
+
+          default_language = catalog["default_language"]
+          x_default = routes.get(default_language, next(iter(routes.values())))
+          for language in routes:
+              page = output / language / f"{routes[language].rsplit('/', 1)[-1]}.html"
+              rendered = page.read_text(encoding="utf-8")
+              for alternate_language, alternate_url in routes.items():
+                  marker = f'<link rel="alternate" hreflang="{alternate_language}" href="{alternate_url}">'
+                  if marker not in rendered:
+                      raise SystemExit(f"Missing {alternate_language} hreflang link in {page}")
+              if f'<link rel="alternate" hreflang="x-default" href="{x_default}">' not in rendered:
+                  raise SystemExit(f"Missing x-default hreflang link in {page}")
+
+          sitemap = ET.parse(output / "sitemap.xml").getroot()
+          namespace = {
+              "sm": "http://www.sitemaps.org/schemas/sitemap/0.9",
+              "xhtml": "http://www.w3.org/1999/xhtml",
+          }
+          entries = {
+              node.find("sm:loc", namespace).text: node
+              for node in sitemap.findall("sm:url", namespace)
+          }
+          indexed = set(entries)
+          if not set(routes.values()).issubset(indexed):
+              raise SystemExit("The sitemap is missing one or more reviewed article routes")
+          expected_hreflang = set(routes.values())
+          for route in routes.values():
+              links = entries[route].findall("xhtml:link", namespace)
+              alternate_urls = {
+                  link.attrib["href"] for link in links
+                  if link.attrib.get("hreflang") != "x-default"
+              }
+              if alternate_urls != expected_hreflang:
+                  raise SystemExit(f"Incomplete sitemap hreflang group for {route}")
+          print(f"Rendered and validated {len(routes)} localized routes for {group}.")
+          PY
+
+      - name: Open or update the publication review PR
+        if: steps.topic.outputs.group != ''
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          branch: automated/blog-drafts-${{ steps.topic.outputs.group }}
+          base: master
+          delete-branch: true
+          draft: true
+          commit-message: "content: add multilingual blog drafts"
+          title: "Content review: publish multilingual blog group"
+          body: |
+            Scheduled LLM-assisted articles for every language in `content/blog/locales.json`, based on `${{ steps.topic.outputs.group }}`. The pipeline validates all variants and stages them under `content/blog/published`; these files become public after this pull request is reviewed and merged.
+
+            Review factual claims, native-language quality, examples, useful detail and internal links in every locale. Mark this pull request ready only after the full group is approved. Merging triggers the normal production deployment.
+          add-paths: content/blog/published

@@ -219,8 +219,98 @@ pub fn sitemap() -> rocket::response::content::RawXml<String> {
         }
     }
 
+    // Static pages and reviewed blog articles are built into the image. The generated
+    // manifest contributes only their relative routes, keeping PUBLIC_BASE_URL and the
+    // existing Rust catalogue as the single source of truth for the rest of the sitemap.
+    append_generated_routes(&mut out, &base);
+
     out.push_str("</urlset>\n");
     rocket::response::content::RawXml(out)
+}
+
+fn append_generated_routes(out: &mut String, base: &str) {
+    let Ok(raw) = std::fs::read_to_string("static/blog-generated/sitemap-routes.json") else {
+        return;
+    };
+    let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        warn!("Could not parse generated sitemap route manifest");
+        return;
+    };
+    append_generated_manifest(out, base, &manifest);
+}
+
+fn append_generated_manifest(out: &mut String, base: &str, manifest: &serde_json::Value) {
+    let Some(entries) = manifest
+        .get("entries")
+        .and_then(serde_json::Value::as_array)
+    else {
+        warn!("Generated sitemap route manifest has no entries");
+        return;
+    };
+
+    for entry in entries {
+        let Some(path) = entry.get("path").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        if !safe_sitemap_path(path) {
+            continue;
+        }
+
+        out.push_str(&format!("  <url><loc>{}{}</loc>", base, escape_xml(path)));
+        if let Some(lastmod) = entry.get("lastmod").and_then(serde_json::Value::as_str) {
+            if lastmod.len() == 10
+                && lastmod
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || byte == b'-')
+            {
+                out.push_str(&format!("<lastmod>{}</lastmod>", escape_xml(lastmod)));
+            }
+        }
+        if let Some(alternates) = entry
+            .get("alternates")
+            .and_then(serde_json::Value::as_array)
+        {
+            for alternate in alternates {
+                let (Some(language), Some(alternate_path)) = (
+                    alternate
+                        .get("language")
+                        .and_then(serde_json::Value::as_str),
+                    alternate.get("path").and_then(serde_json::Value::as_str),
+                ) else {
+                    continue;
+                };
+                if language.len() == 2
+                    && language.bytes().all(|byte| byte.is_ascii_lowercase())
+                    && safe_sitemap_path(alternate_path)
+                {
+                    out.push_str(&format!(
+                        "<xhtml:link rel=\"alternate\" hreflang=\"{}\" href=\"{}{}\"/>",
+                        language,
+                        base,
+                        escape_xml(alternate_path)
+                    ));
+                }
+            }
+        }
+        if let Some(default_path) = entry.get("x_default").and_then(serde_json::Value::as_str) {
+            if safe_sitemap_path(default_path) {
+                out.push_str(&format!(
+                    "<xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"{}{}\"/>",
+                    base,
+                    escape_xml(default_path)
+                ));
+            }
+        }
+        out.push_str("</url>\n");
+    }
+}
+
+fn safe_sitemap_path(path: &str) -> bool {
+    path.starts_with('/')
+        && !path.starts_with("//")
+        && path
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'_'))
 }
 
 fn push_url(
@@ -396,6 +486,28 @@ mod tests {
             escape_xml("/outils/compresser-pdf"),
             "/outils/compresser-pdf"
         );
+    }
+
+    #[test]
+    fn generated_routes_are_escaped_and_reject_attribute_injection() {
+        let manifest = serde_json::json!({
+            "entries": [{
+                "path": "/fr/blog/un-article",
+                "lastmod": "2026-09-24",
+                "alternates": [
+                    {"language": "fr", "path": "/fr/blog/un-article"},
+                    {"language": "en", "path": "/en/blog/an-article\"/><script>"}
+                ],
+                "x_default": "/fr/blog/un-article"
+            }]
+        });
+        let mut output = String::new();
+        append_generated_manifest(&mut output, "https://example.test", &manifest);
+        assert!(output.contains("<loc>https://example.test/fr/blog/un-article</loc>"));
+        assert!(output.contains("hreflang=\"fr\""));
+        assert!(!output.contains("hreflang=\"en\""));
+        assert!(!output.contains("<script>"));
+        assert!(output.contains("hreflang=\"x-default\""));
     }
 
     /// A sitemap that lists a page under two URLs is worse than one that lists it once

@@ -552,6 +552,8 @@ the conversation.
 | Path | What it serves |
 |---|---|
 | `/` · `/en` | The public home, French and English |
+| `/fr/<outil>` · `/en/<tool>` · `/es/<outil>` · `/de/<tool>` · `/it/<tool>` · `/pt/<ferramenta>` | Localized converter and API landing pages |
+| `/[fr|en|es|de|it|pt]/blog` · `/[lang]/blog/<slug>` | Localized editorial index and reviewed articles |
 | `/outils/<slug>` · `/tools/<slug>` | One page per tool, 21 in each language |
 | `/tarifs` · `/pricing` | The offer |
 | `/guides` · `/guides/<slug>` | Fifteen guides, indexable, one per question people search for |
@@ -633,6 +635,18 @@ Everything on-page, because everything on-page is what a product can control:
 - a 404 that offers the other twenty tools to a visitor and stays JSON for an integration
 - an `og:image` rendered by this service's own engine, so the social card cannot drift from
   the brand
+- localized converter and API landing pages with real canonical routes, translated copy,
+  `hreflang`, and the direct Markdown-to-PDF action
+- reviewed blog articles rendered as static HTML, linked to their live localized product
+  pages and included in the sitemap only after review
+
+The weekly GitHub Actions workflow prepares one article group and its six translations as a
+**draft pull request**. It never publishes content automatically. Configure repository
+variables `BLOG_LLM_CHAT_COMPLETIONS_URL` and `BLOG_LLM_MODEL`, plus the secret
+`BLOG_LLM_API_KEY`, for an OpenAI-compatible chat-completions provider. Review facts, examples
+and native-language quality in every variant; merging the PR is the publication step. The
+workflow validates route slugs, article structure, canonicals, reciprocal `hreflang`, and the
+generated sitemap before opening that draft.
 
 Ranking also depends on domain authority and inbound links, which no amount of markup
 replaces. The technical and editorial groundwork is in place; the rest is time.
