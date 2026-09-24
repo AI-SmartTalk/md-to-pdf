@@ -1,4 +1,4 @@
-use crate::auth::ApiKey;
+use crate::auth::PublicOrKey;
 use crate::obs::RequestId;
 use crate::pipeline::{self, RenderSpec, Source, UrlPolicy};
 use crate::types::*;
@@ -8,7 +8,7 @@ use rocket::Either;
 
 #[post("/convert", format = "json", data = "<req>")]
 pub async fn convert(
-    _key: ApiKey,
+    _key: PublicOrKey,
     trace: RequestId,
     req: Json<ConvertRequest>,
 ) -> Result<Either<NamedFile, Json<ConvertResponse>>, AppError> {

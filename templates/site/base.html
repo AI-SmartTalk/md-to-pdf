@@ -1,0 +1,182 @@
+{# Socle de toutes les pages publiques.
+
+   Le thème par défaut est CLAIR : sur des documents personnels, le blanc dit « simple et
+   sûr » là où le sombre dit « outil de développeur ». La bascule reste, et la console
+   d'intégrateur garde son sombre à elle. #}
+<!DOCTYPE html>
+<html lang="{{ lang }}" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{# Le titre et la description viennent du contexte, pas d'un bloc : ils sont réutilisés
+   par les balises Open Graph juste dessous, et un bloc ne se relit pas deux fois. #}
+<title>{{ page_title }}</title>
+<meta name="description" content="{{ page_description }}">
+
+{# Canonique absolue : sans elle, http/https et les variantes d'URL comptent comme autant
+   de pages, et l'autorité d'une page se divise entre ses doubles. #}
+{% if canonical %}<link rel="canonical" href="{{ canonical | safe }}">{% endif %}
+<link rel="alternate" hreflang="{{ lang }}" href="{{ canonical | default(value=base ~ home) | safe }}">
+{% if alternate %}
+<link rel="alternate" hreflang="{{ other_lang }}" href="{{ alternate | safe }}">
+<link rel="alternate" hreflang="x-default" href="{% if other_lang == 'en' %}{{ alternate | safe }}{% else %}{{ canonical | safe }}{% endif %}">
+{% endif %}
+
+<meta property="og:site_name" content="AI SmartTalk Documents">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="{% if lang == 'fr' %}fr_FR{% else %}en_US{% endif %}">
+<meta property="og:title" content="{{ page_title }}">
+<meta property="og:description" content="{{ page_description }}">
+{% if canonical %}<meta property="og:url" content="{{ canonical | safe }}">{% endif %}
+<meta property="og:image" content="{{ base | safe }}/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#090e17" media="(prefers-color-scheme: dark)">
+
+{# Une seule fiche d'organisation, sur toutes les pages : c'est ce qui relie les pages
+   d'outil entre elles aux yeux d'un moteur, et ce qui fait apparaître la marque. #}
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Organization","name":"AI SmartTalk",
+ "url":"https://aismarttalk.tech","logo":"{{ base | safe }}/static/favicon.ico",
+ "brand":{"@type":"Brand","name":"AI SmartTalk Documents"}}
+</script>
+{% block head_extra %}{% endblock head_extra %}
+
+<link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
+<link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="/static/outils/brand.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">{% if lang == "fr" %}Aller au contenu{% else %}Skip to content{% endif %}</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="{{ home | safe }}">
+      <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true">
+        <path d="M6 2h8l5 5v15H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M14 2v5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M9 13h6M9 17h6M9 9h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <span>AI SmartTalk <strong>Documents</strong></span>
+    </a>
+
+    <nav class="site-nav" aria-label="{% if lang == 'fr' %}Navigation principale{% else %}Main navigation{% endif %}">
+      {# Un menu par catégorie plutôt qu'une liste plate : à vingt-et-un outils, une liste
+         ne se lit plus. `<details>` fonctionne au clavier et sans JavaScript. #}
+      <details class="megamenu">
+        <summary>{% if lang == "fr" %}Tous les outils{% else %}All tools{% endif %}</summary>
+        <div class="megamenu-panel">
+          {% for group in nav_groups %}
+          <div class="megamenu-group">
+            <p class="megamenu-title">{{ group.name }}</p>
+            <ul>
+              {% for tool in group.tools %}
+              <li><a href="{{ root | safe }}/{{ tool.slug }}">{{ tool.label | default(value=tool.h1) }}</a></li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endfor %}
+        </div>
+      </details>
+      <a href="{{ pricing | safe }}">{% if lang == "fr" %}Tarifs{% else %}Pricing{% endif %}</a>
+      <a href="/dev#/api">{% if lang == "fr" %}Développeurs{% else %}Developers{% endif %}</a>
+    </nav>
+
+    <div class="header-actions">
+      <a class="lang-switch" href="{{ other_home | safe }}" hreflang="{{ other_lang }}">{{ other_lang | upper }}</a>
+      <button type="button" class="icon-btn" data-role="theme-toggle"
+              aria-label="{% if lang == 'fr' %}Basculer le thème clair ou sombre{% else %}Toggle light or dark theme{% endif %}">
+        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+          <path fill="currentColor" d="M12 3a9 9 0 109 9 7 7 0 01-9-9z"/>
+        </svg>
+      </button>
+      {# Servi tel quel, ce bouton dit « Se connecter » : c'est le seul état que le serveur
+         connaisse à cet instant, et c'est le bon défaut — hors ligne compris. `app.js`
+         pose ensuite la question à `/api/auth/me` et bascule sur « Mon espace » si une
+         session existe. Le cookie est HttpOnly : rien d'autre ne peut répondre. #}
+      <a class="btn primary sm" href="{{ signin | safe }}" data-role="account-link"
+         data-in-href="{{ workspace | safe }}"
+         data-in-label="{% if lang == 'fr' %}Mon espace{% else %}My workspace{% endif %}"
+         >{% if lang == "fr" %}Se connecter{% else %}Sign in{% endif %}</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+{% block content %}{% endblock content %}
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <p class="kicker">AI SmartTalk Documents</p>
+        <p>
+          {%- if lang == "fr" -%}
+          Le moteur documentaire d'AI SmartTalk. Vos fichiers sont supprimés au bout de
+          <span data-role="retention-hours" data-member-hours="{{ member_retention_hours }}">{{ retention_hours }}</span> heures, ne servent à entraîner aucun modèle, et ne sont lus
+          par personne.
+          {%- else -%}
+          The document engine by AI SmartTalk. Your files are deleted after
+          <span data-role="retention-hours" data-member-hours="{{ member_retention_hours }}">{{ retention_hours }}</span> hours, never train a model, and are read by nobody.
+          {%- endif -%}
+        </p>
+      </div>
+      <div>
+        <p class="kicker">{% if lang == "fr" %}Outils{% else %}Tools{% endif %}</p>
+        <ul class="footer-links">
+          {% for group in nav_groups %}{% for tool in group.tools | slice(end=2) %}
+          <li><a href="{{ root | safe }}/{{ tool.slug }}">{{ tool.label | default(value=tool.h1) }}</a></li>
+          {% endfor %}{% endfor %}
+        </ul>
+      </div>
+      <div>
+        <p class="kicker">{% if lang == "fr" %}Pour les développeurs{% else %}For developers{% endif %}</p>
+        <ul class="footer-links">
+          <li><a href="/dev#/api">{% if lang == "fr" %}Référence de l'API{% else %}API reference{% endif %}</a></li>
+          <li><a href="/dev#/console">{% if lang == "fr" %}Console de test{% else %}Test console{% endif %}</a></li>
+          <li><a href="/dev#/guides">{% if lang == "fr" %}Guides{% else %}Guides{% endif %}</a></li>
+          <li><a href="/static/swagger.yaml">OpenAPI</a></li>
+          <li><a href="{{ pricing | safe }}">{% if lang == "fr" %}Tarifs{% else %}Pricing{% endif %}</a></li>
+        </ul>
+        {# La clé d'API rejoint la colonne des développeurs : c'est à eux qu'elle sert, et
+           la quatrième colonne revient au compte. La grille reste à quatre colonnes. #}
+        <div class="api-key-row">
+          <label class="sr-only" for="apiKey">{% if lang == "fr" %}Clé d'API{% else %}API key{% endif %}</label>
+          <input id="apiKey" type="password" data-role="api-key" autocomplete="off"
+                 placeholder="{% if lang == 'fr' %}collez votre token{% else %}paste your token{% endif %}">
+        </div>
+        <p class="notice">
+          {%- if lang == "fr" -%}
+          Conservée dans ce navigateur uniquement. Inutile pour les outils gratuits.
+          {%- else -%}
+          Kept in this browser only. Not needed for the free tools.
+          {%- endif -%}
+        </p>
+      </div>
+      <div>
+        <p class="kicker">{% if lang == "fr" %}Compte{% else %}Account{% endif %}</p>
+        <ul class="footer-links">
+          <li><a href="{{ signin | safe }}">{% if lang == "fr" %}Se connecter{% else %}Sign in{% endif %}</a></li>
+          <li><a href="{{ signup | safe }}">{% if lang == "fr" %}Créer un compte{% else %}Create an account{% endif %}</a></li>
+          <li><a href="{{ pricing | safe }}">{% if lang == "fr" %}Tarifs{% else %}Pricing{% endif %}</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>
+        <a href="https://aismarttalk.tech" target="_blank" rel="noopener">AI SmartTalk</a>
+        · md-to-pdf {{ version }}
+        · <a href="{{ other_home | safe }}" hreflang="{{ other_lang }}">{% if other_lang == "en" %}English{% else %}Français{% endif %}</a>
+      </p>
+    </div>
+  </div>
+</footer>
+
+<script src="/static/outils/app.js" defer></script>
+</body>
+</html>

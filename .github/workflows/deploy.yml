@@ -24,6 +24,11 @@ concurrency:
   group: deploy-md-to-pdf
   cancel-in-progress: false
 
+# Le déploiement lit le dépôt et parle au VPS par SSH : il n'écrit rien sur
+# GitHub. Le GITHUB_TOKEN n'a donc aucune raison d'arriver ici en écriture.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: Déploiement en production

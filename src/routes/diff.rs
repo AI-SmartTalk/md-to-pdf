@@ -7,7 +7,7 @@
 //! of the same document can differ by a hair of anti-aliasing, and without it every diff
 //! would come back "changed".
 
-use crate::auth::ApiKey;
+use crate::auth::PublicOrKey;
 use crate::exec;
 use crate::helpers::{self, base64};
 use crate::obs::{self, RequestId};
@@ -115,14 +115,14 @@ pub struct DiffImage {
 
 #[post("/diff", format = "json", data = "<req>")]
 pub async fn diff(
-    _key: ApiKey,
+    _key: PublicOrKey,
     trace: RequestId,
     req: Json<DiffRequest>,
 ) -> Result<Json<DiffResponse>, AppError> {
     let req = req.into_inner();
 
-    let before = helpers::resolve_pdf_path(&req.before)?;
-    let after = helpers::resolve_pdf_path(&req.after)?;
+    let before = helpers::resolve_readable_pdf(&req.before)?;
+    let after = helpers::resolve_readable_pdf(&req.after)?;
     let dpi = resolve_dpi(req.dpi)?;
     let threshold = resolve_threshold(req.threshold)?;
     let want_images = req.images.unwrap_or(false);

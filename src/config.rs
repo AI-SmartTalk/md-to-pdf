@@ -18,6 +18,17 @@ const DEFAULT_LOG420_REGION: &str = "eu";
 const DEFAULT_SERVICE_NAME: &str = "md-to-pdf";
 const DEFAULT_LAYOUT_MAX_PASSES: u8 = 1;
 const DEFAULT_PREVIEW_MAX_PAGES: usize = 20;
+/// An uploaded file is someone else's personal data. Two hours is long enough to chain a
+/// handful of tools on it and short enough that the retention promise costs nothing to keep.
+const DEFAULT_ASSET_TTL_SECS: u64 = 7_200;
+/// How long a signed-in member's files are kept. Longer than the anonymous two hours
+/// because that is what the sign-up page offers in exchange for an address, and a promise
+/// on a page has to be a number in the code.
+const DEFAULT_ASSET_TTL_MEMBER_SECS: u64 = 86_400;
+const DEFAULT_ASSET_MAX_MB: u64 = 100;
+const DEFAULT_ASSET_MAX_PAGES: usize = 2_000;
+/// A finished job is kept only long enough for the caller to come back for its result
+const DEFAULT_JOB_TTL_SECS: u64 = 3_600;
 
 /// Upper bound on the render concurrency: past a handful of parallel weasyprint runs the
 /// container hits its memory limit long before it gets faster.
@@ -52,6 +63,13 @@ pub struct Config {
     pub service_name: String,
     pub layout_max_passes: u8,
     pub preview_max_pages: usize,
+    /// How long an uploaded file stays readable before the service forgets it
+    pub asset_ttl: Duration,
+    /// Retention for work that belongs to an account
+    pub asset_ttl_member: Duration,
+    pub asset_max_mb: u64,
+    pub asset_max_pages: usize,
+    pub job_ttl: Duration,
 }
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
@@ -90,6 +108,11 @@ impl Config {
             service_name: text("SERVICE_NAME", DEFAULT_SERVICE_NAME),
             layout_max_passes: number("PDF_LAYOUT_MAX_PASSES", DEFAULT_LAYOUT_MAX_PASSES).min(3),
             preview_max_pages: positive("PDF_PREVIEW_MAX_PAGES", DEFAULT_PREVIEW_MAX_PAGES),
+            asset_ttl: duration_secs("ASSET_TTL_SECS", DEFAULT_ASSET_TTL_SECS),
+            asset_ttl_member: duration_secs("ASSET_TTL_MEMBER_SECS", DEFAULT_ASSET_TTL_MEMBER_SECS),
+            asset_max_mb: number("ASSET_MAX_MB", DEFAULT_ASSET_MAX_MB),
+            asset_max_pages: positive("ASSET_MAX_PAGES", DEFAULT_ASSET_MAX_PAGES),
+            job_ttl: duration_secs("JOB_TTL_SECS", DEFAULT_JOB_TTL_SECS),
         }
     }
 

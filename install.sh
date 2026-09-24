@@ -112,6 +112,19 @@ else
     info "$ENV_FILE présent, API_KEY renseignée."
 fi
 
+# Download URLs are signed capabilities. Keep the signing key in the persistent host
+# .env so existing links remain valid across container restarts. Never print its value.
+if ! grep -qE '^ATTESTATION_SECRET=.{16,}$' "$ENV_FILE"; then
+    GENERATED_SIGNING_SECRET="$(openssl rand -hex 32)"
+    if grep -q '^ATTESTATION_SECRET=' "$ENV_FILE"; then
+        sed -i "s|^ATTESTATION_SECRET=.*|ATTESTATION_SECRET=$GENERATED_SIGNING_SECRET|" "$ENV_FILE"
+    else
+        printf '\nATTESTATION_SECRET=%s\n' "$GENERATED_SIGNING_SECRET" >> "$ENV_FILE"
+    fi
+    chmod 600 "$ENV_FILE"
+    info "Persistent signature secret configured."
+fi
+
 # ──────────────────────────── build et démarrage ───────────────────────
 info "Construction de l'image de production (quelques minutes)..."
 docker_cmd compose -f "$PROJECT_DIR/docker-compose.prod.yml" build --pull

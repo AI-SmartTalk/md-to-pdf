@@ -70,6 +70,30 @@ pub fn check_markup(input: &str) -> Result<(), AppError> {
     check_with(input, &policy(false))
 }
 
+/// Vet a single URL this service is about to call itself.
+///
+/// A job callback is an outbound request the caller chooses the destination of, which is
+/// the textbook shape of an SSRF: the same policy that stops a document from pulling
+/// `http://169.254.169.254/` has to stop a callback from posting to it. Only http and
+/// https are allowed here — an inert scheme like `data:` is meaningless for a webhook.
+pub fn check_outbound(url: &str) -> Result<(), AppError> {
+    let trimmed = url.trim();
+
+    match scheme_of(trimmed) {
+        Some(scheme)
+            if scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https") => {}
+        _ => {
+            return Err(AppError::BadRequest(format!(
+                "\"callback_url\" must be an http(s) URL: {}",
+                shorten(trimmed)
+            )))
+        }
+    }
+
+    check_url(trimmed, &policy(false))
+        .map_err(|reason| AppError::BadRequest(format!("\"callback_url\" refused: {}", reason)))
+}
+
 fn policy(markdown: bool) -> Policy<'static> {
     Policy {
         allowed_hosts: &config().allowed_url_hosts,

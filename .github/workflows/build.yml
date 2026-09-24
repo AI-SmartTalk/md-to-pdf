@@ -7,9 +7,16 @@ on:
   pull_request:
     branches:
       - master
+      - feat/plateforme-documentaire
 
 env:
   CARGO_TERM_COLOR: always
+
+# Ces deux jobs lisent le dépôt et n'écrivent nulle part. Sans ce bloc, le
+# GITHUB_TOKEN arrive avec les droits par défaut du dépôt — droit d'écriture
+# compris — dans un job qui compile du code tiers depuis Cargo.lock.
+permissions:
+  contents: read
 
 jobs:
   # Compilation et lint sur le lockfile committé. L'ancienne version lançait
@@ -45,6 +52,16 @@ jobs:
       - name: Clippy
         run: cargo clippy --locked --all-targets -- -D warnings
 
+      # Cette étape manquait : le dépôt porte plus de cinq cents tests unitaires et
+      # `tests/api_surface.rs`, qui vérifie que swagger.yaml et spec.js décrivent
+      # exactement les routes montées par src/main.rs — et rien de tout cela ne
+      # tournait jamais ailleurs que sur la machine de qui pensait à le lancer.
+      #
+      # Après Clippy, parce que les deux compilent les mêmes cibles : la seconde
+      # invocation ne recompile rien.
+      - name: Tests
+        run: cargo test --locked --all-targets
+
   # Le test qui compte vraiment : l'image de production démarre, répond, et passe
   # la suite d'intégration. Un binaire qui compile mais dont l'image n'embarque
   # ni pandoc ni weasyprint est un déploiement cassé que `cargo build` valide.
@@ -62,6 +79,7 @@ jobs:
           docker run -d --name md-to-pdf-ci \
             -p 8000:8000 \
             -e API_KEY=ci-test-key \
+            -e ATTESTATION_SECRET=ci-test-signing-key \
             -e RUST_LOG=info \
             md-to-pdf:ci
 
@@ -82,6 +100,7 @@ jobs:
       - name: Suite d'intégration
         env:
           API_KEY: ci-test-key
+          ATTESTATION_SECRET: ci-test-signing-key
         run: ./test_api.sh http://127.0.0.1:8000
 
       - name: Logs du service en cas d'échec

@@ -16,6 +16,10 @@ set -uo pipefail
 COMPOSE_FILE="${COMPOSE_FILE:-/opt/md-to-pdf/docker-compose.prod.yml}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8000/api/health}"
 CONTAINER="${CONTAINER:-md-to-pdf}"
+# Le service des convertisseurs. Quand c'est lui qui est tombé, redémarrer
+# md-to-pdf seul ne répare rien : il revient et retrouve la même boîte aux
+# lettres sans personne au bout.
+WORKER_SERVICE="${WORKER_SERVICE:-md-to-pdf-worker}"
 # Nombre d'échecs consécutifs avant redémarrage : une sonde isolée qui échoue
 # pendant un pic de charge ne doit pas provoquer une coupure.
 FAILURES_BEFORE_RESTART="${FAILURES_BEFORE_RESTART:-3}"
@@ -36,15 +40,31 @@ if [ "$status" != "running" ]; then
 fi
 
 failures=0
+body=""
 for _ in $(seq 1 "$FAILURES_BEFORE_RESTART"); do
-    if curl -fsS -m 5 "$HEALTH_URL" > /dev/null 2>&1; then
+    # Le corps sert au diagnostic, le code de retour au verdict : /api/health
+    # répond 503 quand il se sait dégradé, et c'est `-f` qui le voit.
+    if body="$(curl -fsS -m 5 "$HEALTH_URL" 2>/dev/null)"; then
         exit 0
     fi
+    # Récupéré sans `-f` : sur un 503 le corps existe et nomme le composant fautif.
+    body="$(curl -sS -m 5 "$HEALTH_URL" 2>/dev/null)"
     failures=$((failures + 1))
     [ "$failures" -lt "$FAILURES_BEFORE_RESTART" ] && sleep "$DELAY_BETWEEN_PROBES"
 done
 
 log "$failures sondes en échec sur $HEALTH_URL alors que le conteneur tourne — redémarrage"
+
+# Quand le service se déclare dégradé parce que le bac à sable ne répond plus, le
+# fautif est le worker : le redémarrer d'abord, sinon md-to-pdf revient et retrouve
+# exactement la même panne.
+case "$body" in
+    *'"sandbox":"unreachable"'*)
+        log "le bac à sable ne répond plus — redémarrage de $WORKER_SERVICE d'abord"
+        docker compose -f "$COMPOSE_FILE" restart "$WORKER_SERVICE"
+        ;;
+esac
+
 docker compose -f "$COMPOSE_FILE" restart md-to-pdf
 
 # Laisser le service revenir avant de rendre la main, pour que l'état du timer

@@ -16,7 +16,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Bump this whenever the pipeline can produce a different PDF from the same input,
 /// otherwise a deployment keeps serving output rendered by the previous version.
-const CACHE_VERSION: &str = "2";
+///
+/// 3 — weasyprint is now told the document is UTF-8. Every HTML and template render
+/// containing a non-ASCII character produced mojibake before that, and those PDFs are in the
+/// cache: without this bump the fix would reach no document anyone had already asked for.
+const CACHE_VERSION: &str = "3";
 
 /// Sweeping walks the whole directory, so it runs at most this often
 const SWEEP_INTERVAL: Duration = Duration::from_secs(60);

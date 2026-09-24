@@ -4,7 +4,11 @@ address = "0.0.0.0"
 # https://rocket.rs/guide/v0.5/configuration/#limits
 [default.limits]
 # Aligned with the JSON limit: the legacy FormData endpoint accepts the same document sizes
-# as /api/convert.
+# as /api/convert. `forms` covers url-encoded bodies, which is what POST / receives.
 forms = "10MiB"
-data-form = "10MiB"
 json = "10MiB"
+# Multipart, which only POST /api/files uses. It has to clear ASSET_MAX_MB (100 MB by
+# default) plus the part headers, or an upload at the documented limit is refused by the
+# framework before the endpoint can say anything useful about it.
+data-form = "110MiB"
+file = "100MiB"

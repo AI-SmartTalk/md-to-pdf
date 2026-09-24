@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% import "icons.html" as icons %}
+
+{% block head_extra %}
+{# Une page d'erreur n'a rien à faire dans un index : elle serait le résultat d'une
+   recherche qui ne mène nulle part. #}
+<meta name="robots" content="noindex, follow">
+{% endblock head_extra %}
+
+{% block content %}
+<div class="wrap">
+  <section class="hero hero-short">
+    <div class="hero-glow" aria-hidden="true"></div>
+    <p class="kicker">404</p>
+    <h1>{% if lang == "fr" %}Cette page n'existe pas{% else %}This page does not exist{% endif %}</h1>
+    <p class="lede">
+      {%- if lang == "fr" -%}
+      Rien à l'adresse <code>{{ missing }}</code>. L'outil que vous cherchiez est
+      peut-être dans la liste ci-dessous — sinon, la page d'accueil accepte un fichier
+      et vous dit elle-même quoi en faire.
+      {%- else -%}
+      Nothing at <code>{{ missing }}</code>. The tool you were after may be in the list
+      below — and failing that, the home page takes a file and tells you what can be done
+      with it.
+      {%- endif -%}
+    </p>
+    <p class="dev-links">
+      <a class="btn primary" href="{{ home | safe }}">{% if lang == "fr" %}Aller à l'accueil{% else %}Go to the home page{% endif %}</a>
+    </p>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>{% if lang == "fr" %}Tous les outils{% else %}Every tool{% endif %}</h2>
+    </div>
+    <div class="tool-groups">
+      {% for group in nav_groups %}
+      <section class="tool-group" data-group="{{ group.name | slugify }}">
+        <h3>{{ group.name }}</h3>
+        <div class="tool-grid">
+          {% for tool in group.tools %}
+          <a class="tool-card" href="{{ root | safe }}/{{ tool.slug }}">
+            <span class="tool-card-icon">{{ icons::tool(name=tool.icon | default(value="")) }}</span>
+            <h4>{{ tool.label | default(value=tool.h1) }}</h4>
+          </a>
+          {% endfor %}
+        </div>
+      </section>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock content %}

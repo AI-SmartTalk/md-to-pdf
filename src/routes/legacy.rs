@@ -20,6 +20,8 @@ pub async fn convert(
         form_data.markdown.len()
     );
 
+    within_legacy_limit(form_data.markdown.len())?;
+
     let engine = allowed_engine(form_data.engine.unwrap_or_default())?;
 
     let mut spec = RenderSpec::new(Source::Markdown(form_data.markdown));
@@ -36,6 +38,26 @@ pub async fn convert(
 
     let outcome = pipeline::render(spec).await?;
     Ok(pipeline::respond(outcome, form_data.client_id, form_data.pdf_name).await?)
+}
+
+/// Ceiling this endpoint has always had in practice, now stated in the code.
+///
+/// It used to be the framework's `data-form` limit that bounded it. Uploads needed that
+/// limit raised to a hundred megabytes, and this route is the one place where the change
+/// would have been felt: it is open, it takes no key, and a multipart body reaches it just
+/// as well as a url-encoded one. So the bound moves here, where it does not depend on a
+/// setting that exists for a different endpoint.
+const LEGACY_MAX_MARKDOWN_BYTES: usize = 10 * 1024 * 1024;
+
+fn within_legacy_limit(len: usize) -> Result<(), AppError> {
+    if len > LEGACY_MAX_MARKDOWN_BYTES {
+        return Err(AppError::BadRequest(format!(
+            "\"markdown\" is {} MB, the limit on this endpoint is {} MB",
+            len / (1024 * 1024),
+            LEGACY_MAX_MARKDOWN_BYTES / (1024 * 1024)
+        )));
+    }
+    Ok(())
 }
 
 /// This endpoint takes no API key, so it only offers the engine that renders behind the
@@ -63,5 +85,13 @@ mod tests {
         assert!(allowed_engine(PdfEngine::Weasyprint).is_ok());
         assert!(allowed_engine(PdfEngine::Wkhtmltopdf).is_err());
         assert!(allowed_engine(PdfEngine::Pdflatex).is_err());
+    }
+
+    /// Raising the multipart limit for uploads must not open this endpoint any wider
+    #[test]
+    fn the_open_endpoint_keeps_its_own_ceiling() {
+        assert!(within_legacy_limit(0).is_ok());
+        assert!(within_legacy_limit(LEGACY_MAX_MARKDOWN_BYTES).is_ok());
+        assert!(within_legacy_limit(LEGACY_MAX_MARKDOWN_BYTES + 1).is_err());
     }
 }

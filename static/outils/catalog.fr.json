@@ -1,0 +1,1660 @@
+{
+  "index": {
+    "title": "Outils PDF gratuits en ligne — compresser, fusionner, convertir | AI SmartTalk",
+    "meta_description": "Compresser, fusionner, convertir, océriser, caviarder un PDF. Chaque traitement rend le fichier et le verdict de ce qu'il a coûté au document.",
+    "h1": "Vos documents, et ce qu'on en a fait",
+    "lede": "Vingt et un outils qui reçoivent un fichier et vous en rendent un autre. La différence tient dans ce qui accompagne le fichier : un verdict, mesuré sur le document livré, qui dit ce que le traitement a préservé et ce qu'il a coûté. Aucun filigrane, jamais. Vos fichiers sont effacés au bout de deux heures.",
+    "claims": [
+      "Le verdict est rendu sur le fichier produit, pas sur une estimation : pages comptées, texte extrait, poids mesuré.",
+      "Aucun filigrane sur aucune sortie, y compris sans compte.",
+      "Vos fichiers sont effacés au bout de deux heures, et vous pouvez les supprimer tout de suite.",
+      "Aucun document ne sert à entraîner un modèle, et aucun n'est lu par un humain.",
+      "Enchaînez les outils sans redéposer le fichier : il est déjà chez nous, il n'y remonte pas deux fois."
+    ]
+  },
+  "tools": [
+    {
+      "slug": "compresser-pdf",
+      "title": "Compresser PDF en ligne, gratuit | AI SmartTalk",
+      "h1": "Compresser un PDF",
+      "meta_description": "Réduisez le poids d'un PDF et sachez ce que ça a coûté : pages conservées, texte encore sélectionnable, poids avant et après.",
+      "lede": "La compression est le seul geste qui peut détruire un document sans que rien ne le montre : un scan passé au niveau maximum revient quatre fois plus léger et n'est plus cherchable. Ici, le fichier arrive avec la facture — et si la compression produit un fichier plus gros, c'est l'original qui vous est rendu.",
+      "endpoint": "/api/compress",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Optimiser",
+      "params": [
+        {
+          "name": "level",
+          "type": "select",
+          "label": "Niveau de compression",
+          "options": [
+            [
+              "ebook",
+              "Équilibré — lecture à l'écran"
+            ],
+            [
+              "screen",
+              "Maximum — le plus léger"
+            ],
+            [
+              "printer",
+              "Impression — images préservées"
+            ],
+            [
+              "prepress",
+              "Prépresse — qualité d'atelier"
+            ]
+          ],
+          "default": "ebook",
+          "help": "Chaque niveau porte ses propres résolutions d'image. « Équilibré » convient à un document qu'on lit et qu'on archive ; « Maximum » à une pièce jointe qu'on veut légère avant tout."
+        },
+        {
+          "name": "dpi",
+          "type": "number",
+          "label": "Résolution des images (dpi)",
+          "default": null,
+          "placeholder": "150",
+          "help": "Facultatif, entre 36 et 1200. Renseigné, il l'emporte sur la résolution du niveau choisi. Laissé vide, le niveau décide."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF à alléger, ou glissez-le dans la zone de dépôt.",
+        "Choisissez un niveau. « Équilibré » est le bon défaut dans la plupart des cas.",
+        "Lancez la compression, puis lisez le verdict avant de télécharger : il dit ce que le fichier a perdu."
+      ],
+      "verdict_says": "Le verdict compare le fichier livré à l'original sur les trois choses qu'une compression détruit en silence : le nombre de pages, la part des caractères encore sélectionnables et cherchables (sous 98 % il alerte, sous 50 % il déclare que les pages ont été rasterisées), et le poids avant et après. Et si Ghostscript produit un fichier plus gros que l'original, l'original vous est rendu tel quel, avec la mention explicite que ce PDF était déjà optimisé.",
+      "faq": [
+        {
+          "q": "Le texte reste-t-il sélectionnable après compression ?",
+          "a": "C'est précisément ce que le verdict mesure. Il extrait la couche texte avant et après, compte les caractères hors espaces, et vous donne le rapport. Une compression qui a rasterisé les pages ne passe pas inaperçue : elle est marquée en échec, pas en réussite."
+        },
+        {
+          "q": "Que se passe-t-il si mon PDF est déjà optimisé ?",
+          "a": "Un PDF ne se compresse pas deux fois. Quand la tentative produit un fichier plus lourd que l'entrée, nous ne vous rendons pas ce fichier : vous recevez l'original, et le verdict porte l'avertissement correspondant avec les deux poids."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement. La page de résultat vous propose aussi de les supprimer immédiatement. Aucun document ne sert à entraîner un modèle et aucun n'est lu par un humain."
+        },
+        {
+          "q": "Y a-t-il une limite de taille ?",
+          "a": "100 Mo et 2000 pages par fichier déposé."
+        }
+      ],
+      "related": [
+        "reparer-pdf",
+        "ocr-pdf",
+        "pdf-en-jpg",
+        "fusionner-pdf"
+      ],
+      "icon": "compress",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Compresser PDF",
+      "alt_slug": "compress-pdf"
+    },
+    {
+      "slug": "fusionner-pdf",
+      "title": "Fusionner PDF en ligne, gratuit | AI SmartTalk",
+      "h1": "Fusionner des PDF",
+      "meta_description": "Assemblez plusieurs PDF en un seul document. L'ordre des pages est l'ordre de dépôt, et rien d'autre.",
+      "lede": "Deux fichiers ou vingt, réunis en un seul document. L'ordre de la liste est l'ordre des pages : c'est le contrat, et c'est la seule chose qu'on ne peut plus rattraper après coup.",
+      "endpoint": "/api/merge",
+      "accept": ".pdf,application/pdf",
+      "multiple": true,
+      "file_param": "pdfs",
+      "output": "binary",
+      "group": "Organiser",
+      "params": [],
+      "steps": [
+        "Déposez au moins deux PDF. Ils s'affichent dans l'ordre où vous les ajoutez.",
+        "Retirez ou réordonnez ce qui doit l'être : cet ordre sera celui du document final.",
+        "Lancez la fusion et téléchargez le document assemblé."
+      ],
+      "verdict_says": "Cet outil ne rend pas encore de verdict chiffré. Ce qu'il tient : un envoi de moins de deux fichiers est refusé avant tout traitement, l'ordre des pages est exactement l'ordre de dépôt, et si l'un des fichiers ne peut pas être lu vous recevez l'erreur telle quelle — jamais un document incomplet qui aurait l'air correct.",
+      "faq": [
+        {
+          "q": "Combien de fichiers puis-je réunir ?",
+          "a": "Deux au minimum, vingt par envoi depuis cette page. Chaque fichier reste plafonné à 100 Mo et 2000 pages."
+        },
+        {
+          "q": "Les signets et les liens survivent-ils ?",
+          "a": "La fusion assemble les pages telles quelles. Les liens internes qui pointaient à l'intérieur d'un document d'origine peuvent ne plus désigner la bonne page une fois les documents mis bout à bout : c'est une conséquence de l'assemblage, pas un réglage."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement. Vous pouvez aussi les supprimer immédiatement depuis la page de résultat. Ils ne servent à entraîner aucun modèle et ne sont lus par personne."
+        }
+      ],
+      "related": [
+        "diviser-pdf",
+        "organiser-pages-pdf",
+        "extraire-pages-pdf",
+        "numeroter-pages-pdf"
+      ],
+      "icon": "merge",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Fusionner PDF",
+      "alt_slug": "merge-pdf"
+    },
+    {
+      "slug": "diviser-pdf",
+      "title": "Diviser PDF en ligne, gratuit et sans filigrane | AI SmartTalk",
+      "h1": "Diviser un PDF",
+      "meta_description": "Découpez un PDF en plusieurs fichiers, par nombre de pages ou aux points de coupe que vous indiquez.",
+      "lede": "Un document long devient une série de fichiers courts : un par chapitre, un par facture, un par page. Chaque partie produite annonce son propre nombre de pages, et repart d'ici sans nouveau dépôt si vous voulez enchaîner.",
+      "endpoint": "/api/pages",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Organiser",
+      "params": [
+        {
+          "name": "op",
+          "type": "select",
+          "label": "Opération",
+          "options": [
+            [
+              "split",
+              "Diviser"
+            ]
+          ],
+          "default": "split",
+          "required": true
+        },
+        {
+          "name": "every",
+          "type": "number",
+          "label": "Pages par fichier",
+          "default": 1,
+          "help": "Une découpe régulière : 1 pour une page par fichier, 10 pour des blocs de dix pages."
+        },
+        {
+          "name": "pages",
+          "type": "string",
+          "label": "Points de coupe",
+          "default": null,
+          "placeholder": "5, 12, 30",
+          "help": "Facultatif. Chaque numéro ouvre un nouveau fichier : « 5, 12 » donne les pages 1-4, 5-11, puis 12 à la fin. Renseigné, ce champ l'emporte sur « pages par fichier », et la réponse vous le dit."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF à découper.",
+        "Indiquez soit un nombre de pages par fichier, soit les points de coupe.",
+        "Lancez la découpe : chaque partie apparaît avec son nom, son poids et son nombre de pages."
+      ],
+      "verdict_says": "Cet outil ne rend pas encore de verdict chiffré. Ce qu'il vous dit : une découpe qui produirait plus de 500 fichiers est refusée avant d'écrire quoi que ce soit, un point de coupe hors du document est une erreur explicite et non un fichier silencieusement plus court, et si un réglage a été ignoré parce que vous en avez donné deux, c'est écrit dans les remarques.",
+      "faq": [
+        {
+          "q": "Puis-je récupérer toutes les parties d'un coup ?",
+          "a": "Chaque partie se télécharge depuis la page de résultat. Elles portent le nom du document suivi de leur rang, dans l'ordre du document d'origine."
+        },
+        {
+          "q": "Combien de fichiers au maximum ?",
+          "a": "500 par découpe. Au-delà, la demande est refusée avec le compte exact plutôt que de remplir un disque."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, les parties produites comme le document déposé. Vous pouvez tout supprimer immédiatement depuis la page de résultat."
+        }
+      ],
+      "related": [
+        "extraire-pages-pdf",
+        "fusionner-pdf",
+        "supprimer-pages-pdf",
+        "organiser-pages-pdf"
+      ],
+      "icon": "split",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Diviser PDF",
+      "alt_slug": "split-pdf"
+    },
+    {
+      "slug": "extraire-pages-pdf",
+      "title": "Extraire des pages en ligne, gratuit | AI SmartTalk",
+      "h1": "Extraire des pages d'un PDF",
+      "meta_description": "Sortez une page, une plage ou une sélection d'un PDF, dans un nouveau document. Une page inexistante est refusée, pas ignorée.",
+      "lede": "Vous ne gardez que ce que vous nommez. La sélection accepte des numéros, des plages, et les mots-clés « paires » et « impaires » sous leur forme technique — et une page que le document ne contient pas est une erreur, jamais un fichier plus court que prévu.",
+      "endpoint": "/api/pages",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Organiser",
+      "params": [
+        {
+          "name": "op",
+          "type": "select",
+          "label": "Opération",
+          "options": [
+            [
+              "extract",
+              "Extraire"
+            ]
+          ],
+          "default": "extract",
+          "required": true
+        },
+        {
+          "name": "pages",
+          "type": "string",
+          "label": "Pages à garder",
+          "default": null,
+          "placeholder": "1, 3, 5-9",
+          "required": true,
+          "help": "Numéros et plages séparés par des virgules. « 2- » va de la page 2 à la fin ; « all », « odd » et « even » désignent respectivement toutes les pages, les impaires et les paires."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF d'origine.",
+        "Écrivez les pages à conserver, par numéro ou par plage.",
+        "Lancez l'extraction : le document produit ne contient que ces pages, dans l'ordre croissant."
+      ],
+      "verdict_says": "Cet outil ne rend pas encore de verdict chiffré. Il tient en revanche la promesse qui compte : une sélection qui nomme une page absente du document est refusée avec un message qui la nomme, avant tout traitement — plutôt que de vous rendre un PDF silencieusement incomplet. La réponse annonce le nombre de pages du fichier produit.",
+      "faq": [
+        {
+          "q": "Comment extraire une seule page ?",
+          "a": "Écrivez son numéro seul, par exemple « 7 ». Le document produit ne contiendra que cette page."
+        },
+        {
+          "q": "L'ordre de ma liste est-il conservé ?",
+          "a": "Non : l'extraction rend les pages dans l'ordre du document d'origine. Pour choisir un ordre différent, utilisez l'outil de réorganisation des pages."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement. Ils ne servent à entraîner aucun modèle et ne sont lus par personne."
+        }
+      ],
+      "related": [
+        "supprimer-pages-pdf",
+        "diviser-pdf",
+        "organiser-pages-pdf",
+        "rogner-pdf"
+      ],
+      "icon": "extract",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Extraire des pages",
+      "alt_slug": "extract-pdf-pages"
+    },
+    {
+      "slug": "supprimer-pages-pdf",
+      "title": "Supprimer des pages en ligne, gratuit | AI SmartTalk",
+      "h1": "Supprimer des pages d'un PDF",
+      "meta_description": "Retirez des pages d'un PDF, par numéro ou par plage. Une suppression qui viderait le document est refusée.",
+      "lede": "L'inverse de l'extraction : vous nommez ce qui part, le reste est conservé dans son ordre. Une demande qui ne laisserait aucune page debout est refusée — un document vide serait plus grave qu'une erreur.",
+      "endpoint": "/api/pages",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Organiser",
+      "params": [
+        {
+          "name": "op",
+          "type": "select",
+          "label": "Opération",
+          "options": [
+            [
+              "delete",
+              "Supprimer"
+            ]
+          ],
+          "default": "delete",
+          "required": true
+        },
+        {
+          "name": "pages",
+          "type": "string",
+          "label": "Pages à supprimer",
+          "default": null,
+          "placeholder": "2, 8-11",
+          "required": true,
+          "help": "Numéros et plages séparés par des virgules. « 12- » supprime de la page 12 à la fin ; « odd » et « even » désignent les pages impaires et paires."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF.",
+        "Indiquez les pages à retirer.",
+        "Lancez la suppression : le fichier produit annonce le nombre de pages restantes."
+      ],
+      "verdict_says": "Cet outil ne rend pas encore de verdict chiffré. Il refuse en revanche deux choses avant d'écrire quoi que ce soit : une page qui n'existe pas dans le document, et une suppression qui ne laisserait aucune page. Le nombre de pages du document produit est annoncé dans la réponse, ce qui se recoupe en un coup d'œil avec ce que vous attendiez.",
+      "faq": [
+        {
+          "q": "Le contenu supprimé peut-il être retrouvé dans le fichier produit ?",
+          "a": "Les pages retirées ne sont pas copiées dans le document de sortie. En revanche, si votre but est de faire disparaître une information et non une page, c'est le caviardage qu'il vous faut : lui détruit la couche texte."
+        },
+        {
+          "q": "Puis-je supprimer toutes les pages sauf une ?",
+          "a": "Oui, mais l'extraction est plus directe : nommez la page à garder plutôt que les cinquante à retirer."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement. Vous pouvez aussi les supprimer immédiatement."
+        }
+      ],
+      "related": [
+        "extraire-pages-pdf",
+        "caviarder-pdf",
+        "organiser-pages-pdf",
+        "diviser-pdf"
+      ],
+      "icon": "delete-pages",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Supprimer des pages",
+      "alt_slug": "remove-pdf-pages"
+    },
+    {
+      "slug": "organiser-pages-pdf",
+      "title": "Organiser les pages en ligne, gratuit | AI SmartTalk",
+      "h1": "Réorganiser les pages d'un PDF",
+      "meta_description": "Donnez au document l'ordre de pages que vous voulez. Un ordre incomplet est refusé avant traitement.",
+      "lede": "Vous écrivez le nouvel ordre, le document le prend. La règle est stricte à dessein : l'ordre doit lister toutes les pages du document. Un ordre incomplet serait une amputation déguisée en réorganisation.",
+      "endpoint": "/api/pages",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Organiser",
+      "params": [
+        {
+          "name": "op",
+          "type": "select",
+          "label": "Opération",
+          "options": [
+            [
+              "reorder",
+              "Réorganiser"
+            ]
+          ],
+          "default": "reorder",
+          "required": true
+        },
+        {
+          "name": "order",
+          "type": "string",
+          "label": "Nouvel ordre des pages",
+          "default": null,
+          "placeholder": "3, 1, 2, 4-10",
+          "required": true,
+          "help": "La liste complète des pages, dans l'ordre voulu. Sur un document de dix pages, elle doit en compter dix : « 10, 1-9 » place la dernière page en tête."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF.",
+        "Écrivez l'ordre complet des pages, en utilisant les plages pour ne pas tout taper.",
+        "Lancez la réorganisation et vérifiez le nombre de pages annoncé."
+      ],
+      "verdict_says": "Cet outil ne rend pas encore de verdict chiffré. Ce qu'il refuse avant tout traitement : un ordre qui ne liste pas exactement toutes les pages du document. Le message d'erreur donne les deux nombres — celui qu'il attendait, celui que vous avez écrit — de sorte que la correction est immédiate au lieu d'être une découverte à l'ouverture du fichier.",
+      "faq": [
+        {
+          "q": "Puis-je faire apparaître deux fois la même page ?",
+          "a": "L'ordre doit compter autant d'entrées que le document a de pages. Une page répétée en occupe donc la place d'une autre, qui manquerait alors : la demande serait refusée."
+        },
+        {
+          "q": "Comment inverser complètement un document ?",
+          "a": "Écrivez les numéros dans l'ordre décroissant. Sur un document court, c'est immédiat ; sur un document long, l'API accepte la même requête depuis un script."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement."
+        }
+      ],
+      "related": [
+        "extraire-pages-pdf",
+        "pivoter-pdf",
+        "fusionner-pdf",
+        "diviser-pdf"
+      ],
+      "icon": "organize",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Organiser les pages",
+      "alt_slug": "reorder-pdf-pages"
+    },
+    {
+      "slug": "pivoter-pdf",
+      "title": "Pivoter PDF en ligne, gratuit et sans filigrane | AI SmartTalk",
+      "h1": "Pivoter un PDF",
+      "meta_description": "Redressez un document scanné de travers : quart de tour à droite, à gauche ou demi-tour, sur tout ou partie des pages.",
+      "lede": "Un scan arrivé couché, une page en paysage au milieu d'un document en portrait. La rotation s'applique à toutes les pages ou à celles que vous nommez, et elle ne connaît que les quarts de tour — c'est tout ce qu'un PDF sait stocker.",
+      "endpoint": "/api/pages",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Organiser",
+      "params": [
+        {
+          "name": "op",
+          "type": "select",
+          "label": "Opération",
+          "options": [
+            [
+              "rotate",
+              "Pivoter"
+            ]
+          ],
+          "default": "rotate",
+          "required": true
+        },
+        {
+          "name": "angle",
+          "type": "number",
+          "label": "Angle",
+          "options": [
+            [
+              "90",
+              "Quart de tour à droite (90°)"
+            ],
+            [
+              "180",
+              "Demi-tour (180°)"
+            ],
+            [
+              "270",
+              "Quart de tour à gauche (270°)"
+            ],
+            [
+              "-90",
+              "Quart de tour à gauche (-90°)"
+            ]
+          ],
+          "default": 90,
+          "required": true,
+          "help": "Seuls les quarts de tour existent dans un PDF : 90, 180, 270 et leurs négatifs. Tout autre angle est refusé."
+        },
+        {
+          "name": "pages",
+          "type": "string",
+          "label": "Pages à pivoter",
+          "default": null,
+          "placeholder": "all",
+          "help": "Vide, toutes les pages pivotent. Sinon, les mêmes formes qu'ailleurs : « 3 », « 2-5 », « 1,4,7-9 », « odd », « even »."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF mal orienté.",
+        "Choisissez l'angle, et les pages concernées si ce n'est pas tout le document.",
+        "Lancez la rotation et téléchargez le document redressé."
+      ],
+      "verdict_says": "Cet outil ne rend pas encore de verdict chiffré. Il refuse en revanche tout angle qui n'est pas un quart de tour, avant traitement et en le nommant : un PDF ne sait pas stocker une rotation de 45°, et l'accepter reviendrait à promettre un résultat impossible. La rotation modifie l'orientation déclarée des pages, elle ne recompose pas leur contenu.",
+      "faq": [
+        {
+          "q": "La rotation dégrade-t-elle la qualité ?",
+          "a": "Non. Elle change l'orientation déclarée des pages ; le contenu n'est ni redessiné ni ré-encodé."
+        },
+        {
+          "q": "Puis-je redresser une seule page ?",
+          "a": "Oui, en indiquant son numéro dans le champ des pages. Les autres gardent leur orientation."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement."
+        }
+      ],
+      "related": [
+        "rogner-pdf",
+        "organiser-pages-pdf",
+        "reparer-pdf",
+        "ocr-pdf"
+      ],
+      "icon": "rotate",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Pivoter PDF",
+      "alt_slug": "rotate-pdf"
+    },
+    {
+      "slug": "rogner-pdf",
+      "title": "Rogner PDF en ligne, gratuit et sans filigrane | AI SmartTalk",
+      "h1": "Rogner un PDF",
+      "meta_description": "Supprimez les marges d'un PDF, automatiquement d'après le contenu détecté ou selon un cadre que vous donnez en points.",
+      "lede": "Un scan avec trois centimètres de blanc autour, un document destiné à une liseuse. Le mode automatique mesure le texte réellement présent et resserre le cadre autour ; une page dont le contenu n'est pas mesurable garde le sien plutôt que de revenir blanche.",
+      "endpoint": "/api/crop",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Éditer",
+      "params": [
+        {
+          "name": "margin",
+          "type": "number",
+          "label": "Marge conservée (points)",
+          "default": 12,
+          "help": "Blanc laissé autour du contenu détecté, en points PostScript (72 points = 1 pouce). Entre 0 et 500. Sans effet si vous donnez un cadre explicite."
+        },
+        {
+          "name": "box",
+          "type": "numbers",
+          "label": "Cadre explicite",
+          "default": null,
+          "placeholder": "36, 36, 559, 806",
+          "help": "Facultatif. Quatre nombres séparés par des virgules — gauche, bas, droite, haut — en points, origine en bas à gauche de la page. Laissé vide, le cadre est calculé d'après le contenu."
+        },
+        {
+          "name": "pages",
+          "type": "string",
+          "label": "Pages à rogner",
+          "default": null,
+          "placeholder": "all",
+          "help": "Vide ou « all », toutes les pages. Sinon des numéros et des plages séparés par des virgules : « 3 », « 2-5 », « 1,4,7-9 ». Les pages non visées gardent leur cadre d'origine."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF à recadrer.",
+        "Laissez le mode automatique, ou donnez les quatre coordonnées du cadre voulu.",
+        "Lancez le rognage et lisez le verdict : il dit combien de pages ont réellement été rognées."
+      ],
+      "verdict_says": "Le verdict dit combien de pages ont été rognées sur le total, vérifie qu'aucune page n'a disparu au passage, et nomme les pages dont le contenu n'a pas pu être mesuré — celles-là conservent leur cadre plutôt que de revenir vides. Si un cadre explicite dépassait de la page, il est ramené aux bords de la page et la remarque le dit, page par page.",
+      "faq": [
+        {
+          "q": "Le contenu coupé est-il vraiment supprimé ?",
+          "a": "Le rognage réécrit le cadre d'affichage des pages. Ce qui sort du cadre n'est plus visible ni imprimé, mais reste techniquement dans le fichier. Pour faire disparaître une information du document, utilisez le caviardage."
+        },
+        {
+          "q": "Que se passe-t-il si aucune page n'a pu être rognée ?",
+          "a": "Le fichier d'origine vous est rendu tel quel, sans ré-encodage, et le verdict porte l'avertissement : aucune page n'a été rognée."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement."
+        }
+      ],
+      "related": [
+        "pivoter-pdf",
+        "compresser-pdf",
+        "pdf-en-jpg",
+        "numeroter-pages-pdf"
+      ],
+      "icon": "crop",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Rogner PDF",
+      "alt_slug": "crop-pdf"
+    },
+    {
+      "slug": "numeroter-pages-pdf",
+      "title": "Numéroter les pages en ligne, gratuit | AI SmartTalk",
+      "h1": "Numéroter les pages d'un PDF",
+      "meta_description": "Ajoutez des numéros de page à un PDF existant : position, format, page de départ et taille de police.",
+      "lede": "Un contrat signé ailleurs n'a pas de feuille de style à modifier. Les numéros sont donc dessinés sur un calque transparent, à la géométrie exacte du document, puis apposés — et le verdict vérifie que le calque est resté aligné.",
+      "endpoint": "/api/pages/number",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Éditer",
+      "params": [
+        {
+          "name": "format",
+          "type": "string",
+          "label": "Format du numéro",
+          "default": "{page}",
+          "placeholder": "Page {page} sur {pages}",
+          "help": "Texte littéral avec deux jetons : {page} pour le numéro courant, {pages} pour le total. 64 caractères au plus, ni « < » ni « > »."
+        },
+        {
+          "name": "position",
+          "type": "select",
+          "label": "Position",
+          "options": [
+            [
+              "bottom-center",
+              "En bas au centre"
+            ],
+            [
+              "bottom-left",
+              "En bas à gauche"
+            ],
+            [
+              "bottom-right",
+              "En bas à droite"
+            ],
+            [
+              "top-center",
+              "En haut au centre"
+            ],
+            [
+              "top-left",
+              "En haut à gauche"
+            ],
+            [
+              "top-right",
+              "En haut à droite"
+            ]
+          ],
+          "default": "bottom-center"
+        },
+        {
+          "name": "start",
+          "type": "number",
+          "label": "Numéro de départ",
+          "default": 1,
+          "help": "Le numéro affiché sur la première page numérotée. Utile pour une annexe qui reprend la numérotation d'un tome précédent."
+        },
+        {
+          "name": "from_page",
+          "type": "number",
+          "label": "Numéroter à partir de la page",
+          "default": 1,
+          "help": "Les pages précédentes ne reçoivent aucun numéro — une page de garde, par exemple."
+        },
+        {
+          "name": "font_size",
+          "type": "number",
+          "label": "Taille de police (points)",
+          "default": 10,
+          "help": "Entre 4 et 72 points."
+        },
+        {
+          "name": "margin",
+          "type": "string",
+          "label": "Marge",
+          "default": "1.5cm",
+          "help": "Distance entre le numéro et les bords qu'il touche. Unités acceptées : pt, mm, cm, in, px."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF à numéroter.",
+        "Choisissez la position et, si besoin, le format et la page de départ.",
+        "Lancez la numérotation et lisez le verdict avant de diffuser le document."
+      ],
+      "verdict_says": "Le verdict vérifie les quatre choses que ce geste peut casser en silence : le nombre de pages avant et après (une apposition ratée tronque un document), l'alignement du calque de numérotation sur les pages sources, les pages dont la taille diffère de la première — le calque suit la page 1 et se voit alors mis à l'échelle sur les autres —, et le nombre de pages réellement numérotées compte tenu de votre page de départ.",
+      "faq": [
+        {
+          "q": "Mon document mélange des pages A4 et paysage : est-ce un problème ?",
+          "a": "Le calque est construit sur la géométrie de la première page. Sur les pages d'une autre taille, il est mis à l'échelle pour tenir, ce qui déplace légèrement le numéro. Le verdict compte ces pages et le dit explicitement."
+        },
+        {
+          "q": "Puis-je écrire « Page 3 sur 40 » ?",
+          "a": "Oui : « Page {page} sur {pages} ». Le total est celui du document déposé."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement."
+        }
+      ],
+      "related": [
+        "filigraner-pdf",
+        "fusionner-pdf",
+        "rogner-pdf",
+        "organiser-pages-pdf"
+      ],
+      "icon": "number",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Numéroter les pages",
+      "alt_slug": "add-page-numbers"
+    },
+    {
+      "slug": "filigraner-pdf",
+      "title": "Filigrane PDF en ligne, gratuit | AI SmartTalk",
+      "h1": "Filigraner un PDF",
+      "meta_description": "Apposez une mention en filigrane sur toutes les pages d'un PDF : texte, opacité et angle au choix.",
+      "lede": "« Confidentiel », « Brouillon », le nom d'un destinataire. La mention est dessinée sur un calque et apposée sur chaque page ; le texte du document, lui, reste sélectionnable et cherchable.",
+      "endpoint": "/api/watermark",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "binary",
+      "group": "Éditer",
+      "params": [
+        {
+          "name": "text",
+          "type": "string",
+          "label": "Texte du filigrane",
+          "default": null,
+          "placeholder": "CONFIDENTIEL",
+          "required": true,
+          "help": "Le texte est échappé avant d'être dessiné : les caractères spéciaux s'affichent tels quels."
+        },
+        {
+          "name": "opacity",
+          "type": "number",
+          "label": "Opacité",
+          "default": 0.06,
+          "help": "Entre 0 et 1. 0,06 donne une mention discrète qui n'entrave pas la lecture ; au-delà de 0,2 elle domine la page."
+        },
+        {
+          "name": "angle",
+          "type": "number",
+          "label": "Angle (degrés)",
+          "default": -45,
+          "help": "Entre -360 et 360. -45 est la diagonale montante habituelle."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF à marquer.",
+        "Écrivez la mention, ajustez l'opacité et l'angle si besoin.",
+        "Lancez le filigranage et téléchargez le document marqué."
+      ],
+      "verdict_says": "Cet outil ne rend pas encore de verdict chiffré. Ce qu'il tient : le filigrane est un calque apposé par-dessus, la couche texte du document reste intacte et cherchable, et l'opacité comme l'angle sont validés avant traitement — hors des bornes, la demande est refusée au lieu de produire une page illisible. Une remarque de contexte : ce calque est composé au format A4, et il est ajusté à la page sur un document d'une autre taille.",
+      "faq": [
+        {
+          "q": "Le filigrane peut-il être retiré du document ?",
+          "a": "C'est un calque apposé sur les pages : un outil d'édition PDF peut le retrouver. Un filigrane est une mention d'usage, pas une protection. Pour empêcher l'ouverture, protégez le document par mot de passe ; pour faire disparaître une information, caviardez-la."
+        },
+        {
+          "q": "Le texte du document reste-t-il sélectionnable ?",
+          "a": "Oui. Rien n'est rasterisé : le contenu d'origine n'est pas touché."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement."
+        }
+      ],
+      "related": [
+        "proteger-pdf",
+        "numeroter-pages-pdf",
+        "caviarder-pdf",
+        "compresser-pdf"
+      ],
+      "icon": "watermark",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Filigrane PDF",
+      "alt_slug": "watermark-pdf"
+    },
+    {
+      "slug": "proteger-pdf",
+      "title": "Protéger PDF en ligne, gratuit | AI SmartTalk",
+      "h1": "Protéger un PDF par mot de passe",
+      "meta_description": "Chiffrez un PDF en AES 256 bits. Le mot de passe ne transite jamais par la ligne de commande du serveur.",
+      "lede": "Le document est chiffré en AES 256 bits : sans le mot de passe, il ne s'ouvre pas. Le mot de passe est transmis à l'outil de chiffrement par un fichier d'arguments temporaire — il n'apparaît à aucun moment dans la liste des processus de la machine.",
+      "endpoint": "/api/protect",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "binary",
+      "group": "Sécuriser",
+      "params": [
+        {
+          "name": "password",
+          "type": "string",
+          "label": "Mot de passe",
+          "default": null,
+          "required": true,
+          "help": "Il sera demandé à chaque ouverture du document. Les sauts de ligne sont refusés ; un mot de passe vide aussi."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF à protéger.",
+        "Choisissez un mot de passe, et notez-le : nous ne le conservons pas.",
+        "Lancez la protection et téléchargez le document chiffré."
+      ],
+      "verdict_says": "Cet outil ne rend pas encore de verdict chiffré. Ce qu'il tient : le chiffrement est en AES 256 bits, le mot de passe passe par un fichier d'arguments temporaire et n'est donc jamais lisible dans la liste des processus du serveur, et il n'est stocké nulle part — ni en base, ni dans un journal. Un mot de passe vide ou contenant un saut de ligne est refusé avant traitement.",
+      "faq": [
+        {
+          "q": "Conservez-vous mon mot de passe ?",
+          "a": "Non. Il sert au chiffrement puis disparaît avec la requête. Si vous le perdez, nous ne pouvons pas ouvrir le document : c'est la contrepartie du chiffrement."
+        },
+        {
+          "q": "Quel niveau de chiffrement est appliqué ?",
+          "a": "AES 256 bits, le niveau le plus élevé que le format PDF définisse."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement. Vous pouvez aussi les supprimer immédiatement depuis la page de résultat."
+        }
+      ],
+      "related": [
+        "deverrouiller-pdf",
+        "caviarder-pdf",
+        "filigraner-pdf",
+        "pdf-en-pdfa"
+      ],
+      "icon": "lock",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Protéger PDF",
+      "alt_slug": "protect-pdf"
+    },
+    {
+      "slug": "deverrouiller-pdf",
+      "title": "Déverrouiller PDF en ligne, gratuit | AI SmartTalk",
+      "h1": "Déverrouiller un PDF",
+      "meta_description": "Retirez le mot de passe d'un PDF dont vous détenez le mot de passe. Aucune protection n'est cassée ici.",
+      "lede": "Un document que vous avez le droit d'ouvrir, mais dont le mot de passe vous encombre à chaque consultation. Vous le fournissez, le chiffrement est retiré. Ce service ne récupère ni ne casse aucun mot de passe : sans lui, il n'y a rien à faire.",
+      "endpoint": "/api/unlock",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Sécuriser",
+      "params": [
+        {
+          "name": "password",
+          "type": "string",
+          "label": "Mot de passe du document",
+          "default": null,
+          "required": true,
+          "help": "Celui qui ouvre le document aujourd'hui. Il est transmis par fichier d'arguments temporaire, jamais par la ligne de commande."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF protégé.",
+        "Saisissez le mot de passe qui l'ouvre.",
+        "Lancez le déverrouillage et lisez le verdict avant de télécharger."
+      ],
+      "verdict_says": "Le verdict confirme le nombre de pages désormais lisibles sans mot de passe, et remonte tel quel tout avertissement de l'outil de déchiffrement — par exemple lorsque le fichier ne portait en réalité aucun chiffrement. Ce que le verdict ne dira jamais, c'est qu'une protection a été contournée : sans le mot de passe, la demande échoue, par construction.",
+      "faq": [
+        {
+          "q": "Pouvez-vous ouvrir un PDF dont j'ai perdu le mot de passe ?",
+          "a": "Non. Cet outil retire une protection dont vous fournissez le mot de passe. Il n'effectue aucune tentative de récupération, et il n'existe pas ici de fonction qui le ferait."
+        },
+        {
+          "q": "Que se passe-t-il si le fichier n'était pas protégé ?",
+          "a": "Vous recevez le document, et le verdict porte l'avertissement correspondant plutôt que de laisser croire à un déverrouillage qui n'a pas eu lieu."
+        },
+        {
+          "q": "Le mot de passe est-il conservé ?",
+          "a": "Non. Il sert au déchiffrement puis disparaît avec la requête, et il n'apparaît dans aucun journal."
+        }
+      ],
+      "related": [
+        "proteger-pdf",
+        "reparer-pdf",
+        "compresser-pdf",
+        "ocr-pdf"
+      ],
+      "icon": "unlock",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Déverrouiller PDF",
+      "alt_slug": "unlock-pdf"
+    },
+    {
+      "slug": "reparer-pdf",
+      "title": "Réparer PDF en ligne, gratuit et sans filigrane | AI SmartTalk",
+      "h1": "Réparer un PDF endommagé",
+      "meta_description": "Récupérez ce qu'un PDF abîmé contient encore, et sachez par quel chemin : reconstruction ou réécriture complète.",
+      "lede": "Un fichier tronqué par un transfert, un PDF que le lecteur refuse d'ouvrir. Deux passes sont tentées dans l'ordre : d'abord la reconstruction des tables de références, qui garde les objets d'origine ; ensuite, seulement si c'est nécessaire, une réécriture complète — qui coûte plus cher, et qui vous est annoncée.",
+      "endpoint": "/api/repair",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Optimiser",
+      "params": [],
+      "steps": [
+        "Déposez le fichier endommagé.",
+        "Lancez la réparation.",
+        "Lisez le verdict : il dit par quelle passe le document a été récupéré, et ce que cette passe a pu coûter."
+      ],
+      "verdict_says": "Le verdict nomme le chemin emprunté. Reconstruction : les objets sont ceux d'origine, seules les tables de références ont été refaites. Réécriture : le document a été décodé et réécrit, et annotations, champs de formulaire et pièces jointes peuvent ne pas avoir survécu — c'est écrit noir sur blanc, pas déduit. Il compare aussi le nombre de pages récupérées à celui que le fichier abîmé annonçait encore, et refuse de vous rendre un document vide plutôt que de vous laisser l'archiver.",
+      "faq": [
+        {
+          "q": "Que se passe-t-il si le fichier est irrécupérable ?",
+          "a": "Vous recevez une erreur explicite. Nous ne rendons pas un PDF vide qui aurait l'air d'un succès : la perte serait découverte le jour où vous auriez besoin du document."
+        },
+        {
+          "q": "La réparation modifie-t-elle le contenu ?",
+          "a": "La première passe ne touche pas aux objets du document. La seconde, employée seulement quand la première échoue, réécrit le document ; le verdict le signale, avec ce que cela peut avoir coûté."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement."
+        }
+      ],
+      "related": [
+        "compresser-pdf",
+        "deverrouiller-pdf",
+        "pdf-en-pdfa",
+        "ocr-pdf"
+      ],
+      "icon": "repair",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Réparer PDF",
+      "alt_slug": "repair-pdf"
+    },
+    {
+      "slug": "ocr-pdf",
+      "title": "OCR PDF en ligne, gratuit et sans filigrane | AI SmartTalk",
+      "h1": "OCR sur un PDF scanné",
+      "meta_description": "Ajoutez une couche texte à un PDF scanné, et sachez quelles pages sont revenues illisibles. OCR en cinq langues.",
+      "lede": "Un scan est une image de texte : rien ne s'y cherche, rien ne s'y sélectionne. L'océrisation lui rend une couche texte. Et parce qu'un OCR qui échoue sur deux pages rend un fichier d'apparence normale, chaque page est relue et comptée, une par une.",
+      "endpoint": "/api/ocr",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Optimiser",
+      "params": [
+        {
+          "name": "languages",
+          "type": "strings",
+          "label": "Langues du document",
+          "options": [
+            [
+              "fra,eng",
+              "Français et anglais"
+            ],
+            [
+              "fra",
+              "Français"
+            ],
+            [
+              "eng",
+              "Anglais"
+            ],
+            [
+              "deu",
+              "Allemand"
+            ],
+            [
+              "spa",
+              "Espagnol"
+            ],
+            [
+              "ita",
+              "Italien"
+            ]
+          ],
+          "default": "fra,eng",
+          "help": "Les cinq langues installées sur ce service : fra, eng, deu, spa, ita. La première nommée est la langue principale. Plusieurs langues se séparent par des virgules."
+        },
+        {
+          "name": "mode",
+          "type": "select",
+          "label": "Portée",
+          "options": [
+            [
+              "auto",
+              "Automatique — seulement les pages sans texte"
+            ],
+            [
+              "force",
+              "Forcé — tout relire, la couche texte existante est perdue"
+            ],
+            [
+              "redo",
+              "Refaire — remplacer une couche issue d'un OCR précédent"
+            ]
+          ],
+          "default": "auto",
+          "help": "« Automatique » est le choix sûr : il ne touche pas aux pages qui portent déjà du texte natif."
+        },
+        {
+          "name": "pdfa",
+          "type": "boolean",
+          "label": "Produire en même temps un PDF/A",
+          "default": false,
+          "help": "L'océrisation et la conversion archivistique se font alors en une seule passe."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF scanné.",
+        "Choisissez la ou les langues du document — c'est le réglage qui pèse le plus sur la qualité.",
+        "Lancez l'océrisation, puis lisez le verdict page par page avant de vous fier au résultat."
+      ],
+      "verdict_says": "Le verdict relit le texte reconnu et le mesure page par page : combien de pages ont été traitées par OCR, combien portaient déjà du texte et ont été laissées telles quelles, et lesquelles sont revenues avec moins de cinquante caractères — page blanche, photographie, ou scan trop dégradé pour être lu. Ces pages sont nommées une par une, avec leur compte de caractères. Un OCR qui rend un fichier d'apparence normale avec deux pages vides, vous l'apprenez ici, pas six mois plus tard.",
+      "faq": [
+        {
+          "q": "Quelles langues sont reconnues ?",
+          "a": "Français, anglais, allemand, espagnol et italien. Une langue non installée est refusée avec la liste de celles qui le sont, plutôt que de produire un texte incohérent."
+        },
+        {
+          "q": "Y a-t-il une limite de pages ?",
+          "a": "300 pages par appel. Au-delà, découpez le document avec l'outil de division, puis océrisez chaque partie : l'erreur vous le dit avec le compte exact."
+        },
+        {
+          "q": "Mon document a déjà du texte : que fait le mode automatique ?",
+          "a": "Il laisse ces pages intactes et n'océrise que celles qui n'en ont pas. C'est ce que le verdict indique sous la forme « pages déjà porteuses d'une couche texte »."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement. Ils ne servent à entraîner aucun modèle et ne sont lus par personne."
+        }
+      ],
+      "related": [
+        "caviarder-pdf",
+        "pdf-en-word",
+        "compresser-pdf",
+        "pdf-en-pdfa"
+      ],
+      "icon": "ocr",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "OCR PDF",
+      "alt_slug": "ocr-pdf"
+    },
+    {
+      "slug": "office-en-pdf",
+      "title": "Office en PDF en ligne, gratuit | AI SmartTalk",
+      "h1": "Word, Excel, PowerPoint en PDF",
+      "meta_description": "Convertissez un document Word, un classeur Excel ou une présentation PowerPoint en PDF, formats ODF et CSV compris.",
+      "lede": "Un document bureautique porte sa propre structure : la conversion en PDF le met en page comme son auteur l'a écrit. Le fichier produit est ensuite relu pour compter ce qui, dans le PDF, reste réellement sélectionnable.",
+      "endpoint": "/api/office-to-pdf",
+      "accept": ".docx,.xlsx,.pptx,.odt,.ods,.odp,.doc,.xls,.ppt,.csv",
+      "multiple": false,
+      "file_param": "file",
+      "output": "asset",
+      "group": "Convertir",
+      "params": [],
+      "steps": [
+        "Déposez le document bureautique : docx, xlsx, pptx, odt, ods, odp, les formats hérités doc, xls, ppt, ou un CSV.",
+        "Lancez la conversion.",
+        "Lisez le verdict, puis téléchargez le PDF."
+      ],
+      "verdict_says": "Le verdict compte les pages produites et les caractères réellement sélectionnables dans le PDF, et signale les pages sans aucun texte extractible : c'est le symptôme d'une police qui n'a pas pu être intégrée, ou d'un document entièrement graphique. Une conversion qui rend un PDF où plus rien ne se cherche est une conversion ratée, même si le fichier s'ouvre.",
+      "faq": [
+        {
+          "q": "Quels formats sont acceptés ?",
+          "a": "docx, xlsx, pptx, odt, ods, odp, les formats hérités doc, xls et ppt, ainsi que le CSV. Le type est reconnu à partir des octets du fichier, jamais de son extension : un fichier mal nommé est identifié correctement."
+        },
+        {
+          "q": "Mes polices d'entreprise sont-elles conservées ?",
+          "a": "Seules les polices présentes sur le serveur de conversion peuvent être intégrées. Quand une substitution a eu lieu, le texte reste sélectionnable mais la mise en page peut bouger — le verdict compte les pages sans texte extractible, qui en sont le signe le plus net."
+        },
+        {
+          "q": "Les macros de mon document sont-elles exécutées ?",
+          "a": "Non. La conversion tourne avec un profil jetable, sans accès réseau, et les macros non signées sont refusées par défaut."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement."
+        }
+      ],
+      "related": [
+        "pdf-en-word",
+        "markdown-en-pdf",
+        "compresser-pdf",
+        "pdf-en-pdfa"
+      ],
+      "icon": "office",
+      "accepts": [
+        "docx",
+        "xlsx",
+        "pptx",
+        "odt",
+        "ods",
+        "odp",
+        "ole",
+        "csv"
+      ],
+      "label": "Office en PDF",
+      "alt_slug": "office-to-pdf"
+    },
+    {
+      "slug": "pdf-en-word",
+      "title": "PDF en Word en ligne, gratuit et sans filigrane | AI SmartTalk",
+      "h1": "PDF en Word, Excel ou PowerPoint",
+      "meta_description": "Reconstruisez un document éditable à partir d'un PDF — et sachez quelle part du texte a réellement été retrouvée.",
+      "lede": "Un PDF contient des glyphes à des coordonnées, pas des paragraphes, des tableaux et des styles : ceux-là sont devinés. Tout le marché vend ce geste sous le mot « convertir ». Ici, le fichier produit est relu et comparé au PDF de départ, et le résultat de cette comparaison vous est donné.",
+      "endpoint": "/api/pdf-to-office",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Convertir",
+      "params": [
+        {
+          "name": "to",
+          "type": "select",
+          "label": "Format de sortie",
+          "options": [
+            [
+              "docx",
+              "Word (docx)"
+            ],
+            [
+              "xlsx",
+              "Excel (xlsx)"
+            ],
+            [
+              "pptx",
+              "PowerPoint (pptx)"
+            ]
+          ],
+          "default": "docx",
+          "required": true
+        }
+      ],
+      "steps": [
+        "Déposez le PDF.",
+        "Choisissez le format éditable voulu.",
+        "Lancez la reconstruction, lisez le verdict, puis relisez le document avant de le diffuser."
+      ],
+      "verdict_says": "Le document produit est relu et comparé au PDF de départ : nombre de pages avant et après — un document éditable se repagine, c'est attendu mais c'est dit —, et part des caractères retrouvés. Sous 98 % le verdict alerte, sous 50 % il déclare franchement que ce PDF ne se prête pas à une conversion en document éditable. Si le fichier produit n'a pas pu être relu, le verdict le dit aussi, plutôt que de laisser croire à une fidélité vérifiée.",
+      "faq": [
+        {
+          "q": "La mise en page est-elle fidèle ?",
+          "a": "Approximative par nature. Un PDF ne contient pas la structure du document : paragraphes, tableaux et styles sont déduits de la position des caractères. C'est pour cela que le verdict mesure ce qui a été retrouvé, et que le service vous demande de relire avant diffusion."
+        },
+        {
+          "q": "Que faire d'un PDF scanné ?",
+          "a": "Océrisez-le d'abord : sans couche texte, il n'y a rien à reconstruire et le verdict vous le dira sans détour. Le résultat de l'océrisation peut être enchaîné ici sans redéposer le fichier."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement. Ils ne servent à entraîner aucun modèle."
+        }
+      ],
+      "related": [
+        "ocr-pdf",
+        "office-en-pdf",
+        "pdf-en-jpg",
+        "compresser-pdf"
+      ],
+      "icon": "word",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "PDF en Word",
+      "alt_slug": "pdf-to-word"
+    },
+    {
+      "slug": "pdf-en-jpg",
+      "title": "PDF en JPG en ligne, gratuit et sans filigrane | AI SmartTalk",
+      "h1": "PDF en JPG ou PNG",
+      "meta_description": "Convertissez les pages d'un PDF en images JPG ou PNG, à la résolution de votre choix, une image par page.",
+      "lede": "Une vignette, une page à afficher dans un visualiseur, une image à donner à un outil qui ne lit pas le PDF. Chaque page devient une image, nommée par son numéro.",
+      "endpoint": "/api/rasterize",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Convertir",
+      "params": [
+        {
+          "name": "format",
+          "type": "select",
+          "label": "Format d'image",
+          "options": [
+            [
+              "png",
+              "PNG — sans perte"
+            ],
+            [
+              "jpeg",
+              "JPEG — plus léger"
+            ]
+          ],
+          "default": "png"
+        },
+        {
+          "name": "dpi",
+          "type": "number",
+          "label": "Résolution (dpi)",
+          "default": 150,
+          "help": "Entre 36 et 300. 150 convient à l'écran ; 300 à une impression."
+        },
+        {
+          "name": "pages",
+          "type": "string",
+          "label": "Pages à convertir",
+          "default": null,
+          "placeholder": "1-5",
+          "help": "Un numéro, une plage, ou vide pour tout le document dans la limite autorisée par appel."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF.",
+        "Choisissez le format et la résolution.",
+        "Lancez la conversion : chaque page apparaît comme une image téléchargeable."
+      ],
+      "verdict_says": "Cet outil ne rend pas encore de verdict chiffré. Ce qu'il vous dit explicitement : quand toutes les pages n'ont pas été rendues — vingt par appel au plus —, la remarque donne le compte exact plutôt que de laisser croire à un document complet. Et une combinaison de pages et de résolution qui dépasserait quarante-huit millions de pixels est refusée d'avance, avec la raison, au lieu d'échouer à mi-course.",
+      "faq": [
+        {
+          "q": "Combien de pages puis-je convertir d'un coup ?",
+          "a": "Vingt par appel. Au-delà, indiquez une plage, ou divisez d'abord le document. Quand la limite s'applique, la réponse le dit."
+        },
+        {
+          "q": "PNG ou JPEG ?",
+          "a": "PNG pour du texte et des aplats, sans perte. JPEG pour des pages photographiques, nettement plus léger."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, les images produites comme le PDF déposé."
+        }
+      ],
+      "related": [
+        "jpg-en-pdf",
+        "compresser-pdf",
+        "rogner-pdf",
+        "pdf-en-word"
+      ],
+      "icon": "image",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "PDF en JPG",
+      "alt_slug": "pdf-to-jpg"
+    },
+    {
+      "slug": "jpg-en-pdf",
+      "title": "JPG en PDF en ligne, gratuit et sans filigrane | AI SmartTalk",
+      "h1": "JPG en PDF",
+      "meta_description": "Réunissez des JPG, PNG, GIF, WebP ou TIFF en un seul PDF. L'ordre de dépôt est l'ordre des pages.",
+      "lede": "Des photos d'un document, une page signée revenue d'un téléphone, une série de captures. Les images sont intégrées telles quelles, sans ré-encodage — et l'ordre dans lequel vous les déposez est l'ordre des pages.",
+      "endpoint": "/api/images-to-pdf",
+      "accept": ".png,.jpg,.jpeg,.gif,.webp,.tif,.tiff,image/*",
+      "multiple": true,
+      "file_param": "images",
+      "output": "asset",
+      "group": "Convertir",
+      "params": [
+        {
+          "name": "fit",
+          "type": "select",
+          "label": "Ajustement",
+          "options": [
+            [
+              "contain",
+              "Page normalisée, image ajustée dedans"
+            ],
+            [
+              "actual",
+              "Page à la taille de chaque image"
+            ]
+          ],
+          "default": "contain"
+        },
+        {
+          "name": "paper_size",
+          "type": "select",
+          "label": "Format de page",
+          "options": [
+            [
+              "A4",
+              "A4"
+            ],
+            [
+              "A3",
+              "A3"
+            ],
+            [
+              "A5",
+              "A5"
+            ],
+            [
+              "A6",
+              "A6"
+            ],
+            [
+              "Letter",
+              "Letter"
+            ],
+            [
+              "Legal",
+              "Legal"
+            ],
+            [
+              "Tabloid",
+              "Tabloid"
+            ]
+          ],
+          "default": "A4",
+          "help": "Sans effet si vous choisissez une page à la taille de chaque image."
+        },
+        {
+          "name": "orientation",
+          "type": "select",
+          "label": "Orientation",
+          "options": [
+            [
+              "portrait",
+              "Portrait"
+            ],
+            [
+              "landscape",
+              "Paysage"
+            ],
+            [
+              "auto",
+              "D'après chaque image"
+            ]
+          ],
+          "default": "portrait"
+        },
+        {
+          "name": "margin",
+          "type": "number",
+          "label": "Marge (points)",
+          "default": 0,
+          "help": "Distance entre l'image et le bord de la page, entre 0 et 144 points (deux pouces)."
+        }
+      ],
+      "steps": [
+        "Déposez vos images dans l'ordre où elles doivent apparaître.",
+        "Choisissez le format de page, ou laissez chaque page prendre la taille de son image.",
+        "Lancez l'assemblage et téléchargez le PDF."
+      ],
+      "verdict_says": "Cet outil ne rend pas encore de verdict chiffré. Ce qu'il tient et ce qu'il dit : le type de chaque fichier est lu dans ses octets et jamais dans son nom — un fichier renommé en .jpg qui n'est pas une image est refusé avec la raison ; les images sont intégrées sans être ré-encodées ; et quand le nombre de pages diffère du nombre d'images (un GIF animé, un TIFF multipage), ou qu'un réglage a été ignoré, c'est écrit dans les remarques.",
+      "faq": [
+        {
+          "q": "Combien d'images par document ?",
+          "a": "200 au maximum. Au-delà, il s'agit de plusieurs documents, pas d'un document plus long."
+        },
+        {
+          "q": "La qualité des images est-elle dégradée ?",
+          "a": "Non : les données JPEG et PNG sont intégrées telles quelles, sans ré-encodage."
+        },
+        {
+          "q": "Comment obtenir une page par photo, à la taille exacte de la photo ?",
+          "a": "Choisissez l'ajustement « page à la taille de chaque image ». Le format de page et l'orientation ne s'appliquent alors plus, et la réponse le rappelle."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement."
+        }
+      ],
+      "related": [
+        "pdf-en-jpg",
+        "fusionner-pdf",
+        "ocr-pdf",
+        "compresser-pdf"
+      ],
+      "icon": "image-to-doc",
+      "accepts": [
+        "png",
+        "jpeg",
+        "gif",
+        "webp",
+        "tiff"
+      ],
+      "label": "JPG en PDF",
+      "alt_slug": "jpg-to-pdf"
+    },
+    {
+      "slug": "caviarder-pdf",
+      "title": "Caviarder PDF en ligne, gratuit | AI SmartTalk",
+      "h1": "Caviarder un PDF",
+      "meta_description": "Faites disparaître une information d'un PDF : les pages sont reconstruites en image, la couche texte n'existe plus.",
+      "lede": "Un rectangle noir posé sur un mot laisse le mot dessous : il se copie, il se cherche, il ressort. Ici, les pages visées sont reconstruites à partir de leurs pixels et la couche texte disparaît avec les chaînes caviardées. C'est irréversible, et c'est le but.",
+      "endpoint": "/api/redact",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "binary",
+      "group": "Sécuriser",
+      "params": [
+        {
+          "name": "patterns",
+          "type": "strings",
+          "label": "Termes à caviarder",
+          "default": null,
+          "placeholder": "Jean Dupont, 12 rue des Lilas",
+          "help": "Textes exacts, séparés par des virgules, recherchés sans distinction de casse. Ce sont des chaînes littérales, pas des expressions régulières : une syntaxe de motif est refusée explicitement. 64 termes au plus, 256 caractères chacun."
+        },
+        {
+          "name": "entities",
+          "type": "strings",
+          "label": "Catégories à caviarder",
+          "options": [
+            [
+              "email",
+              "Adresses de courriel"
+            ],
+            [
+              "iban",
+              "IBAN"
+            ],
+            [
+              "phone",
+              "Numéros de téléphone"
+            ],
+            [
+              "siret",
+              "SIRET et SIREN"
+            ],
+            [
+              "credit_card",
+              "Numéros de carte bancaire"
+            ],
+            [
+              "email,iban,phone,siret,credit_card",
+              "Toutes les catégories"
+            ]
+          ],
+          "default": null,
+          "help": "Détectées dans tout le document. IBAN, SIRET, SIREN et cartes bancaires sont validés par leur clé de contrôle : un nombre qui y ressemble sans la vérifier n'est pas caviardé par erreur."
+        },
+        {
+          "name": "dpi",
+          "type": "number",
+          "label": "Résolution de reconstruction (dpi)",
+          "default": 200,
+          "help": "Entre 72 et 400. Les pages caviardées sont redessinées à cette résolution : plus haut, plus lisible et plus lourd."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF.",
+        "Donnez au moins un terme exact ou une catégorie — les deux se combinent.",
+        "Lancez le caviardage, puis vérifiez le document produit : l'opération ne se défait pas."
+      ],
+      "verdict_says": "Ce que ce caviardage garantit, et que le service énonce avec le résultat : les pages visées sont reconstruites à partir d'images, les chaînes caviardées ne sont plus dans le fichier, et avec elles disparaissent la couche texte, les signets, les annotations, les pièces jointes et les métadonnées de la source. En échange, le document n'est plus ni sélectionnable ni cherchable, et il est plus lourd. Par l'API, la réponse détaille en plus, page par page, le nombre de zones peintes.",
+      "faq": [
+        {
+          "q": "Le texte caviardé peut-il être récupéré ?",
+          "a": "Non. Les pages ne sont pas recouvertes, elles sont reconstruites à partir de pixels : il n'y a plus de couche texte à extraire. C'est ce qui distingue un caviardage d'un rectangle noir."
+        },
+        {
+          "q": "Que perd le document au passage ?",
+          "a": "Tout ce qui vivait dans la couche texte : la sélection, la recherche, les signets, les annotations, les pièces jointes et les métadonnées. Le fichier est aussi plus lourd que l'original. Ce n'est pas un effet de bord, c'est le prix de la preuve."
+        },
+        {
+          "q": "Mon PDF est un scan : le caviardage fonctionne-t-il ?",
+          "a": "Non tant qu'il n'y a pas de texte à trouver. Océrisez-le d'abord, puis revenez : le résultat de l'océrisation s'enchaîne ici sans nouveau dépôt."
+        },
+        {
+          "q": "Puis-je utiliser des expressions régulières ?",
+          "a": "Non, et c'est délibéré : les termes sont des chaînes littérales. Une syntaxe de motif est refusée en la nommant, plutôt que d'être interprétée d'une façon que vous n'auriez pas voulue."
+        }
+      ],
+      "related": [
+        "proteger-pdf",
+        "ocr-pdf",
+        "supprimer-pages-pdf",
+        "filigraner-pdf"
+      ],
+      "icon": "redact",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "Caviarder PDF",
+      "alt_slug": "redact-pdf"
+    },
+    {
+      "slug": "pdf-en-pdfa",
+      "title": "PDF en PDF/A en ligne, gratuit | AI SmartTalk",
+      "h1": "Convertir un PDF en PDF/A",
+      "meta_description": "Produisez un PDF/A-1b, 2b ou 3b pour l'archivage, et sachez exactement ce que la conversion a dû retirer.",
+      "lede": "PDF/A est la forme qu'une archive légale accepte : polices intégrées, couleurs indépendantes du périphérique, rien qui dépende de l'extérieur. La conversion retire ce que la norme interdit — et chaque retrait vous est nommé, parce que personne ne devrait le découvrir après le dépôt.",
+      "endpoint": "/api/pdfa",
+      "accept": ".pdf,application/pdf",
+      "multiple": false,
+      "file_param": "pdf",
+      "output": "asset",
+      "group": "Sécuriser",
+      "params": [
+        {
+          "name": "variant",
+          "type": "select",
+          "label": "Niveau de conformité",
+          "options": [
+            [
+              "pdf/a-2b",
+              "PDF/A-2b — le choix courant"
+            ],
+            [
+              "pdf/a-1b",
+              "PDF/A-1b — le plus strict"
+            ],
+            [
+              "pdf/a-3b",
+              "PDF/A-3b — pièces jointes autorisées"
+            ]
+          ],
+          "default": "pdf/a-2b",
+          "help": "Niveau B uniquement : le niveau A exige un ordre de lecture balisé qu'aucun outil ne peut inventer à partir d'un PDF qui n'en a pas."
+        }
+      ],
+      "steps": [
+        "Déposez le PDF à archiver.",
+        "Choisissez la variante attendue par votre organisme de dépôt.",
+        "Lancez la conversion et lisez le verdict avant de déposer le fichier."
+      ],
+      "verdict_says": "Le verdict lit l'identification PDF/A dans les métadonnées du fichier produit et déclare l'échec si le moteur est retombé sur un PDF ordinaire — l'unique défaut de conformité détectable sans validateur, et le seul qui vous ferait archiver un fichier non conforme sans le savoir. Il liste ensuite chaque ajustement annoncé (annotation retirée, transparence aplatie, police substituée), vérifie que le nombre de pages n'a pas bougé, et précise qu'aucun validateur PDF/A n'est exécuté ici : le fichier est déclaré conforme, il n'est pas prouvé conforme.",
+      "faq": [
+        {
+          "q": "Le fichier est-il certifié conforme ?",
+          "a": "Non, et nous préférons l'écrire : ce service produit un PDF/A et lit l'identification qu'il porte, il n'exécute pas de validateur. Le verdict dit exactement cela, plutôt que de laisser croire à une certification."
+        },
+        {
+          "q": "Quelle variante choisir ?",
+          "a": "PDF/A-2b convient à la plupart des dépôts. PDF/A-1b est le plus strict, exigé par certaines administrations. PDF/A-3b autorise les pièces jointes, par exemple une facture au format machine."
+        },
+        {
+          "q": "Et pour un document scanné ?",
+          "a": "Océrisez-le : l'option correspondante produit la couche texte et le PDF/A en une seule passe, ce qui évite une deuxième conversion."
+        },
+        {
+          "q": "Mes fichiers sont-ils conservés ?",
+          "a": "Deux heures, puis ils sont effacés automatiquement."
+        }
+      ],
+      "related": [
+        "ocr-pdf",
+        "reparer-pdf",
+        "office-en-pdf",
+        "compresser-pdf"
+      ],
+      "icon": "archive",
+      "accepts": [
+        "pdf"
+      ],
+      "label": "PDF en PDF/A",
+      "alt_slug": "pdf-to-pdfa"
+    },
+    {
+      "slug": "markdown-en-pdf",
+      "title": "Markdown en PDF en ligne, gratuit | AI SmartTalk",
+      "h1": "Markdown en PDF",
+      "meta_description": "Écrivez en Markdown, obtenez un PDF mis en page : titres, tableaux, sommaire, numéros de page.",
+      "lede": "Les autres outils transforment un fichier que vous avez déjà. Celui-ci en fabrique un. Vous écrivez le texte, le moteur le met en page — et il rendra exactement le même PDF la prochaine fois, à partir du même texte.",
+      "endpoint": "/api/convert",
+      "accept": "",
+      "multiple": false,
+      "output": "binary",
+      "group": "Convertir",
+      "params": [
+        {
+          "name": "markdown",
+          "type": "text",
+          "label": "Votre document en Markdown",
+          "default": null,
+          "placeholder": "# Titre\n\nUn paragraphe, une **mise en gras**, une liste :\n\n- premier point\n- second point",
+          "required": true,
+          "help": "Titres, listes, tableaux, citations et blocs de code sont pris en charge."
+        },
+        {
+          "name": "options.paper_size",
+          "type": "select",
+          "label": "Format de page",
+          "options": [
+            [
+              "a4",
+              "A4"
+            ],
+            [
+              "a3",
+              "A3"
+            ],
+            [
+              "letter",
+              "Letter"
+            ]
+          ],
+          "default": "a4"
+        },
+        {
+          "name": "options.orientation",
+          "type": "select",
+          "label": "Orientation",
+          "options": [
+            [
+              "portrait",
+              "Portrait"
+            ],
+            [
+              "landscape",
+              "Paysage"
+            ]
+          ],
+          "default": "portrait"
+        },
+        {
+          "name": "options.toc",
+          "type": "boolean",
+          "label": "Ajouter un sommaire",
+          "default": false
+        },
+        {
+          "name": "options.page_numbers",
+          "type": "boolean",
+          "label": "Numéroter les pages",
+          "default": false
+        }
+      ],
+      "steps": [
+        "Écrivez ou collez votre texte en Markdown.",
+        "Choisissez le format de page, et ajoutez sommaire et numéros si le document le demande.",
+        "Lancez le rendu et téléchargez le PDF."
+      ],
+      "verdict_says": "Le rendu est déterministe : le même texte et les mêmes options donnent, indéfiniment, exactement le même PDF. C'est ce qui rend un document reproductible, comparable et vérifiable — et c'est la brique sur laquelle reposent l'audit de mise en page et l'attestation de rendu que l'API expose sur ce même moteur. Aucun modèle de langage n'intervient dans le chemin de rendu.",
+      "faq": [
+        {
+          "q": "Qu'est-ce que le Markdown ?",
+          "a": "Une façon d'écrire du texte structuré avec des signes simples : un dièse pour un titre, un tiret pour une puce, deux astérisques pour du gras. Il s'apprend en cinq minutes et se relit sans outil."
+        },
+        {
+          "q": "Puis-je appliquer la charte de mon entreprise ?",
+          "a": "Oui, par l'API : le moteur accepte une feuille de style et des chartes versionnées, ce qui garantit qu'un document produit aujourd'hui et le même produit dans six mois se ressemblent au pixel près."
+        },
+        {
+          "q": "Les tableaux sont-ils gérés ?",
+          "a": "Oui, ainsi que les blocs de code, les citations et les listes imbriquées."
+        },
+        {
+          "q": "Ce que j'écris est-il conservé ?",
+          "a": "Le texte sert au rendu et n'est pas archivé comme document. Rien de ce qui passe par ce service ne sert à entraîner un modèle."
+        }
+      ],
+      "related": [
+        "office-en-pdf",
+        "numeroter-pages-pdf",
+        "fusionner-pdf",
+        "compresser-pdf"
+      ],
+      "icon": "markdown",
+      "accepts": [],
+      "label": "Markdown en PDF",
+      "alt_slug": "markdown-to-pdf"
+    }
+  ]
+}

@@ -1,0 +1,1748 @@
+{
+  "guides": [
+    {
+      "key": "overview",
+      "slug": "what-the-engine-does",
+      "alt_slug": "ce-que-fait-le-moteur",
+      "group": "Start here",
+      "title": "What the engine does",
+      "lede": "One container turns text into a finished document: paginated, branded, illustrated, censored where it must be, and checked before it leaves.",
+      "meta_description": "One container turns text into a finished document: paginated, branded, illustrated, censored where it must be, and checked before it leaves.",
+      "icon": "M4 4h11l5 5v11H4zM14 4v5h5",
+      "tools": [
+        "markdown-to-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "p",
+          "html": "Three input formats, one rendering pipeline, one contract. Whatever you send — Markdown, raw HTML or a Tera template with its data — the document goes through the same expansion, the same stylesheet assembly and the same engine, so a feature documented here works on all three."
+        },
+        {
+          "type": "h",
+          "text": "The pipeline, in order"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Stage",
+            "What happens",
+            "Guide"
+          ],
+          "rows": [
+            [
+              "1 · Censoring",
+              "<code>CENSOR</code> tags and regions are <b>removed from the source</b>, before anything else sees it.",
+              "<a href=\"/en/guides/censoring-a-document\">→ Censoring: hiding what must not ship</a>"
+            ],
+            [
+              "2 · Blocks",
+              "<code>```chart</code> and <code>```mermaid</code> fences become inline SVG.",
+              "<a href=\"/en/guides/charts-in-a-pdf\">→ Charts, drawn in-process</a>"
+            ],
+            [
+              "3 · Cover",
+              "<code>options.cover</code> prepends a cover page, styled by the theme.",
+              "<a href=\"/en/guides/themes-and-cover-pages\">→ Themes and cover pages</a>"
+            ],
+            [
+              "4 · Styling",
+              "<code>default.css</code>, then the theme, then your <code>css</code>, then the layout <code>options</code>.",
+              "<a href=\"/en/guides/headers-footers-and-css\">→ Headers, footers and CSS</a>"
+            ],
+            [
+              "5 · Render",
+              "pandoc and/or WeasyPrint produce the PDF. Identical inputs hit the cache.",
+              "<a href=\"/en/guides/limits-caching-and-safety\">→ Limits, caching and safety</a>"
+            ],
+            [
+              "6 · Audit",
+              "<code>options.autolayout</code> inspects the result and re-renders it if that improves it.",
+              "<a href=\"/en/guides/layout-audit\">→ Layout Doctor</a>"
+            ]
+          ]
+        },
+        {
+          "type": "h",
+          "text": "Sources and destinations"
+        },
+        {
+          "type": "cards",
+          "cards": [
+            {
+              "title": "Markdown → PDF",
+              "html": "<code>POST /api/convert</code>. pandoc, tables, footnotes, table of contents, code highlighting."
+            },
+            {
+              "title": "HTML → PDF",
+              "html": "<code>POST /api/html-to-pdf</code>. For markup you already build client-side."
+            },
+            {
+              "title": "Template → PDF",
+              "html": "<code>POST /api/render</code>. A Tera (Jinja2-like) template plus a JSON context — the invoice case."
+            },
+            {
+              "title": "→ PNG pages",
+              "html": "<code>POST /api/preview</code>. One page, a range, or a contact sheet."
+            },
+            {
+              "title": "→ Merged, watermarked, encrypted",
+              "html": "<code>merge</code>, <code>watermark</code>, <code>protect</code> chain on saved PDFs."
+            },
+            {
+              "title": "→ Redacted, compared",
+              "html": "<code>redact</code> paints out and flattens; <code>diff</code> compares two renders pixel by pixel."
+            }
+          ]
+        },
+        {
+          "type": "h",
+          "text": "The response contract"
+        },
+        {
+          "type": "p",
+          "html": "Every endpoint that produces a PDF returns the <b>binary PDF</b> — unless you send both <code>client_id</code> and <code>pdf_name</code>, in which case the file is saved and you get a JSON download URL instead. Nothing else changes."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"download_url\": \"/download/demo-client/report-2026.pdf\",\n  \"cached\": true,\n  \"warnings\": [{ \"kind\": \"mermaid\", \"message\": \"…\", \"line\": 42 }],\n  \"layout\": { \"pages\": 12, \"score\": 94, \"issues\": [], \"passes\": 1 }\n}"
+        },
+        {
+          "type": "p",
+          "html": "The three optional fields appear only when they apply — <code>cached</code> when the PDF came from the render cache, <code>warnings</code> when a chart or diagram could not be drawn, <code>layout</code> when you asked for <code>autolayout</code>. A client written before they existed still parses the response."
+        },
+        {
+          "type": "try",
+          "target": "convert",
+          "tool": "markdown-to-pdf",
+          "label": "Send a first document"
+        }
+      ]
+    },
+    {
+      "key": "quickstart",
+      "slug": "first-call-in-three-minutes",
+      "alt_slug": "premier-appel-en-trois-minutes",
+      "group": "Start here",
+      "title": "First call in three minutes",
+      "lede": "No SDK, no build step: HTTP, JSON, and a key in a header.",
+      "meta_description": "No SDK, no build step: HTTP, JSON, and a key in a header.",
+      "icon": "M13 2L3 14h7l-1 8 10-12h-7z",
+      "tools": [
+        "markdown-to-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "h",
+          "text": "Authenticate"
+        },
+        {
+          "type": "p",
+          "html": "Every <code>/api/*</code> route needs your key, as <code>X-API-Key</code> or <code>Authorization: Bearer</code>. Two routes stay open: <code>GET /api/health</code> (the container probe) and <code>GET /download/…</code> (fetching a PDF that was already produced). The public tools at <a href=\"/tools\">AI SmartTalk Documents</a> need no key at all."
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "# Your key comes from your personal space — never hard-coded in a repository\nexport MDTOPDF_KEY='your-key'\n\ncurl -s $BASE/api/health\n# {\"status\":\"ok\",\"version\":\"0.2.0\",\"engines\":[\"weasyprint\",\"wkhtmltopdf\",\"pdflatex\"]}"
+        },
+        {
+          "type": "h",
+          "text": "Get a PDF back"
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "curl -X POST \"$BASE/api/convert\" \\\n  -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"markdown\": \"# Hello\\n\\nA **document**.\", \"options\": {\"page_numbers\": true}}' \\\n  --output document.pdf"
+        },
+        {
+          "type": "h",
+          "text": "Or keep it on the server"
+        },
+        {
+          "type": "p",
+          "html": "Add <code>client_id</code> and <code>pdf_name</code> and the answer becomes a URL. This is what you want whenever the PDF will be chained into <code>merge</code>, <code>watermark</code>, <code>protect</code>, <code>redact</code> or <code>diff</code> — those endpoints take download paths, not uploads."
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "curl -X POST \"$BASE/api/convert\" \\\n  -H \"X-API-Key: $MDTOPDF_KEY\" -H 'Content-Type: application/json' \\\n  -d '{\"markdown\": \"# Hello\", \"client_id\": \"demo\", \"pdf_name\": \"hello\"}'\n# {\"download_url\":\"/download/demo/hello.pdf\"}"
+        },
+        {
+          "type": "note",
+          "level": "info",
+          "html": "<code>client_id</code> and <code>pdf_name</code> are plain names — <code>[A-Za-z0-9._-]</code>, 128 characters at most, not starting with a dot. They build a path on disk, so anything else is refused with a 400."
+        },
+        {
+          "type": "h",
+          "text": "Layout options"
+        },
+        {
+          "type": "p",
+          "html": "Every field of <code>options</code> is optional, and an options object that does not mention a field renders exactly as it did before that field existed. Nothing here is breaking."
+        },
+        {
+          "type": "table",
+          "head": [
+            "Field",
+            "Values",
+            "Effect"
+          ],
+          "rows": [
+            [
+              "paper_size",
+              "a4 · a3 · letter",
+              "Page format, <code>a4</code> by default."
+            ],
+            [
+              "orientation",
+              "portrait · landscape",
+              "Wide tables usually want <code>landscape</code>."
+            ],
+            [
+              "margins",
+              "{top, right, bottom, left}",
+              "Any CSS length: <code>\"2cm\"</code>, <code>\"18mm\"</code>."
+            ],
+            [
+              "page_numbers",
+              "true · false",
+              "Numbering in the page footer."
+            ],
+            [
+              "page_number_format",
+              "CSS <code>content</code>",
+              "e.g. <code>counter(page) \" / \" counter(pages)</code>."
+            ],
+            [
+              "toc / toc_depth",
+              "true · 1–6",
+              "Table of contents built from the headings."
+            ],
+            [
+              "watermark",
+              "text",
+              "Diagonal CSS watermark, drawn at render time."
+            ],
+            [
+              "theme",
+              "\"report\" · \"report@1\"",
+              "Named, versioned brand kit."
+            ],
+            [
+              "cover",
+              "{title, subtitle, logo, date}",
+              "Cover page, styled by the theme."
+            ],
+            [
+              "censor_label",
+              "text",
+              "Wording of censored blocks with no named level."
+            ],
+            [
+              "charts",
+              "false",
+              "Turns off <code>chart</code> <b>and</b> <code>mermaid</code> expansion."
+            ],
+            [
+              "autolayout",
+              "true",
+              "Audits the output and corrects it. Costs a full extra render."
+            ]
+          ]
+        },
+        {
+          "type": "h",
+          "text": "Errors and tracing"
+        },
+        {
+          "type": "p",
+          "html": "Errors are always JSON: <code>{\"error\": \"…\", \"details\": \"…\"}</code>. Every response carries an <code>X-Request-Id</code>; send your own on the way in and it is echoed back and attached to every log event — that is what ties a support ticket to what the service actually did."
+        },
+        {
+          "type": "try",
+          "target": "convert",
+          "tool": "markdown-to-pdf",
+          "label": "Open the console on /api/convert"
+        }
+      ]
+    },
+    {
+      "key": "themes",
+      "slug": "themes-and-cover-pages",
+      "alt_slug": "themes-et-pages-de-garde",
+      "group": "Look and feel",
+      "title": "Themes and cover pages",
+      "lede": "Three brand kits ship with the service. They are named, versioned and immutable — a contract rendered with report@1 still comes out identical next year.",
+      "meta_description": "Three brand kits ship with the service. They are named, versioned and immutable — a contract rendered with report@1 still comes out identical next year.",
+      "icon": "M12 3a9 9 0 100 18 3 3 0 002-5 3 3 0 013-3h2a3 3 0 003-3 9 9 0 00-10-7z",
+      "tools": [
+        "markdown-to-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "p",
+          "html": "A theme is a whole stylesheet, not a colour: typography, headings, tables, callouts, footnotes, table of contents and — when the kit ships one — a cover page. Ask for it with <code>options.theme</code>, as <code>\"name\"</code> for the latest version or <code>\"name@2\"</code> to pin one."
+        },
+        {
+          "type": "h",
+          "text": "Installed kits"
+        },
+        {
+          "type": "p",
+          "html": "Pulled live from <code>GET /api/themes</code> on the service you are pointing at, previews included. What you see below is what this deployment will actually render."
+        },
+        {
+          "type": "themes"
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"markdown\": \"# Quarterly report\\n\\nBody text.\",\n  \"options\": {\n    \"theme\": \"report@1\",\n    \"toc\": true,\n    \"page_numbers\": true,\n    \"cover\": {\n      \"title\": \"Quarterly report\",\n      \"subtitle\": \"Q4 2026 — internal\",\n      \"logo\": \"https://example.com/logo.png\",\n      \"date\": \"31 December 2026\"\n    }\n  }\n}"
+        },
+        {
+          "type": "h",
+          "text": "Utility classes"
+        },
+        {
+          "type": "p",
+          "html": "Every kit understands the same two pandoc div conventions, so a document can move from one theme to another without being rewritten."
+        },
+        {
+          "type": "code",
+          "lang": "markdown",
+          "code": "::: success\n**Target met.** Median render time is back under two seconds.\n:::\n\n::: warning\nThe figures for December are still provisional.\n:::\n\n::: wide\n| A wide table | rendered | at a reduced | body size |\n|--------------|----------|--------------|-----------|\n| …            | …        | …            | …         |\n:::"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Class",
+            "Use"
+          ],
+          "rows": [
+            [
+              "<code>wide</code>",
+              "A table with many columns — rendered at a reduced body size so it still fits."
+            ],
+            [
+              "<code>success</code> · <code>warning</code> · <code>danger</code> · <code>info</code> · <code>note</code>",
+              "Callout boxes, coloured by the theme's tokens."
+            ]
+          ]
+        },
+        {
+          "type": "h",
+          "text": "Cover pages"
+        },
+        {
+          "type": "p",
+          "html": "<code>options.cover</code> inserts a cover page in front of the document. When the theme ships a <code>cover.html</code> it is used and styled by the kit; otherwise a built-in, self-contained template takes over so a cover asked for without a theme is still a cover page. Every value is escaped, and a <code>logo</code> URL goes through the same fetch policy as any other asset in the document."
+        },
+        {
+          "type": "p",
+          "html": "Preview a kit's cover without rendering anything of your own: <code>GET /api/themes/report/latest/preview.png?cover=true</code>."
+        },
+        {
+          "type": "h",
+          "text": "Adding a kit"
+        },
+        {
+          "type": "p",
+          "html": "A theme is a directory on the server, read once at startup. A kit that does not validate is dropped with a warning rather than keeping the service from starting."
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "themes/\n└── acme/\n    └── v1/                 # exactly v1, v2, … — v01 is refused\n        ├── theme.json      # required: label, description, fonts, colors\n        ├── theme.css       # required, non-empty, 512 KB max\n        ├── cover.html      # optional — Tera: title, subtitle, logo, date\n        ├── header.html     # optional — used unless the request overrides it\n        └── footer.html     # optional"
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"label\": \"ACME\",\n  \"description\": \"ACME brand kit: sans-serif, red accent, dark table headers.\",\n  \"author\": \"ACME\",\n  \"fonts\": [\"TeX Gyre Heros\", \"DejaVu Sans Mono\"],\n  \"colors\": { \"accent\": \"#c0322f\", \"ink\": \"#101a2b\", \"line\": \"#dbe3ef\" }\n}"
+        },
+        {
+          "type": "note",
+          "level": "warn",
+          "html": "<b>Themes are immutable.</b> The render cache key contains <code>name@version</code>, so changing a published <code>theme.css</code> in place does not invalidate anything — the old PDF keeps being served until the cache TTL expires. Any visual change means a new <code>v&lt;n+1&gt;</code> directory."
+        },
+        {
+          "type": "p",
+          "html": "The fonts a kit declares all ship inside the image. Naming a family that is not installed does not fail the render — it silently falls back, which is exactly the kind of difference nobody notices until the contract is printed."
+        },
+        {
+          "type": "try",
+          "target": "themes",
+          "tool": null,
+          "label": "List the themes"
+        }
+      ]
+    },
+    {
+      "key": "templates",
+      "slug": "headers-footers-and-css",
+      "alt_slug": "en-tetes-pieds-de-page-et-css",
+      "group": "Look and feel",
+      "title": "Headers, footers and CSS",
+      "lede": "Four ways to reach the same stylesheet, in a defined order. Knowing that order is the difference between styling a document and fighting it.",
+      "meta_description": "Four ways to reach the same stylesheet, in a defined order. Knowing that order is the difference between styling a document and fighting it.",
+      "icon": "M4 5h16M4 12h16M4 19h10",
+      "tools": [
+        "markdown-to-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "h",
+          "text": "Order of application"
+        },
+        {
+          "type": "p",
+          "html": "Stylesheets are concatenated, later wins on equal specificity:"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "code": "templates/default.css  →  theme.css  →  your `css` field  →  `options` (paper, margins, numbering, watermark)"
+        },
+        {
+          "type": "p",
+          "html": "<code>templates/default.css</code> is the floor every document stands on: readable typography, tables, page-break rules, and the geometry of censored blocks. It is applied even when no theme is asked for, which is why an unstyled request still comes out looking deliberate."
+        },
+        {
+          "type": "h",
+          "text": "Headers and footers"
+        },
+        {
+          "type": "p",
+          "html": "Four fields, resolved in a strict priority: inline HTML beats a named template, and a named template beats the fragment the theme ships. That order is what lets one document override a brand kit for one page without abandoning the kit."
+        },
+        {
+          "type": "table",
+          "head": [
+            "Field",
+            "Priority",
+            "Content"
+          ],
+          "rows": [
+            [
+              "<code>header_html</code> / <code>footer_html</code>",
+              "1",
+              "Raw HTML, sent in the request."
+            ],
+            [
+              "<code>header_template</code> / <code>footer_template</code>",
+              "2",
+              "The name of a file in <code>templates/</code>, e.g. <code>header.html</code>."
+            ],
+            [
+              "The theme's <code>header.html</code> / <code>footer.html</code>",
+              "3",
+              "Used when the request names neither."
+            ]
+          ]
+        },
+        {
+          "type": "h",
+          "text": "Templates shipped"
+        },
+        {
+          "type": "p",
+          "html": "These sit in <code>templates/</code> and are ready to be named in a request. They are examples as much as they are assets — copy one, change the logo and the wording, drop it next to them."
+        },
+        {
+          "type": "table",
+          "head": [
+            "File",
+            "What it draws"
+          ],
+          "rows": [
+            [
+              "<code>header.html</code>",
+              "The neutral starting point: a logo slot (empty <code>src</code>) and a company name, on a ruled line. Copy this one."
+            ],
+            [
+              "<code>footer.html</code>",
+              "A centred page number above a rule, fixed to the bottom of the page."
+            ],
+            [
+              "<code>mdp.header.html</code>",
+              "A filled-in example: MDP Data Protection branding."
+            ],
+            [
+              "<code>symexo.header.html</code>",
+              "A filled-in example: Symexo branding."
+            ],
+            [
+              "<code>default.css</code>",
+              "Not a header — the base stylesheet described above."
+            ]
+          ]
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"markdown\": \"# Service agreement\",\n  \"header_template\": \"header.html\",\n  \"footer_template\": \"footer.html\",\n  \"options\": { \"page_numbers\": true }\n}"
+        },
+        {
+          "type": "note",
+          "level": "info",
+          "html": "For page numbering, prefer <code>options.page_numbers</code> over a custom footer: it uses the CSS paged-media counters the engine already sets up, and it survives a change of theme. A footer template is for what numbering cannot express — a legal mention, a document reference, a classification level."
+        },
+        {
+          "type": "note",
+          "level": "warn",
+          "html": "HTML headers and footers only make sense for the HTML-based engines. With <code>engine: \"pdflatex\"</code> they are ignored and the service says so in its logs rather than silently producing a document without them."
+        },
+        {
+          "type": "h",
+          "text": "Your own CSS"
+        },
+        {
+          "type": "p",
+          "html": "The <code>css</code> field is appended last, so it wins. Everything CSS Paged Media offers is available — running headers, named pages, breaks:"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "code": "@page { size: A4; margin: 25mm 20mm; }\n@page :first { margin-top: 60mm; }\n\nh1 { break-before: page; }\ntable { break-inside: avoid; }\n\n/* A running footer on every page but the first */\n@page { @bottom-center { content: \"Confidential — do not circulate\"; font-size: 8pt; } }\n@page :first { @bottom-center { content: \"\"; } }"
+        },
+        {
+          "type": "try",
+          "target": "convert",
+          "tool": "markdown-to-pdf",
+          "label": "Try a header template"
+        }
+      ]
+    },
+    {
+      "key": "censor",
+      "slug": "censoring-a-document",
+      "alt_slug": "censurer-un-document",
+      "group": "Document content",
+      "title": "Censoring: hiding what must not ship",
+      "lede": "The censored text is removed from the source before pandoc ever sees it. It cannot be selected, searched or extracted from the PDF, because it is not in the PDF.",
+      "meta_description": "The censored text is removed from the source before pandoc ever sees it. It cannot be selected, searched or extracted from the PDF, because it is not in…",
+      "icon": "M3 3l18 18M10.6 10.6a3 3 0 004.2 4.2M9.4 5.2A9.6 9.6 0 0112 5c5 0 9 4.5 9 7a12 12 0 01-2.2 3.2M6.2 6.2A12.6 12.6 0 003 12c0 2.5 4 7 9 7 1.4 0 2.7-.3 3.9-.9",
+      "tools": [
+        "redact-pdf",
+        "markdown-to-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "p",
+          "html": "This is the feature the fork was built for: publishing one document to two audiences. The premium reader gets everything; everyone else gets the same document with a sized, labelled hole where the paid content was — which is a sales pitch, not an error page."
+        },
+        {
+          "type": "h",
+          "text": "The tags"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Tag",
+            "Effect"
+          ],
+          "rows": [
+            [
+              "<code>{{CENSOR}}</code> / <code>&lt;CENSOR&gt;</code>",
+              "Point replacement: the historical blurred block. Unchanged since day one."
+            ],
+            [
+              "<code>{{CENSOR:premium}}</code>",
+              "The same, labelled with that level."
+            ],
+            [
+              "<code>{{CENSOR:start}}</code> … <code>{{CENSOR:end}}</code>",
+              "Removes the region; the block is <b>sized after what was removed</b>, so the page keeps its shape."
+            ],
+            [
+              "<code>{{CENSOR:teaser=25}}</code> … <code>:end</code>",
+              "Keeps the first 25 words, removes the rest. The teaser."
+            ],
+            [
+              "<code>{{CENSOR:inline}}</code> … <code>:end</code>",
+              "Removes a run of text without breaking the paragraph around it."
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "html": "The historical point tag tolerates spacing: <code>{{CENSOR}}</code>, <code>{{ CENSOR }}</code>, <code>{{CENSOR }}</code> and <code>{{ CENSOR}}</code> all render exactly what they always rendered. Levels are free-form names — <code>premium</code>, <code>confidentiel</code>, <code>interne</code>, <code>secret</code> are the ones in common use. Modifiers combine with a comma: <code>{{CENSOR:start,confidentiel}}</code>."
+        },
+        {
+          "type": "h",
+          "text": "A full example"
+        },
+        {
+          "type": "code",
+          "lang": "markdown",
+          "code": "# Market study 2026\n\n## Public summary\n\nThe market grew by 18% over the quarter.\n\n## Margins by segment\n\n{{CENSOR:teaser=20,premium}}\nThe hardware segment carries a gross margin of 34%, well above the\nservices segment, whose contracts are priced on a three-year horizon and\nabsorb the onboarding cost in the first year.\n{{CENSOR:end}}\n\n## Method\n\nOur estimate rests on {{CENSOR:inline}}a proprietary panel of 400 firms{{CENSOR:end}}\nweighted by revenue."
+        },
+        {
+          "type": "p",
+          "html": "Two documents from one source: send it as-is for the free edition, strip the tags before sending for the paid one. Same rendering path, same pagination, same theme."
+        },
+        {
+          "type": "h",
+          "text": "Labels"
+        },
+        {
+          "type": "p",
+          "html": "Labels cascade: the level named on the tag wins, then <code>options.censor_label</code>, then the historical wording. A long label wraps rather than being clipped — it is the sales pitch, and half of it would sell nothing."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"markdown\": \"…\",\n  \"options\": { \"censor_label\": \"Reserved for subscribers — aismarttalk.tech\" }\n}"
+        },
+        {
+          "type": "h",
+          "text": "What happens when you get it wrong"
+        },
+        {
+          "type": "p",
+          "html": "Malformed input always errs <b>towards</b> censoring. A syntax mistake must not be a way to reveal what was meant to be hidden:"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Mistake",
+            "Behaviour"
+          ],
+          "rows": [
+            [
+              "An unclosed region",
+              "Censored to the end of the document."
+            ],
+            [
+              "Nested regions",
+              "Depth-counted, so the outer one still closes correctly."
+            ],
+            [
+              "A level tag followed by <code>:end</code>",
+              "Opens a region — that is what a misspelled <code>start</code> looks like."
+            ],
+            [
+              "An <code>:end</code> with no open region",
+              "Dropped."
+            ]
+          ]
+        },
+        {
+          "type": "note",
+          "level": "info",
+          "html": "Censoring hides text you control, in a source you are about to render. To black out text in a <b>PDF that already exists</b> — someone else's contract, a scanned invoice — you want <code>/api/redact</code>, which works on pixels. See the redaction guide."
+        },
+        {
+          "type": "try",
+          "target": "convert",
+          "tool": "markdown-to-pdf",
+          "label": "Render a censored document"
+        }
+      ]
+    },
+    {
+      "key": "charts",
+      "slug": "charts-in-a-pdf",
+      "alt_slug": "graphiques-dans-un-pdf",
+      "group": "Document content",
+      "title": "Charts, drawn in-process",
+      "lede": "A fenced ```chart block becomes inline SVG. No browser, no headless Chrome, no external service — and no chart can fail your request.",
+      "meta_description": "A fenced ```chart block becomes inline SVG. No browser, no headless Chrome, no external service — and no chart can fail your request.",
+      "icon": "M4 20V10M10 20V4M16 20v-7M22 20H2",
+      "tools": [
+        "markdown-to-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "markdown",
+          "code": "```chart\n{\n  \"type\": \"bar\",\n  \"title\": \"Revenue\",\n  \"labels\": [\"Q1\", \"Q2\", \"Q3\", \"Q4\"],\n  \"series\": [{\"name\": \"2026\", \"data\": [12000, 18000, 15000, 21000]}]\n}\n```"
+        },
+        {
+          "type": "h",
+          "text": "Types"
+        },
+        {
+          "type": "table",
+          "head": [
+            "type",
+            "For"
+          ],
+          "rows": [
+            [
+              "<code>bar</code> · <code>column</code>",
+              "Vertical bars — the default reflex for a few categories."
+            ],
+            [
+              "<code>hbar</code>",
+              "Horizontal bars — when the labels are long."
+            ],
+            [
+              "<code>stacked-bar</code> · <code>stacked</code>",
+              "Composition of a total."
+            ],
+            [
+              "<code>grouped-bar</code> · <code>grouped</code>",
+              "Several series compared category by category."
+            ],
+            [
+              "<code>line</code>",
+              "A trend over an ordered axis."
+            ],
+            [
+              "<code>area</code>",
+              "The same, when the volume under the curve matters."
+            ],
+            [
+              "<code>pie</code> · <code>donut</code> · <code>doughnut</code>",
+              "A share of a whole, up to 8 slices."
+            ]
+          ]
+        },
+        {
+          "type": "h",
+          "text": "Every field"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Field",
+            "Default",
+            "Description"
+          ],
+          "rows": [
+            [
+              "<code>type</code>",
+              "<code>bar</code>",
+              "One of the values above."
+            ],
+            [
+              "<code>title</code> / <code>subtitle</code>",
+              "—",
+              "Drawn inside the SVG, so they travel with the figure."
+            ],
+            [
+              "<code>labels</code>",
+              "—",
+              "Categories, one per point."
+            ],
+            [
+              "<code>series</code>",
+              "—",
+              "<code>[{name, data, color}]</code> — 8 series max, 2000 points."
+            ],
+            [
+              "<code>x_label</code> / <code>y_label</code>",
+              "—",
+              "Axis titles."
+            ],
+            [
+              "<code>value_format</code>",
+              "<code>compact</code>",
+              "<code>compact</code> · <code>percent</code> · <code>eur</code> · <code>plain</code>."
+            ],
+            [
+              "<code>width</code> / <code>height</code>",
+              "640 / 360",
+              "240–2000 and 160–2000 respectively."
+            ],
+            [
+              "<code>legend</code>",
+              "from 2 series",
+              "Force it on or off."
+            ],
+            [
+              "<code>grid</code>",
+              "<code>true</code>",
+              "Background grid lines."
+            ],
+            [
+              "<code>texture</code>",
+              "<code>true</code>",
+              "Hatch patterns, so the chart survives being printed in black and white."
+            ]
+          ]
+        },
+        {
+          "type": "note",
+          "level": "info",
+          "html": "<code>texture</code> is on by default on purpose. A report is printed, photocopied and faxed; two series that differ only by hue become one series the moment the colour is gone."
+        },
+        {
+          "type": "h",
+          "text": "A denser example"
+        },
+        {
+          "type": "code",
+          "lang": "markdown",
+          "code": "```chart\n{\n  \"type\": \"grouped-bar\",\n  \"title\": \"Documents converted\",\n  \"subtitle\": \"by quarter and by engine\",\n  \"labels\": [\"Q1\", \"Q2\", \"Q3\", \"Q4\"],\n  \"series\": [\n    {\"name\": \"weasyprint\", \"data\": [12000, 18000, 15000, 21000], \"color\": \"#0e8ea3\"},\n    {\"name\": \"pdflatex\",   \"data\": [3000, 2600, 4100, 3900]}\n  ],\n  \"y_label\": \"documents\",\n  \"value_format\": \"compact\",\n  \"height\": 420\n}\n```"
+        },
+        {
+          "type": "h",
+          "text": "Failure is never fatal"
+        },
+        {
+          "type": "p",
+          "html": "A block that cannot be rendered — invalid JSON, an unknown type, too many series — <b>stays in the document as a code block</b>, and the reason comes back in the <code>warnings</code> field of the JSON response. A hundred-page report is never lost over one malformed figure."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"download_url\": \"/download/demo/report.pdf\",\n  \"warnings\": [\n    { \"kind\": \"chart\", \"message\": \"unknown chart type \\\"radar\\\"\", \"line\": 42 }\n  ]\n}"
+        },
+        {
+          "type": "p",
+          "html": "<code>options.charts: false</code> turns off the expansion of <b>both</b> block types — useful when you are rendering untrusted input and want no block expansion at all."
+        },
+        {
+          "type": "try",
+          "target": "convert",
+          "tool": "markdown-to-pdf",
+          "label": "Render a chart"
+        }
+      ]
+    },
+    {
+      "key": "diagrams",
+      "slug": "mermaid-diagrams",
+      "alt_slug": "diagrammes-mermaid",
+      "group": "Document content",
+      "title": "Mermaid diagrams",
+      "lede": "Flowcharts, sequences and state machines written as text, rendered to SVG inside the page.",
+      "meta_description": "Flowcharts, sequences and state machines written as text, rendered to SVG inside the page.",
+      "icon": "M5 3h6v6H5zM13 15h6v6h-6zM8 9v6h5",
+      "tools": [
+        "markdown-to-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "markdown",
+          "code": "```mermaid theme=forest\ngraph TD;\n  A[Request] --> B{Cached?};\n  B -- yes --> C[Serve from cache];\n  B -- no --> D[Render];\n  D --> C;\n```"
+        },
+        {
+          "type": "p",
+          "html": "Attributes may follow the language — <code>theme=dark</code>, <code>title=\"…\"</code> — including in pandoc form (<code>{.mermaid theme=forest}</code>). The HTML spelling <code>&lt;pre&gt;&lt;code class=\"language-mermaid\"&gt;</code> works too, which matters when the Markdown was produced by another tool. Accepted themes: <code>default</code>, <code>dark</code>, <code>forest</code>, <code>neutral</code>."
+        },
+        {
+          "type": "p",
+          "html": "<code>click</code> directives lose their hyperlink on purpose: a diagram in a printed report should not carry a live link to somewhere the reader cannot see."
+        },
+        {
+          "type": "note",
+          "level": "warn",
+          "html": "<b>Diagrams depend on an external service.</b> Rendering is delegated to Mermaid Studio, so the container needs outbound access to it. If it is unreachable, times out, or is explicitly disabled, every diagram degrades to its code block plus one warning and the document still comes out. Charts have no such dependency — they are drawn in-process."
+        },
+        {
+          "type": "p",
+          "html": "One consequence worth knowing: the render cache key is computed on the <b>expanded</b> source, so a document containing a diagram calls Mermaid Studio <i>before</i> it can hit the disk cache. An in-process diagram cache keeps that cheap, but it empties on restart — the first render of a diagram after a deployment always goes over the network."
+        },
+        {
+          "type": "try",
+          "target": "convert",
+          "tool": "markdown-to-pdf",
+          "label": "Render a diagram"
+        }
+      ]
+    },
+    {
+      "key": "layout",
+      "slug": "layout-audit",
+      "alt_slug": "controle-de-mise-en-page",
+      "group": "Quality control",
+      "title": "Layout Doctor",
+      "lede": "The service reads back the PDF it just produced, finds what a proofreader would find, and fixes it — but only if fixing it actually helped.",
+      "meta_description": "The service reads back the PDF it just produced, finds what a proofreader would find, and fixes it — but only if fixing it actually helped.",
+      "icon": "M4 4h16v16H4zM4 9h16M9 9v11",
+      "tools": [
+        "markdown-to-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "p",
+          "html": "<code>options.autolayout: true</code> on any rendering endpoint analyses the produced PDF, re-renders it with corrective CSS while that improves the score, and returns the report in the <code>layout</code> field. <b>A corrective pass that does not improve the score is thrown away</b>: the client never receives a PDF worse than the one it would have had."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"markdown\": \"…\",\n  \"options\": { \"theme\": \"report\", \"autolayout\": true }\n}"
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"download_url\": \"/download/demo/report.pdf\",\n  \"layout\": {\n    \"pages\": 12,\n    \"score\": 94,\n    \"passes\": 1,\n    \"issues\": [\n      { \"kind\": \"orphan_heading\", \"page\": 7, \"severity\": \"warn\",\n        \"detail\": \"heading alone at the bottom of the page\", \"bbox\": [72, 60, 523, 84] }\n    ]\n  }\n}"
+        },
+        {
+          "type": "h",
+          "text": "What it looks for"
+        },
+        {
+          "type": "table",
+          "head": [
+            "kind",
+            "Severity",
+            "Meaning"
+          ],
+          "rows": [
+            [
+              "<code>overflow</code>",
+              "<code>error</code> / <code>warn</code>",
+              "Content past the page edge (error) or past the margin (warn)."
+            ],
+            [
+              "<code>blank_page</code>",
+              "<code>warn</code>",
+              "A page with no ink at all — reported, not fixable."
+            ],
+            [
+              "<code>widow_page</code>",
+              "<code>warn</code>",
+              "A last page carrying almost nothing."
+            ],
+            [
+              "<code>orphan_heading</code>",
+              "<code>warn</code>",
+              "A heading alone at the bottom of a page."
+            ],
+            [
+              "<code>split_table</code>",
+              "<code>warn</code>",
+              "A table cut across a page break."
+            ],
+            [
+              "<code>long_table</code>",
+              "<code>info</code>",
+              "A table taller than a page; suppresses the anti-break rule."
+            ]
+          ]
+        },
+        {
+          "type": "h",
+          "text": "Auditing a PDF you already have"
+        },
+        {
+          "type": "p",
+          "html": "<code>POST /api/layout</code> runs the same analysis on an existing PDF without touching it — a useful gate in a pipeline that renders elsewhere."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{ \"pdf\": \"/download/demo/report.pdf\" }"
+        },
+        {
+          "type": "note",
+          "level": "warn",
+          "html": "<b>It costs a full extra render per corrective pass</b>, plus the analysis itself — roughly double the latency of the same request without it. Turn it on for documents a human will read, not for a batch of ten thousand invoices."
+        },
+        {
+          "type": "try",
+          "target": "layout",
+          "tool": null,
+          "label": "Audit a PDF"
+        }
+      ]
+    },
+    {
+      "key": "redaction",
+      "slug": "redaction-and-visual-diff",
+      "alt_slug": "caviardage-et-diff-visuel",
+      "group": "Quality control",
+      "title": "Redaction and visual diff",
+      "lede": "Black out a PDF so the text is genuinely gone, and compare two renders pixel by pixel so a rendering regression cannot ship unnoticed.",
+      "meta_description": "Black out a PDF so the text is genuinely gone, and compare two renders pixel by pixel so a rendering regression cannot ship unnoticed.",
+      "icon": "M4 6h16v12H4zM7 10h6M7 14h10",
+      "tools": [
+        "redact-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "h",
+          "text": "POST /api/redact"
+        },
+        {
+          "type": "p",
+          "html": "Paints out patterns and personal data, then <b>rebuilds every page from pixels</b>. The redacted strings are gone from the file, and so is every text layer, bookmark, annotation and metadata entry of the source. The result is neither selectable nor searchable, and it is larger — that is the trade, and it is the only honest one."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"pdf\": \"/download/demo/contract.pdf\",\n  \"patterns\": [\"Jean Dupont\", \"FR76 3000 1007 9412 3456 7890 185\"],\n  \"entities\": [\"email\", \"iban\", \"phone\", \"siret\", \"credit_card\"],\n  \"dpi\": 150,\n  \"client_id\": \"demo\",\n  \"pdf_name\": \"contract-redacted\"\n}"
+        },
+        {
+          "type": "p",
+          "html": "Entities are validated by their check digits, so a 14-digit invoice number is not mistaken for a SIRET and a random 16-digit reference is not blacked out as a card number."
+        },
+        {
+          "type": "note",
+          "level": "warn",
+          "html": "<b><code>patterns</code> are literal strings, not regular expressions.</b> Comparison ignores case and normalises whitespace, so a match may span a line break. A pattern that <i>looks</i> like a regex (<code>\\d{4}</code>, <code>[A-Z]+</code>, <code>.*</code>, <code>(?i)</code>) is rejected with a 400 rather than matched literally — receiving a document where nothing was blacked out while believing the job was done is the failure this prevents."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"download_url\": \"/download/demo/contract-redacted.pdf\",\n  \"redactions\": [{ \"page\": 1, \"count\": 3 }, { \"page\": 2, \"count\": 1 }],\n  \"pages\": 4,\n  \"mode\": \"flatten\",\n  \"notice\": \"…\"\n}"
+        },
+        {
+          "type": "p",
+          "html": "<code>mode</code> is always <code>flatten</code>: there is deliberately no overlay mode that would keep the text layer under a black rectangle. The binary form of the endpoint (no <code>client_id</code>) cannot carry the redaction counts — use the JSON form whenever you need proof of what was painted."
+        },
+        {
+          "type": "note",
+          "level": "info",
+          "html": "A PDF that was <b>scanned</b> — no text layer — comes back flattened with <code>redactions: []</code>. Nothing could be located; there is no OCR. An empty array is the only signal, and it means \"nothing was found\", not \"nothing was there\"."
+        },
+        {
+          "type": "h",
+          "text": "POST /api/diff"
+        },
+        {
+          "type": "p",
+          "html": "Compares two saved PDFs page by page and tells you whether anything moved. This is the endpoint that turns \"the report still looks right\" into a CI check."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"before\": \"/download/ci/report-main.pdf\",\n  \"after\": \"/download/ci/report-branch.pdf\",\n  \"dpi\": 150,\n  \"threshold\": 0,\n  \"images\": true\n}"
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"verdict\": \"changed\",\n  \"pages_total\": 12, \"pages_before\": 12, \"pages_after\": 12,\n  \"pages_changed\": 2,\n  \"changed_ratio\": 0.167,\n  \"per_page\": [{ \"page\": 7, \"ratio\": 0.031 }, { \"page\": 8, \"ratio\": 0.004 }]\n}"
+        },
+        {
+          "type": "p",
+          "html": "<b><code>threshold</code> defaults to 0</b>: any page that visibly moved makes the verdict <code>changed</code>. Raise it to tolerate noise — a CI that defaulted to tolerance would report <code>identical</code> on a renamed heading, which is the one thing it exists to catch."
+        },
+        {
+          "type": "note",
+          "level": "warn",
+          "html": "Run a diff right after a deployment that changed the renderer without bumping the internal cache version and it will compare a stale cached PDF against a fresh one — or worse, call two different renders <code>identical</code>. Render both sides of a comparison in the same session."
+        },
+        {
+          "type": "try",
+          "target": "redact",
+          "tool": "redact-pdf",
+          "label": "Redact a PDF"
+        }
+      ]
+    },
+    {
+      "key": "assets",
+      "slug": "upload-a-file-and-chain-tools",
+      "alt_slug": "deposer-un-fichier-et-enchainer",
+      "group": "PDF toolbox",
+      "title": "Upload a file, then chain tools",
+      "lede": "One upload, one opaque handle, and every tool in the service accepts it — including on documents this engine never rendered.",
+      "meta_description": "One upload, one opaque handle, and every tool in the service accepts it — including on documents this engine never rendered.",
+      "icon": "M12 16V4m0 0L8 8m4-4l4 4M5 20h14",
+      "tools": [
+        "ocr-pdf",
+        "compress-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "p",
+          "html": "For a long time every tool here only worked on documents the service had produced itself, because the only way to name a file was <code>/download/&lt;client_id&gt;/&lt;name&gt;.pdf</code>. <code>POST /api/files</code> is the other half: you hand over bytes, you get a handle, and that handle goes wherever a download path went."
+        },
+        {
+          "type": "h",
+          "text": "Upload"
+        },
+        {
+          "type": "p",
+          "html": "This is the <b>only</b> endpoint of the API that is not JSON: <code>multipart/form-data</code>, with a field named <code>file</code> that may repeat. Do not set <code>Content-Type</code> by hand — the multipart boundary is part of it."
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "curl -s -X POST \"$BASE/api/files\" \\\n  -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -F 'file=@contract.pdf' \\\n  -F 'file=@appendix.pdf'\n\n# {\"files\":[\n#   {\"id\":\"as_9f2c1d84e6b74a01bd35c7f0a1e2d3c4\",\"name\":\"contract.pdf\",\"kind\":\"pdf\",\n#    \"bytes\":184203,\"pages\":12,\"expires_at\":\"2026-08-19T14:02:11Z\"},\n#   {\"id\":\"as_31b0…\",\"name\":\"appendix.pdf\",\"kind\":\"pdf\",\"bytes\":40118,\"pages\":3,…}\n# ]}"
+        },
+        {
+          "type": "p",
+          "html": "The <code>kind</code> is read from the <b>bytes</b>, never from the extension: a <code>.pdf</code> that is really a zip comes back as what it is, and the tool that would have choked on it refuses before starting. What is kept is an id, a type, a size, a page count and an expiry — nothing that would make this a library."
+        },
+        {
+          "type": "h",
+          "text": "Two reference forms, everywhere"
+        },
+        {
+          "type": "p",
+          "html": "Every route that consumes a document now accepts both. The old form did not move, and no existing integration has to change a line."
+        },
+        {
+          "type": "table",
+          "head": [
+            "Form",
+            "Where it comes from",
+            "Lifetime"
+          ],
+          "rows": [
+            [
+              "<code>/download/&lt;client_id&gt;/&lt;name&gt;.pdf</code>",
+              "A render saved with <code>client_id</code> + <code>pdf_name</code>.",
+              "Kept until the deployment purges it."
+            ],
+            [
+              "<code>asset://as_…</code>",
+              "An upload, or the output of a tool asked for as <code>\"output\": \"asset\"</code>.",
+              "Two hours by default, then purged. <code>DELETE /api/files/&lt;id&gt;</code> is immediate."
+            ]
+          ]
+        },
+        {
+          "type": "h",
+          "text": "Three ways to get the result out"
+        },
+        {
+          "type": "table",
+          "head": [
+            "What you send",
+            "What you get",
+            "When to use it"
+          ],
+          "rows": [
+            [
+              "nothing",
+              "the binary file itself",
+              "One operation, one download."
+            ],
+            [
+              "<code>client_id</code> + <code>pdf_name</code>",
+              "<code>{\"download_url\": \"…\"}</code>",
+              "The file must stay reachable by URL."
+            ],
+            [
+              "<code>\"output\": \"asset\"</code>",
+              "<code>{\"asset\": {\"id\": \"as_…\", …}}</code>",
+              "Another tool comes next. This is the one that makes a chain cheap."
+            ]
+          ]
+        },
+        {
+          "type": "h",
+          "text": "A chain, end to end"
+        },
+        {
+          "type": "p",
+          "html": "A scanned contract arrives, has to be read, compressed, and handed back. Four calls, and the file never comes back down to the caller until the last one."
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "# 1. Upload\nSRC=$(curl -s -X POST \"$BASE/api/files\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -F 'file=@scan.pdf' | jq -r '.files[0].id')\n\n# 2. OCR — the result stays inside the service\nOCRED=$(curl -s -X POST \"$BASE/api/ocr\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  -d \"{\\\"pdf\\\": \\\"asset://$SRC\\\", \\\"languages\\\": [\\\"fra\\\"], \\\"output\\\": \\\"asset\\\"}\" \\\n  | jq -r '.asset.id')\n\n# 3. Compress, and read the verdict rather than hoping\nRESULT=$(curl -s -X POST \"$BASE/api/compress\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  -d \"{\\\"pdf\\\": \\\"asset://$OCRED\\\", \\\"level\\\": \\\"ebook\\\", \\\"output\\\": \\\"asset\\\"}\")\necho \"$RESULT\" | jq -r '.verdict.summary'   # 4.2 MB -> 780 KB, text intact\nFINAL=$(echo \"$RESULT\" | jq -r '.asset.id')\n\n# 4. Fetch the bytes, with the right content type\ncurl -s \"$BASE/api/files/$FINAL\" -H \"X-API-Key: $MDTOPDF_KEY\" --output ready.pdf"
+        },
+        {
+          "type": "note",
+          "level": "info",
+          "html": "<code>GET /api/files/&lt;id&gt;</code> serves the file with the content type of what it holds, while <code>/download/…</code> serves everything as <code>application/pdf</code>. That is why a tool that produces an image or a <code>.docx</code> tells you to ask for an asset."
+        },
+        {
+          "type": "h",
+          "text": "When the work outlives the request"
+        },
+        {
+          "type": "p",
+          "html": "OCR on two hundred pages, a LibreOffice conversion or a Ghostscript pass on a heavy file do not fit inside a synchronous deadline. <code>POST /api/jobs</code> takes the endpoint name and the body it would have received, answers <code>202</code> with a poll URL, and forces the result to an asset — a job has no socket to stream a file down."
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "JOB=$(curl -s -X POST \"$BASE/api/jobs\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"endpoint\": \"ocr\", \"body\": {\"pdf\": \"asset://as_9f2c…\", \"languages\": [\"fra\"]}}' \\\n  | jq -r '.job_id')\n\ncurl -s \"$BASE/api/jobs/$JOB\" -H \"X-API-Key: $MDTOPDF_KEY\" | jq '{status, result: .result.asset.id}'\n# {\"status\":\"running\",\"result\":null} … then {\"status\":\"done\",\"result\":\"as_77aa…\"}"
+        },
+        {
+          "type": "p",
+          "html": "The poll URL is the source of truth. A <code>callback_url</code>, when one is given, is a courtesy: sent once, signed with <code>X-Signature</code>, never retried. A webhook that must arrive exactly once is a message queue, and this service is not one."
+        },
+        {
+          "type": "h",
+          "text": "What is kept, and for how long"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Rule",
+            "Default"
+          ],
+          "rows": [
+            [
+              "Lifetime of an uploaded file",
+              "2 hours, then purged — configurable per deployment."
+            ],
+            [
+              "Maximum size",
+              "100 MB"
+            ],
+            [
+              "Maximum pages",
+              "2 000"
+            ],
+            [
+              "Immediate deletion",
+              "<code>DELETE /api/files/&lt;id&gt;</code> → 204"
+            ]
+          ]
+        },
+        {
+          "type": "note",
+          "level": "warn",
+          "html": "An expired asset answers <b>404</b>, not a stale file. A chain that sits idle between two steps for longer than the retention will fail on the second one — which is the correct behaviour, and worth knowing before a nightly batch discovers it."
+        },
+        {
+          "type": "try",
+          "target": "files",
+          "tool": null,
+          "label": "Upload a file from the console"
+        }
+      ]
+    },
+    {
+      "key": "toolbox",
+      "slug": "preview-merge-watermark-protect",
+      "alt_slug": "apercu-fusion-filigrane-protection",
+      "group": "PDF toolbox",
+      "title": "Preview, merge, watermark, protect",
+      "lede": "Four endpoints that operate on PDFs the service has already saved. They chain: the output of one is the input of the next.",
+      "meta_description": "Four endpoints that operate on PDFs the service has already saved. They chain: the output of one is the input of the next.",
+      "icon": "M3 7h18v13H3zM8 7V4h8v3M8 12h8",
+      "tools": [
+        "merge-pdf",
+        "watermark-pdf",
+        "protect-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "h",
+          "text": "Preview — pages as PNG"
+        },
+        {
+          "type": "p",
+          "html": "<code>POST /api/preview</code> takes the same body as a render (<code>markdown</code>, <code>html</code>, or <code>template</code> + <code>data</code>) and answers with images instead of a PDF. A body with no new field returns the PNG of page 1 — historical behaviour, unchanged."
+        },
+        {
+          "type": "table",
+          "head": [
+            "Field",
+            "Default",
+            "Description"
+          ],
+          "rows": [
+            [
+              "<code>pages</code>",
+              "<code>\"1\"</code>",
+              "<code>\"3\"</code>, <code>\"2-5\"</code> or <code>\"all\"</code>, capped by the deployment."
+            ],
+            [
+              "<code>dpi</code>",
+              "<code>150</code>",
+              "36–300."
+            ],
+            [
+              "<code>layout</code>",
+              "see below",
+              "<code>png</code> (raw image), <code>images</code> (JSON, one PNG per page), <code>sheet</code> (one contact-sheet image)."
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "html": "Without an explicit <code>layout</code>, one page returns a raw PNG and several return the <code>images</code> JSON — so an existing caller keeps getting exactly what it got. <code>images</code> reports <code>truncated: true</code> when the page cap cut the answer short; <code>sheet</code> cannot, since it is just an image."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"markdown\": \"# Report\\n\\n…\",\n  \"pages\": \"1-4\",\n  \"dpi\": 120,\n  \"layout\": \"sheet\",\n  \"options\": { \"theme\": \"report\" }\n}"
+        },
+        {
+          "type": "h",
+          "text": "Merge"
+        },
+        {
+          "type": "p",
+          "html": "<code>POST /api/merge</code> concatenates two or more previously saved PDFs, in the order given."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"pdfs\": [\n    \"/download/demo/cover.pdf\",\n    \"/download/demo/body.pdf\",\n    \"/download/demo/appendix.pdf\"\n  ],\n  \"client_id\": \"demo\",\n  \"pdf_name\": \"complete-file\"\n}"
+        },
+        {
+          "type": "h",
+          "text": "Watermark"
+        },
+        {
+          "type": "p",
+          "html": "<code>POST /api/watermark</code> overlays a diagonal text watermark on every page of a saved PDF."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"pdf\": \"/download/demo/contract.pdf\",\n  \"text\": \"DRAFT — DO NOT SIGN\",\n  \"opacity\": 0.06,\n  \"angle\": -45,\n  \"client_id\": \"demo\",\n  \"pdf_name\": \"contract-draft\"\n}"
+        },
+        {
+          "type": "p",
+          "html": "<code>opacity</code> defaults to <code>0.06</code> (0–1) and <code>angle</code> to <code>-45</code> (−360 to 360). The default is deliberately faint: a watermark that fights the text makes the document unreadable, and an unreadable draft gets re-exported without the watermark."
+        },
+        {
+          "type": "note",
+          "level": "info",
+          "html": "Two watermarks, two purposes. <code>options.watermark</code> is drawn <b>at render time</b>, in CSS, under the text — it belongs to the document. <code>/api/watermark</code> stamps an <b>existing</b> PDF, including one the service did not produce."
+        },
+        {
+          "type": "h",
+          "text": "Protect"
+        },
+        {
+          "type": "p",
+          "html": "<code>POST /api/protect</code> applies AES-256 password protection to a saved PDF. Do this <b>last</b>: an encrypted PDF cannot be merged, watermarked, previewed or diffed afterwards."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"pdf\": \"/download/demo/contract-draft.pdf\",\n  \"password\": \"a-real-passphrase\",\n  \"client_id\": \"demo\",\n  \"pdf_name\": \"contract-sealed\"\n}"
+        },
+        {
+          "type": "try",
+          "target": "preview",
+          "tool": null,
+          "label": "Preview a document"
+        }
+      ]
+    },
+    {
+      "key": "compose",
+      "slug": "the-document-contract",
+      "alt_slug": "le-contrat-de-document",
+      "group": "Verdict and proof",
+      "title": "The document contract",
+      "lede": "State what the document must satisfy instead of asking for a render. The service renders, audits, corrects, and answers with the log of what it had to do.",
+      "meta_description": "State what the document must satisfy instead of asking for a render. The service renders, audits, corrects, and answers with the log of what it had to do.",
+      "icon": "M6 3h9l4 4v14H6zM9 12h7M9 16h5M9 8h4",
+      "tools": [
+        "markdown-to-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "p",
+          "html": "Every other endpoint answers <i>here is your PDF, hope it is fine</i>. <code>POST /api/compose</code> takes <b>constraints</b>: at most four pages, no table cut in half, a layout score of at least 90. It renders, audits with the Layout Doctor, applies corrective rules, re-renders, and stops when the contract holds or the passes run out — then hands back the file <b>and</b> what it had to do to get there."
+        },
+        {
+          "type": "note",
+          "level": "info",
+          "html": "Entirely deterministic: no model, no outbound call, and the same input produces the same document. That is what makes the render cache, the pixel diff <b>and</b> the attestation possible at all."
+        },
+        {
+          "type": "h",
+          "text": "A request"
+        },
+        {
+          "type": "p",
+          "html": "The body is a render body — <code>markdown</code>, or <code>html</code>, or <code>template</code> + <code>data</code>, plus the usual <code>css</code> and <code>options</code> — with one field more."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"markdown\": \"# Quarterly report\\n\\n…\",\n  \"options\": { \"theme\": \"report@1\", \"page_numbers\": true },\n  \"constraints\": {\n    \"max_pages\": 4,\n    \"no_split_tables\": true,\n    \"no_orphan_headings\": true,\n    \"min_layout_score\": 90\n  },\n  \"max_passes\": 3,\n  \"client_id\": \"acme\", \"pdf_name\": \"report-q4\"\n}"
+        },
+        {
+          "type": "h",
+          "text": "The constraints"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Field",
+            "Values",
+            "What it forbids"
+          ],
+          "rows": [
+            [
+              "<code>max_pages</code> · <code>min_pages</code>",
+              "a page count",
+              "A document that does not fit the envelope it was written for."
+            ],
+            [
+              "<code>no_split_tables</code>",
+              "true",
+              "A table broken across two pages."
+            ],
+            [
+              "<code>no_orphan_headings</code>",
+              "true",
+              "A heading stranded at the foot of a page."
+            ],
+            [
+              "<code>no_blank_pages</code>",
+              "true",
+              "A page produced by pagination and holding nothing."
+            ],
+            [
+              "<code>no_overflow</code>",
+              "true",
+              "Content reaching past the print area."
+            ],
+            [
+              "<code>min_layout_score</code>",
+              "0 – 100",
+              "Anything the Layout Doctor grades below that mark."
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "html": "Every field is optional, and a request with no constraint at all is simply a render with a report. <code>max_passes</code> defaults to <code>3</code> and is capped at <code>5</code>: each pass is a <b>full render</b>, so a contract that needs more than a handful is a document problem rather than a layout problem, and saying so quickly is more useful than burning the whole time budget to fail anyway."
+        },
+        {
+          "type": "h",
+          "text": "The answer"
+        },
+        {
+          "type": "p",
+          "html": "Send <code>client_id</code> + <code>pdf_name</code> (or <code>\"output\": \"asset\"</code>) and you get the report; send neither and you get the PDF itself, as everywhere else."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"download_url\": \"/download/acme/report-q4.pdf\",\n  \"verdict\": \"met\",\n  \"score\": 94,\n  \"pages\": 4,\n  \"passes\": [\n    { \"n\": 1, \"score\": 78, \"pages\": 5, \"applied\": [\"tighter tables\", \"smaller figure margins\"] },\n    { \"n\": 2, \"score\": 94, \"pages\": 4, \"applied\": [] }\n  ],\n  \"unmet\": [],\n  \"layout\": { \"pages\": 4, \"score\": 94, \"issues\": [] }\n}"
+        },
+        {
+          "type": "p",
+          "html": "<code>verdict</code> is <code>met</code> or <code>unmet</code>. <code>passes</code> is the honest part: it says what each attempt scored and which corrective rules it introduced, so a document that needed three passes today tells you where it is fragile before it needs four tomorrow."
+        },
+        {
+          "type": "note",
+          "level": "warn",
+          "html": "A contract that could not be met <b>still returns the best document produced</b>, with <code>verdict: \"unmet\"</code> and <code>unmet</code> naming what is still broken. Refusing to hand it over would leave you with a report and nothing to look at. Check <code>verdict</code> — an HTTP 200 does not mean the contract held."
+        },
+        {
+          "type": "h",
+          "text": "Sealing the result in the same call"
+        },
+        {
+          "type": "p",
+          "html": "Add <code>\"attest\": true</code> and the answer carries an <code>attestation</code>: the signed record of what was rendered, which <code>POST /api/verify</code> checks later. One call produces the document, its verdict and its proof."
+        },
+        {
+          "type": "try",
+          "target": "compose",
+          "tool": null,
+          "label": "Write a contract"
+        }
+      ]
+    },
+    {
+      "key": "attestation",
+      "slug": "provenance-attestation",
+      "alt_slug": "attestation-de-provenance",
+      "group": "Verdict and proof",
+      "title": "Proving a document came from us",
+      "lede": "A signed, self-contained record that says this file was issued here and has not been edited since. Two endpoints, no database, no lookup.",
+      "meta_description": "A signed, self-contained record that says this file was issued here and has not been edited since. Two endpoints, no database, no lookup.",
+      "icon": "M12 3l7 4v6c0 4-3 7-7 8-4-1-7-4-7-8V7zM9 12l2 2 4-4",
+      "tools": [
+        "markdown-to-pdf",
+        "protect-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "p",
+          "html": "A PDF says nothing about where it came from. An attestation does: hash of the file, page count, size, engine, theme, PDF variant, operations applied and the moment it was issued — serialised, signed with this deployment's key, and folded into a single line you can put in a header, a database column or an e-mail."
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "curl -s -X POST \"$BASE/api/attest\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' -d '{\n    \"pdf\": \"/download/acme/agreement.pdf\",\n    \"theme\": \"report@1\",\n    \"operations\": [\"convert\", \"redact\"]\n  }' | jq '{attestation, sha: .claims.output_sha256, pages: .claims.pages}'"
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"attestation\": \"v1.eyJ2ZXJzaW9uIjox….a3f9…\",\n  \"claims\": {\n    \"version\": 1,\n    \"service\": \"md-to-pdf\",\n    \"issued_at\": \"2026-08-19T12:04:00Z\",\n    \"output_sha256\": \"9f2c1d84…\",\n    \"bytes\": 184203,\n    \"pages\": 12,\n    \"theme\": \"report@1\",\n    \"operations\": [\"convert\", \"redact\"]\n  }\n}"
+        },
+        {
+          "type": "p",
+          "html": "The record is <b>self-contained</b> on purpose: verifying it needs the file and that one line, never a lookup in a store we would then have to keep, back up and eventually leak. <code>claims</code> is the same record, readable, so you can show it without decoding anything."
+        },
+        {
+          "type": "h",
+          "text": "Verifying, later, elsewhere"
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "curl -s -X POST \"$BASE/api/verify\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' -d '{\n    \"pdf\": \"asset://as_9f2c…\",\n    \"attestation\": \"v1.eyJ2ZXJzaW9uIjox….a3f9…\"\n  }'\n# {\"verdict\":\"valid\",\"detail\":\"…\",\"attestation\":{…}}"
+        },
+        {
+          "type": "p",
+          "html": "The document is uploaded like any other — <code>POST /api/files</code> then <code>asset://</code> — so a partner who received a PDF by mail can check it without ever having had an account here."
+        },
+        {
+          "type": "h",
+          "text": "The four verdicts"
+        },
+        {
+          "type": "table",
+          "head": [
+            "Verdict",
+            "What happened",
+            "What to do"
+          ],
+          "rows": [
+            [
+              "<code>valid</code>",
+              "The signature matches and the file still hashes to what was sealed.",
+              "Nothing. This is the file that was issued."
+            ],
+            [
+              "<code>altered</code>",
+              "The record is genuine, and the <b>document</b> no longer hashes to it.",
+              "The file was edited after issue. Ask for the original."
+            ],
+            [
+              "<code>forged</code>",
+              "The signature does not belong to this deployment's key.",
+              "The record was tampered with — or it was issued by another service."
+            ],
+            [
+              "<code>unreadable</code>",
+              "Not in the <code>v1.&lt;payload&gt;.&lt;signature&gt;</code> form, or a version this build does not read.",
+              "Copy-paste accident, most of the time. Check the whole line travelled."
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "html": "<code>altered</code> and <code>forged</code> are deliberately told apart. They are different incidents — an edited document, or a fabricated record — and a single <i>invalid</i> would hide which one you are dealing with."
+        },
+        {
+          "type": "h",
+          "text": "What it proves, and what it does not"
+        },
+        {
+          "type": "note",
+          "level": "warn",
+          "html": "An attestation proves <b>origin and integrity</b> against one deployment's key. It is not a qualified electronic signature: it carries no identity, no certificate and no legal timestamp. When a document has to be signed in the legal sense, that is a different apparatus, and this one does not pretend to replace it."
+        },
+        {
+          "type": "p",
+          "html": "The signing key is the deployment's. Set <code>ATTESTATION_SECRET</code> (16 characters at least) and attestations survive a restart and can be checked by any instance sharing it; leave it unset and the service draws a key at startup, says so in its logs, and every attestation stops verifying at the next restart. That is the honest failure: an attestation nobody can check is better than one anybody can forge."
+        },
+        {
+          "type": "p",
+          "html": "The natural pairing is with the contract: <code>POST /api/compose</code> with <code>\"attest\": true</code> renders the document, grades it, and seals it in one call — the file, its verdict and its proof, produced together."
+        },
+        {
+          "type": "try",
+          "target": "attest",
+          "tool": null,
+          "label": "Seal a document"
+        }
+      ]
+    },
+    {
+      "key": "recipes",
+      "slug": "five-complete-recipes",
+      "alt_slug": "cinq-recettes-completes",
+      "group": "End to end",
+      "title": "Five complete recipes",
+      "lede": "Whole workflows, copy-pasteable, each combining several features the way a real integration does.",
+      "meta_description": "Whole workflows, copy-pasteable, each combining several features the way a real integration does.",
+      "icon": "M4 4h16v4H4zM4 12h10M4 17h7M17 12l3 3-3 3",
+      "tools": [
+        "markdown-to-pdf",
+        "watermark-pdf",
+        "protect-pdf",
+        "redact-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "h",
+          "text": "1 · A branded, sealed contract"
+        },
+        {
+          "type": "p",
+          "html": "Cover page, brand kit, numbering, table of contents, draft watermark, then AES-256. Four calls, each feeding the next."
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "# 1. Render, save server-side\ncurl -s -X POST \"$BASE/api/convert\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' -d '{\n    \"markdown\": \"# Service agreement\\n\\n## 1. Scope\\n…\",\n    \"options\": {\n      \"theme\": \"report@1\",\n      \"toc\": true, \"toc_depth\": 2,\n      \"page_numbers\": true,\n      \"page_number_format\": \"counter(page) \\\" / \\\" counter(pages)\",\n      \"cover\": { \"title\": \"Service agreement\", \"subtitle\": \"ACME × AI SmartTalk\", \"date\": \"2026-07-26\" },\n      \"autolayout\": true\n    },\n    \"client_id\": \"acme\", \"pdf_name\": \"agreement\"\n  }'\n# {\"download_url\":\"/download/acme/agreement.pdf\",\"layout\":{\"score\":97,…}}\n\n# 2. Stamp it as a draft\ncurl -s -X POST \"$BASE/api/watermark\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' -d '{\n    \"pdf\": \"/download/acme/agreement.pdf\", \"text\": \"DRAFT\",\n    \"client_id\": \"acme\", \"pdf_name\": \"agreement-draft\"\n  }'\n\n# 3. Seal it — always last\ncurl -s -X POST \"$BASE/api/protect\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' -d '{\n    \"pdf\": \"/download/acme/agreement-draft.pdf\", \"password\": \"…\",\n    \"client_id\": \"acme\", \"pdf_name\": \"agreement-sealed\"\n  }'"
+        },
+        {
+          "type": "h",
+          "text": "2 · A two-audience study"
+        },
+        {
+          "type": "p",
+          "html": "One source, two PDFs. The free edition keeps the CENSOR tags; the paid edition has them stripped before the call. Same theme, same pagination, same figures — which is what makes the hole read as a paywall rather than as a broken document."
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "# Free edition — the source ships with its tags\ncurl -s -X POST \"$BASE/api/convert\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' -d @study.json \\\n  --output study-free.pdf\n\n# Paid edition — same JSON, tags removed from the `markdown` field first\njq '.markdown |= gsub(\"\\\\{\\\\{CENSOR:[^}]*\\\\}\\\\}\"; \"\")' study.json \\\n  | curl -s -X POST \"$BASE/api/convert\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n      -H 'Content-Type: application/json' -d @- --output study-full.pdf"
+        },
+        {
+          "type": "h",
+          "text": "3 · Invoices in bulk"
+        },
+        {
+          "type": "p",
+          "html": "One Tera template, one JSON context per invoice, no theme and no <code>autolayout</code> — this is the path built for volume. The template is stored on your side and sent with each call, so a change of wording is a deploy of your service, not of ours."
+        },
+        {
+          "type": "code",
+          "lang": "json",
+          "code": "{\n  \"template\": \"<h1>Invoice {{ number }}</h1>\\n<p>{{ customer.name }}</p>\\n<table>{% for l in lines %}<tr><td>{{ l.label }}</td><td>{{ l.amount }}</td></tr>{% endfor %}</table>\",\n  \"data\": {\n    \"number\": \"2026-0412\",\n    \"customer\": { \"name\": \"ACME\" },\n    \"lines\": [{ \"label\": \"Annual subscription\", \"amount\": \"1 200,00 €\" }]\n  },\n  \"options\": { \"paper_size\": \"a4\", \"margins\": { \"top\": \"20mm\", \"bottom\": \"20mm\" } },\n  \"client_id\": \"acme\", \"pdf_name\": \"invoice-2026-0412\"\n}"
+        },
+        {
+          "type": "note",
+          "level": "info",
+          "html": "Identical inputs hit the content-addressed render cache and come back with <code>cached: true</code> without re-rendering. Two invoices differ, so they will not — but a re-run of the same batch after a failure costs almost nothing."
+        },
+        {
+          "type": "h",
+          "text": "4 · Visual regression in CI"
+        },
+        {
+          "type": "p",
+          "html": "Render the same document on both branches, compare, fail the build if anything moved. The threshold stays at 0 so a renamed heading is caught."
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "render() {  # $1 = name — renders the reference document and saves it\n  curl -s -X POST \"$BASE/api/convert\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n    -H 'Content-Type: application/json' \\\n    -d \"$(jq -n --rawfile md fixtures/reference.md --arg n \"$1\" \\\n         '{markdown: $md, options: {theme: \"report@1\"}, client_id: \"ci\", pdf_name: $n}')\" \\\n    | jq -r .download_url\n}\n\nBEFORE=$(git stash && render main && git stash pop)\nAFTER=$(render branch)\n\nVERDICT=$(curl -s -X POST \"$BASE/api/diff\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  -d \"{\\\"before\\\": \\\"$BEFORE\\\", \\\"after\\\": \\\"$AFTER\\\", \\\"threshold\\\": 0}\" | jq -r .verdict)\n\n[ \"$VERDICT\" = identical ] || { echo \"rendering changed\"; exit 1; }"
+        },
+        {
+          "type": "h",
+          "text": "5 · Sharing a third-party document safely"
+        },
+        {
+          "type": "p",
+          "html": "A supplier contract has to go to a partner, minus the personal data and the bank details. Redact first, then compare the result against the source: the pages the diff reports as changed must be exactly the pages the redaction says it painted. Two independent answers agreeing is what makes it a check rather than a hope."
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "# 1. Redact — JSON form, because we want the counts back\ncurl -s -X POST \"$BASE/api/redact\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' -d '{\n    \"pdf\": \"/download/legal/supplier-contract.pdf\",\n    \"entities\": [\"email\", \"iban\", \"phone\"],\n    \"patterns\": [\"Jean Dupont\"],\n    \"client_id\": \"legal\", \"pdf_name\": \"supplier-contract-public\"\n  }'\n# {\"redactions\":[{\"page\":1,\"count\":4},{\"page\":3,\"count\":2}],\"mode\":\"flatten\",…}\n#\n# An empty `redactions` array here means nothing was FOUND — check the source\n# has a text layer before concluding it had nothing to hide.\n\n# 2. Compare source and result: pages 1 and 3 must be the ones that moved\ncurl -s -X POST \"$BASE/api/diff\" -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'Content-Type: application/json' -d '{\n    \"before\": \"/download/legal/supplier-contract.pdf\",\n    \"after\":  \"/download/legal/supplier-contract-public.pdf\",\n    \"threshold\": 0\n  }' | jq '.per_page'"
+        },
+        {
+          "type": "note",
+          "level": "info",
+          "html": "The redacted file is rebuilt from pixels, so <b>every</b> page differs from its source at the byte level. The diff still tells you what you need: <code>per_page</code> ranks the pages by how much visibly changed, and a page that only lost a text layer barely moves while a page that gained a black rectangle does."
+        }
+      ]
+    },
+    {
+      "key": "limits",
+      "slug": "limits-caching-and-safety",
+      "alt_slug": "limites-cache-et-securite",
+      "group": "Operating",
+      "title": "Limits, caching and safety",
+      "lede": "What the service refuses, what it remembers, and what it does when it is busy. Reading this before going to production is cheaper than reading it after.",
+      "meta_description": "What the service refuses, what it remembers, and what it does when it is busy. Reading this before going to production is cheaper than reading it after.",
+      "icon": "M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z",
+      "tools": [
+        "markdown-to-pdf"
+      ],
+      "blocks": [
+        {
+          "type": "h",
+          "text": "Timeouts and queueing"
+        },
+        {
+          "type": "p",
+          "html": "Renders run in a bounded pool. Past the pool, requests queue; past the queue timeout, you get a <code>429</code> with a <code>Retry-After</code> header telling you when a retry has a chance. A whole job — render, preview, redaction or diff, every process and every corrective pass together — is bounded by a single wall-clock deadline, so a request can never outlive the proxy in front of it."
+        },
+        {
+          "type": "table",
+          "head": [
+            "Status",
+            "Meaning",
+            "What to do"
+          ],
+          "rows": [
+            [
+              "<code>400</code>",
+              "Malformed request, or a refused URL named explicitly.",
+              "Read <code>details</code> — it names the offending field or URL."
+            ],
+            [
+              "<code>401</code>",
+              "Token missing or refused.",
+              "Check the <code>X-API-Key</code> header."
+            ],
+            [
+              "<code>404</code>",
+              "Unknown theme, template or saved PDF.",
+              "An unknown theme lists the ones available."
+            ],
+            [
+              "<code>429</code>",
+              "No render slot within the queue timeout.",
+              "Honour <code>Retry-After</code>; do not hammer."
+            ],
+            [
+              "<code>502</code>",
+              "A service we depend on failed — Mermaid Studio, typically.",
+              "Diagrams normally degrade instead; this is the rest."
+            ],
+            [
+              "<code>504</code>",
+              "The job hit its deadline.",
+              "Split the document, or drop <code>autolayout</code>."
+            ]
+          ]
+        },
+        {
+          "type": "h",
+          "text": "The render cache"
+        },
+        {
+          "type": "p",
+          "html": "Rendering is <b>content-addressed</b>: the key hashes the expanded source, your CSS, the engine, the resolved options, the header and footer, and the theme <code>name@version</code>. Identical inputs come back instantly with <code>cached: true</code>. Two consequences are worth knowing before you go looking for a purge endpoint — there is none."
+        },
+        {
+          "type": "p",
+          "html": "Changing anything that reaches the key <b>invalidates nothing and evicts nothing</b>; it simply produces a different key, and both entries coexist until TTL or LRU drops them. And changing a <i>published</i> <code>theme.css</code> in place does not change the key at all — which is why theme versions exist."
+        },
+        {
+          "type": "h",
+          "text": "What a document may fetch"
+        },
+        {
+          "type": "p",
+          "html": "WeasyPrint dereferences every URL a document points at, so two layers stand in the way. The request is rejected with a <b>400 naming the offending URL</b> when the document or your CSS references <code>file://</code>, a private address, a cloud metadata endpoint, or a host outside the allowlist. At render time the fetcher re-checks every URL, re-resolving DNS and pinning the validated IP — a remote resource that is refused is simply <b>absent from the PDF</b> rather than an error."
+        },
+        {
+          "type": "note",
+          "level": "info",
+          "html": "This is why <code>weasyprint</code> is the default and the only engine available without a token. <code>wkhtmltopdf</code> and <code>pdflatex</code> only get the first layer — the guarded fetcher has no equivalent there."
+        },
+        {
+          "type": "h",
+          "text": "Tracing a request"
+        },
+        {
+          "type": "p",
+          "html": "Every response carries an <code>X-Request-Id</code>. Send your own on the way in — printable ASCII, 128 characters at most — and it is echoed back and attached to every log event the request produces, including the render event with its duration, engine and cache status. That identifier is what turns \"a PDF came out wrong yesterday\" into a line in a log."
+        },
+        {
+          "type": "code",
+          "lang": "shell",
+          "code": "curl -i -X POST \"$BASE/api/convert\" \\\n  -H \"X-API-Key: $MDTOPDF_KEY\" \\\n  -H 'X-Request-Id: invoice-batch-2026-07-26-0412' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"markdown\": \"# Invoice\"}'"
+        },
+        {
+          "type": "h",
+          "text": "The open legacy endpoint"
+        },
+        {
+          "type": "p",
+          "html": "<code>POST /</code> takes FormData and is <b>not</b> covered by the API key — it never was, by design, so existing integrations keep working. Being open is what shapes what it offers: it renders with <code>weasyprint</code> only, block expansion is off (a <code>```mermaid</code> fence stays a code listing, so an anonymous body of them cannot turn one request into thousands of outbound calls), and a blocked URL is reported rather than fatal. <code>/api/*</code> behaves the other way round on all three counts."
+        },
+        {
+          "type": "try",
+          "target": "health",
+          "tool": null,
+          "label": "Check the service"
+        }
+      ]
+    }
+  ]
+}

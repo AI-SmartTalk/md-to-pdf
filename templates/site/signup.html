@@ -1,0 +1,165 @@
+{# La création de compte.
+
+   Ce n'est pas une formalité administrative : c'est le moment où l'on garde la personne
+   ou on la perd. D'où l'ordre choisi — ce qu'elle y gagne d'abord, deux champs ensuite,
+   et la promesse « aucune carte bancaire » là où l'œil hésite, juste avant le bouton. #}
+{% extends "base.html" %}
+{% import "icons.html" as icons %}
+
+{% block head_extra %}
+{# Un formulaire d'inscription n'a rien à faire dans un index ; les liens qu'il porte,
+   eux, méritent d'être suivis. #}
+<meta name="robots" content="noindex, follow">
+<script src="/static/outils/account.js" defer></script>
+{% endblock head_extra %}
+
+{% block content %}
+<div class="wrap">
+
+<section class="hero hero-short">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <h1>
+    {%- if lang == "fr" -%}Gardez la trace de vos documents{%- else -%}Keep track of your documents{%- endif -%}
+  </h1>
+  <p class="lede">
+    {%- if lang == "fr" -%}
+    Un compte gratuit vous donne l'historique de vos documents avec le verdict de chaque
+    opération, vos clés d'API en libre-service, et des fichiers gardés plus longtemps.
+    Deux champs, aucune carte bancaire.
+    {%- else -%}
+    A free account gives you the history of your documents with the verdict of every
+    operation, self-service API keys, and files kept for longer. Two fields, no card.
+    {%- endif -%}
+  </p>
+</section>
+
+<div class="tool-layout">
+  <div class="account-col">
+
+    {# `novalidate` : les bulles natives varient d'un navigateur à l'autre et ne sont pas
+       annoncées de la même façon. Les messages sont écrits ici, dans une région vivante. #}
+    <form class="tool-panel" data-account="signup" data-next="{{ workspace | safe }}" novalidate>
+      <div class="params">
+        <div class="field">
+          <label for="account-email">{% if lang == "fr" %}Adresse e-mail{% else %}E-mail address{% endif %}</label>
+          {# `autocomplete` n'est pas décoratif : sans lui les gestionnaires de mots de
+             passe ne proposent rien, et l'inscription chute. #}
+          <input id="account-email" name="email" type="email" autocomplete="email"
+                 autocapitalize="off" autocorrect="off" spellcheck="false" required
+                 placeholder="{% if lang == 'fr' %}vous@exemple.fr{% else %}you@example.com{% endif %}">
+        </div>
+
+        <div class="field">
+          <label for="account-password">{% if lang == "fr" %}Mot de passe{% else %}Password{% endif %}</label>
+          <input id="account-password" name="password" type="password"
+                 autocomplete="new-password" minlength="10" required
+                 aria-describedby="account-password-hint">
+          {# Le compteur dit la règle avant la soumission ; une erreur rouge après coup
+             aurait appris la même chose, une seconde trop tard. #}
+          <span class="hint" id="account-password-hint" data-role="password-hint"
+                data-min="{% if lang == 'fr' %}Au moins 10 caractères.{% else %}At least 10 characters.{% endif %}"
+                data-left="{% if lang == 'fr' %}Encore {n} caractère{s}.{% else %}{n} character{s} to go.{% endif %}"
+                data-ok="{% if lang == 'fr' %}Longueur suffisante.{% else %}Long enough.{% endif %}">
+            {%- if lang == "fr" -%}Au moins 10 caractères.{%- else -%}At least 10 characters.{%- endif -%}
+          </span>
+        </div>
+
+        {# Afficher le mot de passe attrape les fautes de frappe que la confirmation
+           prétendait attraper, sans faire saisir deux fois. #}
+        <div class="field inline">
+          <input id="account-reveal" type="checkbox" data-role="reveal">
+          <label for="account-reveal">{% if lang == "fr" %}Afficher le mot de passe{% else %}Show password{% endif %}</label>
+        </div>
+      </div>
+
+      <div class="alert" role="alert" aria-live="assertive" hidden data-role="error">
+        <span class="alert-title" data-role="error-title"></span>
+        <span class="alert-details" data-role="error-details"></span>
+        <a href="{{ other_page | safe }}" data-role="error-link" data-carry-suite hidden>
+          {%- if lang == "fr" -%}Se connecter{%- else -%}Sign in{%- endif -%}
+        </a>
+      </div>
+
+      <div class="run-row">
+        <button type="submit" class="btn primary lg" data-role="submit">
+          {%- if lang == "fr" -%}Créer mon compte{%- else -%}Create my account{%- endif -%}
+        </button>
+        <span class="status" hidden data-role="status">
+          <span class="spinner" aria-hidden="true"></span>
+          <span data-role="status-text"></span>
+        </span>
+      </div>
+
+      <p class="notice">
+        {{ icons::trust(name="shield") }}
+        <span>
+          {%- if lang == "fr" -%}
+          Le palier gratuit est gratuit : aucune carte bancaire n'est demandée, ni
+          maintenant ni pour continuer. Votre adresse ne sert qu'à vous reconnecter.
+          {%- else -%}
+          The free tier is free: no card is asked for, now or later. Your address is only
+          ever used to sign you back in.
+          {%- endif -%}
+        </span>
+      </p>
+    </form>
+
+    <p class="account-alt">
+      {%- if lang == "fr" -%}
+      Vous avez déjà un compte ? <a href="{{ other_page | safe }}" data-carry-suite>Se connecter</a>.
+      {%- else -%}
+      Already have an account? <a href="{{ other_page | safe }}" data-carry-suite>Sign in</a>.
+      {%- endif -%}
+    </p>
+  </div>
+
+  <aside class="tool-aside">
+    <div class="aside-card">
+      <h2>{% if lang == "fr" %}Ce que le compte ajoute{% else %}What the account adds{% endif %}</h2>
+      <ul>
+        <li>{{ icons::trust(name="check") }}
+          {%- if lang == "fr" -%}
+          L'historique de vos documents, avec le verdict de chaque opération — ce qui a été
+          préservé, ce qui a été perdu.
+          {%- else -%}
+          The history of your documents, with the verdict of every operation — what was
+          preserved, what was lost.
+          {%- endif -%}
+        </li>
+        <li>{{ icons::trust(name="check") }}
+          {%- if lang == "fr" -%}
+          Vos clés d'API, créées et révoquées par vous, sans passer par nous.
+          {%- else -%}
+          Your API keys, created and revoked by you, without going through us.
+          {%- endif -%}
+        </li>
+        <li>{{ icons::trust(name="check") }}
+          {%- if lang == "fr" -%}
+          Vos fichiers gardés {{ member_retention_hours }} heures au lieu de
+          {{ retention_hours }}.
+          {%- else -%}
+          Your files kept for {{ member_retention_hours }} hours instead of
+          {{ retention_hours }}.
+          {%- endif -%}
+        </li>
+      </ul>
+    </div>
+
+    <div class="aside-card">
+      <h2>{% if lang == "fr" %}Les outils restent libres{% else %}The tools stay free{% endif %}</h2>
+      <p>
+        {%- if lang == "fr" -%}
+        Aucun outil ne se ferme parce que vous n'avez pas de compte, et aucun ne pose de
+        filigrane. Le compte ajoute ; il ne reprend rien.
+        {%- else -%}
+        No tool closes because you have no account, and none adds a watermark. The account
+        gives; it never takes anything back.
+        {%- endif -%}
+      </p>
+      <p><a href="{{ home | safe }}">{% if lang == "fr" %}Revenir aux outils{% else %}Back to the tools{% endif %}</a></p>
+    </div>
+  </aside>
+</div>
+
+</div>
+{% endblock content %}

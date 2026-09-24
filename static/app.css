@@ -43,6 +43,7 @@
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   --topbar-h: 56px;
+  --subbar-h: 42px;                 /* navigation de section, sous celle du site */
   --maxw: 1280px;
   --ease: cubic-bezier(.22, .61, .36, 1);
 }
@@ -80,7 +81,7 @@ body {
   margin: 0;
   overflow: hidden;                 /* le shell ne scrolle pas, ses panneaux si */
   display: grid;
-  grid-template-rows: var(--topbar-h) minmax(0, 1fr);
+  grid-template-rows: var(--topbar-h) var(--subbar-h) minmax(0, 1fr);
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
@@ -398,12 +399,15 @@ table.grid td.desc { color: var(--text-dim); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ─────────────────────────────── topbar ─────────────────────────────── */
+/* ────────────────────── barre du site et sous-barre ─────────────────────
+   Les valeurs reprennent celles de `static/outils/brand.css` : c'est la même
+   barre, sur les deux surfaces, et un écart de deux pixels se voit quand on
+   passe de l'une à l'autre. */
 
 .topbar {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
   padding: 0 16px;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(14px);
@@ -414,18 +418,50 @@ table.grid td.desc { color: var(--text-dim); }
 .brand {
   display: flex;
   align-items: center;
-  gap: 9px;
-  font-weight: 700;
-  font-size: 15px;
+  gap: 10px;
+  font-weight: 500;
+  font-size: 15.5px;
   color: var(--text);
   letter-spacing: -.02em;
   flex: none;
 }
 .brand:hover { text-decoration: none; }
-.brand svg { color: var(--accent); }
+.brand svg { color: var(--accent); flex: none; }
+.brand strong { font-weight: 700; }
 .brand .ver { font-family: var(--mono); font-size: 10.5px; font-weight: 500; color: var(--text-faint); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; }
 
-.topnav { display: flex; gap: 2px; }
+/* La sous-barre porte la navigation propre à la section et ses outils. Elle est
+   posée sur le fond alternatif : deux barres du même gris se liraient comme une
+   seule, haute et confuse. */
+.subbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px;
+  min-width: 0;
+  background: var(--bg-alt);
+  border-bottom: 1px solid var(--border-soft);
+  z-index: 30;
+}
+.subbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
+
+.subbar-back {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-faint);
+  white-space: nowrap;
+  flex: none;
+  padding-right: 12px;
+  border-right: 1px solid var(--border-soft);
+}
+.subbar-back:hover { color: var(--text); text-decoration: none; }
+
+.topnav { display: flex; gap: 2px; min-width: 0; }
+.sitenav a { font-size: 14px; }
+/* En dessous d'une certaine largeur, les onglets de section défilent plutôt que
+   de disparaître : sans eux, la section n'a plus de navigation du tout. */
+.subnav { overflow-x: auto; scrollbar-width: none; }
+.subnav::-webkit-scrollbar { display: none; }
 .topnav a {
   position: relative;
   font-size: 13.5px;
@@ -437,8 +473,9 @@ table.grid td.desc { color: var(--text-dim); }
 }
 .topnav a:hover { color: var(--text); background: var(--panel-2); text-decoration: none; }
 .topnav a[aria-current="page"] { color: var(--accent); background: var(--tint); }
+.subnav a { white-space: nowrap; }
 
-.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
 
 .cmdk-hint {
   display: inline-flex;
@@ -484,7 +521,7 @@ table.grid td.desc { color: var(--text-dim); }
 
 .popover {
   position: absolute;
-  top: calc(var(--topbar-h) - 4px);
+  top: calc(var(--topbar-h) + var(--subbar-h) - 4px);
   right: 14px;
   z-index: 60;
   width: 340px;
@@ -528,119 +565,6 @@ table.grid td.desc { color: var(--text-dim); }
   text-transform: uppercase;
   color: var(--text-faint);
 }
-
-/* ─────────────────────────────── accueil ────────────────────────────── */
-
-.hero {
-  position: relative;
-  overflow: hidden;
-  border-bottom: 1px solid var(--border-soft);
-}
-.hero-glow {
-  position: absolute;
-  inset: -50% 30% 20% -15%;
-  background:
-    radial-gradient(42% 42% at 32% 42%, color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 70%),
-    radial-gradient(38% 38% at 64% 56%, color-mix(in srgb, var(--accent-2) 22%, transparent) 0%, transparent 72%);
-  filter: blur(30px);
-  opacity: .7;
-  pointer-events: none;
-}
-.hero .wrap {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1.02fr) minmax(0, .98fr);
-  gap: 44px;
-  align-items: center;
-  padding-top: 56px;
-  padding-bottom: 60px;
-}
-
-.hero h1 { margin-top: 14px; font-size: clamp(30px, 3.8vw, 48px); font-weight: 800; }
-.grad {
-  background: linear-gradient(96deg, var(--accent) 0%, var(--accent-2) 60%, var(--accent-3) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.lede { margin-top: 16px; max-width: 52ch; font-size: 16px; color: var(--text-dim); }
-.lede.small { margin-top: 12px; font-size: 14px; }
-.hero-cta { display: flex; gap: 10px; margin-top: 26px; flex-wrap: wrap; }
-
-.hero-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 34px; max-width: 540px; }
-.stat {
-  background: color-mix(in srgb, var(--panel) 75%, transparent);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--r);
-  padding: 10px 13px;
-}
-.stat-value { display: block; font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--accent); line-height: 1.3; }
-.stat-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-faint); }
-
-/* illustration du pipeline */
-
-.pipeline { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, .84fr); gap: 12px; align-items: center; }
-.pipe-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow-lg); overflow: hidden; }
-.pipe-card.in { transform: rotate(-1deg); }
-.pipe-card.out { transform: rotate(1.2deg); }
-.pipe-head {
-  display: flex; align-items: center; gap: 8px;
-  font-family: var(--mono); font-size: 11px; color: var(--text-faint);
-  padding: 7px 11px;
-  background: var(--panel-2);
-  border-bottom: 1px solid var(--border-soft);
-}
-.chip {
-  font-size: 9.5px; text-transform: uppercase; letter-spacing: .09em;
-  color: var(--accent);
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  border-radius: 999px;
-  padding: 1px 7px;
-}
-.pipe-body { padding: 11px; font-size: 11px; color: var(--text-dim); white-space: pre; }
-.tok-h { color: var(--accent); font-weight: 700; }
-.tok-b { color: var(--text); font-weight: 700; }
-.tok-c { color: var(--accent-2); }
-
-.pipe-arrow { display: grid; justify-items: center; gap: 5px; color: var(--text-faint); }
-.pipe-engine { font-family: var(--mono); font-size: 10px; text-align: center; }
-
-.page { background: #fff; padding: 15px 13px; display: grid; gap: 7px; position: relative; min-height: 196px; }
-.page-h { height: 10px; width: 62%; border-radius: 3px; background: #2b3a52; }
-.page-l { height: 6px; border-radius: 3px; background: #d6dde8; }
-.page-l.short { width: 72%; }
-.page-blur {
-  height: 44px; border-radius: 4px;
-  background: repeating-linear-gradient(115deg, #c9d3e2 0 10px, #dde4ee 10px 20px);
-  filter: blur(1.1px);
-  display: grid; place-items: center;
-  font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: #5a6a83;
-}
-.page-num { position: absolute; bottom: 7px; left: 0; right: 0; text-align: center; font-family: var(--mono); font-size: 8.5px; color: #8b98ac; }
-
-.home-section { padding: 48px 0; border-bottom: 1px solid var(--border-soft); }
-.home-section.tinted { background: var(--bg-alt); }
-.home-section .section-head { margin-bottom: 26px; }
-
-.quick { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 20px; align-items: start; }
-.quick-notes { display: grid; gap: 10px; }
-.quick-note {
-  background: var(--panel);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--r);
-  padding: 12px 14px;
-}
-.quick-note h4 { font-size: 12.5px; }
-.quick-note p { margin-top: 5px; font-size: 12.5px; color: var(--text-dim); }
-
-.home-foot {
-  display: flex; flex-wrap: wrap; gap: 16px;
-  align-items: center; justify-content: space-between;
-  padding: 22px 0 32px;
-  font-size: 13px;
-  color: var(--text-dim);
-}
-.home-foot .links { display: flex; gap: 16px; font-family: var(--mono); font-size: 12.5px; }
 
 /* ───────────────────────────── vue API ──────────────────────────────── */
 
@@ -1122,12 +1046,6 @@ img.preview { max-width: 100%; border: 1px solid var(--border); border-radius: v
 }
 
 @media (max-width: 1080px) {
-  .hero .wrap { grid-template-columns: minmax(0, 1fr); padding-top: 40px; padding-bottom: 44px; }
-  .pipeline { grid-template-columns: minmax(0, 1fr); }
-  .pipe-arrow { transform: rotate(90deg); justify-self: center; }
-  .pipe-card.in, .pipe-card.out { transform: none; }
-  .quick { grid-template-columns: minmax(0, 1fr); }
-
   /* la console bascule en panneaux alternés : deux colonnes serrées valent
      moins qu'un panneau lisible à la fois */
   .console-switch { display: inline-flex; }
@@ -1139,10 +1057,9 @@ img.preview { max-width: 100%; border: 1px solid var(--border); border-radius: v
 }
 
 @media (max-width: 860px) {
-  .topnav a { padding: 6px 9px; font-size: 13px; }
+  .topnav a, .sitenav a { padding: 6px 9px; font-size: 13px; }
   .cmdk-hint { display: none; }
   .brand .ver { display: none; }
-  .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #view-api .split,
   #view-guides .split { grid-template-columns: minmax(0, 1fr); }
   #view-api .sidebar,
@@ -1163,7 +1080,19 @@ img.preview { max-width: 100%; border: 1px solid var(--border); border-radius: v
 }
 
 @media (max-width: 620px) {
-  .topnav { display: none; }
+  /* La barre du site cède ses entrées avant que les onglets de section ne
+     cèdent les leurs : « Retour au site » suffit à repartir, alors qu'une
+     section sans navigation ne se parcourt plus.
+
+     « Accès Pro » disparaît aussi : l'onglet « Clés d'API », lui, reste visible
+     et mène au même endroit. Deux barres qui ne peuvent pas passer à la ligne
+     ne tiennent pas 390 px autrement. */
+  .topbar { gap: 8px; padding: 0 12px; }
+  .sitenav { display: none; }
+  .topbar-right .btn { display: none; }
+  .brand { gap: 8px; font-size: 14px; min-width: 0; flex: 0 1 auto; }
+  .brand span:not(.ver) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .subbar { gap: 10px; padding: 0 12px; }
   .health span:not(.dot) { display: none; }
   .wrap { padding: 0 16px; }
 }

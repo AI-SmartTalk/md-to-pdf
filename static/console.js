@@ -8,6 +8,113 @@
 
 const Console = (() => {
 
+  // ══════════════════════════════════════════════════════════ assets
+
+  // Les fichiers déposés par POST /api/files vivent à côté des PDFs générés :
+  // même durée de vie qu'une session de travail, même stockage local. `state`
+  // vient de ui.js ; on lui ajoute ici ce que seule la console utilise.
+  state.assets = JSON.parse(localStorage.getItem("mdpdf.assets") || "[]");
+
+  const persistAssets = () => localStorage.setItem("mdpdf.assets", JSON.stringify(state.assets));
+
+  const IMAGE_KINDS = ["png", "jpeg", "gif", "webp", "tiff"];
+  const OFFICE_KINDS = ["docx", "xlsx", "pptx", "odt", "ods", "odp", "ole", "csv"];
+
+  // Ce qu'un sélecteur de source propose. Un outil qui n'accepte pas de PDF ne
+  // doit pas en proposer : le 400 arriverait après l'envoi, pas avant.
+  function sourceOptions(pick) {
+    const out = [];
+    if (pick === "pdf") {
+      state.saved.forEach((url) => out.push({ value: url, label: url.replace("/download/", "") }));
+    }
+    state.assets.forEach((asset) => {
+      if (pick === "pdf" && asset.kind !== "pdf") return;
+      if (pick === "image" && !IMAGE_KINDS.includes(asset.kind)) return;
+      if (pick === "office" && !OFFICE_KINDS.includes(asset.kind)) return;
+      out.push({ value: "asset://" + asset.id, label: asset.name + " · " + asset.kind });
+    });
+    return out;
+  }
+
+  function fillPicker(select) {
+    const pick = select.dataset.pick;
+    const chosen = select.value;
+    select.innerHTML =
+      `<option value="">${escapeHtml(k(pick === "pdf" ? "console.pdfpicker" : "console.assetpicker"))}</option>` +
+      sourceOptions(pick)
+        .map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`)
+        .join("");
+    select.value = chosen;
+  }
+
+  // Un fichier déposé doit être utilisable dans la foulée : les sélecteurs déjà
+  // à l'écran sont regarnis sans reconstruire le formulaire, qui effacerait ce
+  // que l'utilisateur vient de saisir.
+  function refreshPickers() {
+    $$("#form .pdf-picker select").forEach(fillPicker);
+  }
+
+  function rememberAssets(list) {
+    if (!Array.isArray(list)) return 0;
+    let added = 0;
+    list.forEach((asset) => {
+      if (!asset || !asset.id || state.assets.some((a) => a.id === asset.id)) return;
+      state.assets.unshift(asset);
+      added++;
+    });
+    if (!added) return 0;
+    state.assets = state.assets.slice(0, 20);
+    persistAssets();
+    renderAssets();
+    refreshPickers();
+    return added;
+  }
+
+  // Tout ce qu'une réponse peut contenir d'asset : le dépôt lui-même, la sortie
+  // d'un outil, le résultat d'un travail asynchrone.
+  function harvestAssets(json) {
+    if (!json || typeof json !== "object") return 0;
+    let added = rememberAssets(json.files) + rememberAssets(json.assets);
+    if (json.asset) added += rememberAssets([json.asset]);
+    if (json.result) added += harvestAssets(json.result);
+    return added;
+  }
+
+  function renderAssets() {
+    const list = $("#assetList");
+    if (!list) return;
+    $("#assetCount").textContent = state.assets.length ? state.assets.length : "";
+
+    if (!state.assets.length) {
+      list.innerHTML = `<li class="empty">${escapeHtml(k("console.assets.empty"))}</li>`;
+      return;
+    }
+
+    list.innerHTML = "";
+    state.assets.forEach((asset) => {
+      const li = document.createElement("li");
+      const use = document.createElement("a");
+      use.href = "#";
+      use.textContent = asset.name + " · " + asset.kind + (asset.pages ? " · " + asset.pages + " p." : "");
+      use.title = "asset://" + asset.id;
+      use.onclick = (e) => {
+        e.preventDefault();
+        copyText("asset://" + asset.id, k("console.assets.copied"));
+      };
+      const drop = document.createElement("button");
+      drop.textContent = "✕";
+      drop.title = k("console.assets.drop");
+      drop.onclick = () => {
+        state.assets = state.assets.filter((a) => a.id !== asset.id);
+        persistAssets();
+        renderAssets();
+        refreshPickers();
+      };
+      li.append(use, drop);
+      list.appendChild(li);
+    });
+  }
+
   // ══════════════════════════════════════════════════════════ formulaire
 
   const fieldId = (name) => "f_" + name.replace(/[^\w]/g, "_");
@@ -75,12 +182,19 @@ const Console = (() => {
 
     let input;
     if (field.type === "textarea" || field.type === "json" || field.type === "pdflist"
-        || field.type === "list") {
+        || field.type === "assetlist" || field.type === "list") {
       input = document.createElement("textarea");
       input.rows = field.rows || 4;
       input.spellcheck = false;
       input.value = fieldValue(field);
       if (field.type === "pdflist") input.placeholder = "/download/demo-client/doc1.pdf";
+      if (field.type === "assetlist") input.placeholder = "asset://as_…";
+    } else if (field.type === "file") {
+      // Le seul endpoint multipart de l'API : sans ce champ, aucun des outils
+      // qui consomment un asset n'est essayable depuis la console.
+      input = document.createElement("input");
+      input.type = "file";
+      if (field.multiple) input.multiple = true;
     } else if (field.type === "select" || field.type === "bool") {
       input = document.createElement("select");
       (field.options || ["", "true", "false"]).forEach((opt) => {
@@ -103,18 +217,20 @@ const Console = (() => {
     input.dataset.name = field.name;
     input.dataset.kind = field.type;
 
-    if (field.type === "pdfpick" || field.type === "pdflist") {
+    const picks = { pdfpick: "pdf", pdflist: "pdf", assetpick: "any", assetlist: "any" };
+    if (picks[field.type]) {
+      const multi = field.type === "pdflist" || field.type === "assetlist";
       const picker = document.createElement("div");
       picker.className = "pdf-picker";
       const select = document.createElement("select");
-      select.innerHTML = `<option value="">${escapeHtml(k("console.pdfpicker"))}</option>` +
-        state.saved.map((u) => `<option value="${escapeHtml(u)}">${escapeHtml(u.replace("/download/", ""))}</option>`).join("");
+      select.dataset.pick = field.pick || picks[field.type];
+      fillPicker(select);
       const add = document.createElement("button");
       add.type = "button";
-      add.textContent = field.type === "pdflist" ? k("console.add") : k("console.use");
+      add.textContent = multi ? k("console.add") : k("console.use");
       add.onclick = () => {
         if (!select.value) return;
-        if (field.type === "pdflist") {
+        if (multi) {
           input.value = (input.value.trim() ? input.value.trim() + "\n" : "") + select.value;
         } else {
           input.value = select.value;
@@ -194,6 +310,12 @@ const Console = (() => {
     $("#form").querySelectorAll("[data-name]").forEach((el) => {
       const wrap = el.closest(".field");
       if (wrap && wrap.hidden) return;
+      if (el.type === "file") {
+        // `el.value` d'un champ fichier ne vaut qu'un chemin factice : ce qui
+        // s'envoie, ce sont les objets File eux-mêmes.
+        values[el.dataset.name] = el.files;
+        return;
+      }
       values[el.dataset.name] = el.type === "checkbox" ? el.checked : el.value;
     });
     return values;
@@ -215,6 +337,7 @@ const Console = (() => {
     Object.entries(values).forEach(([name, raw]) => {
       if (name.startsWith("__")) return;
       if (raw === "" || raw === false || raw == null) return;
+      if (typeof FileList !== "undefined" && raw instanceof FileList) return;
 
       const spec = findSpec(ep.fields, name);
       const kind = spec ? spec.type : "text";
@@ -229,7 +352,7 @@ const Console = (() => {
       } else if (kind === "number") {
         value = Number(raw);
         if (Number.isNaN(value)) throw new Error(`${k("console.field")} « ${name} » : ${k("console.field.number")}`);
-      } else if (kind === "pdflist" || kind === "list") {
+      } else if (kind === "pdflist" || kind === "assetlist" || kind === "list") {
         value = String(raw).split("\n").map((s) => s.trim()).filter(Boolean);
         if (!value.length) return;
       } else if (kind === "bool") {
@@ -256,13 +379,17 @@ const Console = (() => {
     return h;
   }
 
-  function buildCurl(ep, url, headers, bodyText, formValues) {
+  function buildCurl(ep, url, headers, bodyText, formValues, fileNames) {
     const parts = [`curl -X ${ep.method} '${url}'`];
     Object.entries(headers).forEach(([k, v]) => {
       // la clé n'est jamais recopiée en clair : le presse-papier peut finir n'importe où
       parts.push(`  -H '${k}: ${k === "X-API-Key" ? "$API_KEY" : v}'`);
     });
-    if (formValues) {
+    if (fileNames && fileNames.length) {
+      // Le champ « file » est répétable : c'est ainsi qu'un dépôt multiple se
+      // transcrit en curl, et c'est la forme que tout client HTTP sait produire.
+      fileNames.forEach((name) => parts.push(`  -F ${JSON.stringify("file=@" + name)}`));
+    } else if (formValues) {
       Object.entries(formValues).forEach(([k, v]) => {
         if (k.startsWith("__") || v === "" || v === false) return;
         parts.push(`  -F ${JSON.stringify(`${k}=${v}`)}`);
@@ -284,9 +411,30 @@ const Console = (() => {
     let body = null;
     let bodyText = "";
     let headers = {};
+    let fileNames = null;
 
     try {
-      if (ep.json) {
+      if (ep.multipart) {
+        const fd = new FormData();
+        fileNames = [];
+        Object.entries(values).forEach(([name, value]) => {
+          if (name.startsWith("__")) return;
+          if (typeof FileList !== "undefined" && value instanceof FileList) {
+            Array.from(value).forEach((file) => {
+              fd.append(name, file);
+              fileNames.push(file.name);
+            });
+            return;
+          }
+          if (value === "" || value === false || value == null) return;
+          fd.append(name, value);
+        });
+        if (!fileNames.length) throw new Error(k("console.file.none"));
+        body = fd;
+        // Content-Type est laissé au navigateur : la frontière multipart en fait
+        // partie, et une valeur écrite à la main la casserait.
+        headers = buildHeaders(ep, false);
+      } else if (ep.json) {
         const payload = buildPayload(ep, values);
         bodyText = JSON.stringify(payload);
         body = bodyText;
@@ -307,7 +455,7 @@ const Console = (() => {
       return;
     }
 
-    state.lastCurl = buildCurl(ep, url, headers, bodyText, ep.form ? values : null);
+    state.lastCurl = buildCurl(ep, url, headers, bodyText, ep.form && !ep.multipart ? values : null, fileNames);
     $("#tabCurl").innerHTML = highlightShell(state.lastCurl);
 
     $("#statusBadge").innerHTML = '<span class="spinner"></span>';
@@ -346,6 +494,19 @@ const Console = (() => {
     await renderResponse(blob, ctype, res.ok);
   }
 
+  // Juste assez pour que le fichier téléchargé porte un nom qu'un système
+  // d'exploitation sache ouvrir.
+  const BINARY_EXTENSIONS = {
+    "application/pdf": "pdf",
+    "application/zip": "zip",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+    "application/vnd.oasis.opendocument.text": "odt",
+    "application/vnd.oasis.opendocument.spreadsheet": "ods",
+    "application/vnd.oasis.opendocument.presentation": "odp",
+  };
+
   async function renderResponse(blob, ctype, ok) {
     const preview = $("#tabPreview");
     preview.innerHTML = "";
@@ -368,14 +529,28 @@ const Console = (() => {
       return;
     }
 
-    if (ctype === "image/png") {
+    if (ctype.startsWith("image/")) {
       state.blobUrl = URL.createObjectURL(blob);
       const img = document.createElement("img");
       img.className = "preview";
       img.alt = k("console.png.aria");
       img.src = state.blobUrl;
       preview.appendChild(img);
-      $("#tabRaw").textContent = `${k("console.binary")}image/png — ${formatBytes(blob.size)})`;
+      $("#tabRaw").textContent = `${k("console.binary")}${ctype} — ${formatBytes(blob.size)})`;
+      return;
+    }
+
+    // Un docx, un zip ou un octet-stream n'ont pas de visionneuse ici : le lien
+    // de téléchargement vaut mieux qu'un aperçu de leurs octets en texte.
+    if (ctype && blob.size && !ctype.startsWith("text/") && ctype !== "application/json") {
+      state.blobUrl = URL.createObjectURL(blob);
+      const dl = document.createElement("a");
+      dl.className = "preview-link";
+      dl.href = state.blobUrl;
+      dl.download = "response." + (BINARY_EXTENSIONS[ctype] || "bin");
+      dl.textContent = k("console.download.file") + ctype;
+      preview.appendChild(dl);
+      $("#tabRaw").textContent = `${k("console.binary")}${ctype} — ${formatBytes(blob.size)})`;
       return;
     }
 
@@ -392,6 +567,14 @@ const Console = (() => {
     const pre = document.createElement("pre");
     pre.innerHTML = json ? highlightJson(body) : escapeHtml(body);
     preview.appendChild(pre);
+
+    // Un asset déposé ou produit rejoint la liste latérale et les sélecteurs :
+    // c'est ce qui rend la chaîne « je dépose, puis j'enchaîne » réellement
+    // praticable depuis la console.
+    if (ok && json) {
+      const added = harvestAssets(json);
+      if (added) toast(added + " " + k("console.assets.added"));
+    }
 
     if (ok && json && json.download_url) {
       rememberPdf(json.download_url);
@@ -573,6 +756,7 @@ const Console = (() => {
     initGutter();
     showEmptyResponse();
     renderSaved();
+    renderAssets();
   }
 
   // Retraduction : la liste des endpoints et le formulaire courant portent des
@@ -580,9 +764,10 @@ const Console = (() => {
   function refresh() {
     renderGroups();
     renderSaved();
+    renderAssets();
     showEmptyResponse();
     select(state.current, true);
   }
 
-  return { init, refresh, select, send, renderSaved };
+  return { init, refresh, select, send, renderSaved, renderAssets };
 })();
