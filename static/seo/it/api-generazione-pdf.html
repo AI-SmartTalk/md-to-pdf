@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API di generazione PDF per sviluppatori | md-to-pdf</title>
+  <meta name="description" content="Crea PDF da Markdown, HTML e modelli JSON con l’API md-to-pdf di AI SmartTalk. Scopri esempi curl, temi grafici e accesso sicuro tramite chiave API.">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <link rel="canonical" href="https://pdf.aismarttalk.tech/it/api-generazione-pdf">
+  <link rel="alternate" hreflang="de" href="https://pdf.aismarttalk.tech/de/pdf-generierungs-api">
+  <link rel="alternate" hreflang="en" href="https://pdf.aismarttalk.tech/en/pdf-generation-api">
+  <link rel="alternate" hreflang="es" href="https://pdf.aismarttalk.tech/es/api-generacion-pdf">
+  <link rel="alternate" hreflang="fr" href="https://pdf.aismarttalk.tech/fr/api-generation-pdf">
+  <link rel="alternate" hreflang="it" href="https://pdf.aismarttalk.tech/it/api-generazione-pdf">
+  <link rel="alternate" hreflang="pt" href="https://pdf.aismarttalk.tech/pt/api-geracao-pdf">
+  <link rel="alternate" hreflang="x-default" href="https://pdf.aismarttalk.tech/en/pdf-generation-api">
+  <meta property="og:type" content="website"><meta property="og:site_name" content="md-to-pdf by AI SmartTalk">
+  <meta property="og:title" content="API di generazione PDF per sviluppatori"><meta property="og:description" content="Genera PDF pronti per la produzione dalla tua app a partire da Markdown, HTML e dati strutturati.">
+  <meta property="og:url" content="https://pdf.aismarttalk.tech/it/api-generazione-pdf">
+  <link rel="icon" href="/static/favicon.ico"><link rel="stylesheet" href="/static/marketing.css">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"md-to-pdf API","applicationCategory":"DeveloperApplication","operatingSystem":"Any","url":"https://pdf.aismarttalk.tech/it/api-generazione-pdf","description":"API di generazione PDF per Markdown, HTML e dati JSON.","publisher":{"@type":"Organization","name":"AI SmartTalk","url":"https://aismarttalk.tech"}}</script>
+</head>
+<body>
+  <header class="site-header"><a class="brand" href="/">md-to-pdf <span>by AI SmartTalk</span></a><nav aria-label="Navigazione principale"><a href="/it/markdown-in-pdf">Converti online</a><a href="/it/blog">Guide</a><a href="/#/api">Documentazione API</a><a href="/#/acces">Richiedi l’accesso</a></nav><nav class="language-nav" aria-label="Lingue"><a lang="de" href="/de/pdf-generierungs-api">Deutsch</a> <a lang="en" href="/en/pdf-generation-api">English</a> <a lang="es" href="/es/api-generacion-pdf">Español</a> <a lang="fr" href="/fr/api-generation-pdf">Français</a> <a lang="it" href="/it/api-generazione-pdf">Italiano</a> <a lang="pt" href="/pt/api-geracao-pdf">Português</a></nav></header>
+  <main>
+    <section class="hero"><p class="eyebrow">PER I TEAM DI PRODOTTO E SVILUPPO</p><h1>Genera PDF dalla tua app con un’API</h1><p class="lede">Invia Markdown, HTML o dati strutturati e ricevi un PDF pronto da consegnare, con temi personalizzati, anteprime e strumenti per la qualità dei documenti.</p><div class="hero-actions"><a class="button" href="/#/acces">Richiedi una chiave API →</a><a class="button secondary" href="/#/api">Consulta la documentazione</a></div></section>
+    <section class="feature-grid" aria-label="Funzionalità dell’API"><article class="feature"><h2>Da Markdown a PDF</h2><p>Invia report, proposte o note di riunione in Markdown, con opzioni CSS e di pagina.</p></article><article class="feature"><h2>Dati in PDF</h2><p>Compila un modello Tera con dati JSON per creare documenti personalizzati in modo ripetibile.</p></article><article class="feature"><h2>Controlla il risultato</h2><p>Visualizza le pagine in anteprima, confronta le versioni e verifica l’impaginazione prima della consegna.</p></article></section>
+    <section class="content-grid"><article><h2>Esempio: convertire un documento Markdown</h2><p>Ogni richiesta API usa una chiave specifica del cliente nell’intestazione <code>X-API-Key</code> . Gli amministratori possono creare e revocare ogni chiave separatamente.</p><pre><code>curl https://pdf.aismarttalk.tech/api/convert \
+  -H "X-API-Key: $MDTOPDF_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"markdown":"# Report\n\nMonthly results."}' \
+  --output report.pdf</code></pre><p>Conserva la chiave sul server o in un gestore di segreti. Non inserirla mai nel JavaScript del browser.</p></article><aside class="callout"><h2>Prova il convertitore pubblico</h2><p>Verifica il risultato della conversione di un documento Markdown prima di collegare un’integrazione.</p><a class="text-link" href="/it/markdown-in-pdf">Apri lo strumento Markdown in PDF →</a></aside></section>
+    <section class="faq"><h2>Un motore, tanti flussi di lavoro</h2><p>Il servizio riunisce conversione, rendering di modelli, anteprima, unione, filigrana, protezione con password, oscuramento dei dati e analisi dell’impaginazione. Le operazioni API richiedono una chiave per proteggere l’accesso e attribuire l’utilizzo a ogni integrazione.</p><p><a href="/#/api">Consulta tutti gli endpoint nella documentazione interattiva</a> oppure <a href="/#/acces">richiedi una chiave API</a>.</p></section>
+    <section class="related"><h2>Guide ed esempi</h2><p><a href="/it/blog">Leggi le guide all’integrazione</a> · <a href="/it/markdown-in-pdf">Converti un esempio online</a></p></section>
+  </main>
+  <footer class="site-footer"><span>md-to-pdf by AI SmartTalk</span><nav><a href="/it/markdown-in-pdf">Convertitore</a><a href="/it/blog">Guide</a><a href="/it/api-generazione-pdf">API</a><a href="https://aismarttalk.tech">AI SmartTalk</a></nav></footer>
+</body>
+</html>

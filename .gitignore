@@ -42,3 +42,6 @@ docker-compose.override.yml
 # Les sessions ouvertes. Chaque fichier porte un jeton qui ouvre un compte : commité,
 # il ne fuite pas une trace, il fuite un accès.
 /public/sessions/
+
+# Built from reviewed article sources and copied into the production image
+/static/blog-generated/

@@ -1,0 +1,282 @@
+[
+  {
+    "translation_group": "automate-pdf-reports-api",
+    "primary_query_fr": "automatiser la génération de rapports PDF par API",
+    "primary_query_en": "automate PDF report generation with an API",
+    "search_intent_fr": "Un développeur veut transformer des données applicatives en rapports récurrents sans assembler manuellement le HTML.",
+    "search_intent_en": "A developer wants to turn application data into recurring reports without hand-building HTML.",
+    "audience_fr": "Développeur ou responsable produit d'un SaaS B2B",
+    "audience_en": "Developer or product lead at a B2B SaaS company",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "POST /api/render reçoit un nom de template Tera et un objet JSON data.",
+      "POST /api/convert reçoit du Markdown et peut accepter options et un thème versionné.",
+      "Les routes /api/* exigent X-API-Key ou Authorization: Bearer.",
+      "Le service propose preview, diff et layout pour inspecter un rendu.",
+      "Les clés personnelles sont gérées séparément et chaque clé peut être révoquée.",
+      "The API does not claim to guarantee perfect layout or factual correctness."
+    ]
+  },
+  {
+    "translation_group": "markdown-pdf-team-workflow",
+    "primary_query_fr": "workflow Markdown vers PDF pour une équipe",
+    "primary_query_en": "Markdown to PDF workflow for a team",
+    "search_intent_fr": "Une équipe veut garder ses documents versionnables et produire un PDF cohérent à chaque livraison.",
+    "search_intent_en": "A team wants version-controlled source documents and consistent PDFs for each release.",
+    "audience_fr": "Équipe technique qui documente ses livrables",
+    "audience_en": "Technical team publishing customer-facing documents",
+    "cta_fr": "/fr/convertir-markdown-pdf",
+    "cta_en": "/en/markdown-to-pdf",
+    "product_facts": [
+      "Les pages localisées /fr/convertir-markdown-pdf et /en/markdown-to-pdf convertissent du Markdown en PDF dans une action publique sans compte.",
+      "Les blocs Markdown usuels incluent titres, listes, tableaux, liens et code.",
+      "L'outil public renvoie le PDF directement sans le sauvegarder avec un identifiant client.",
+      "L'API protégée peut choisir des thèmes versionnés et générer des aperçus PNG.",
+      "The anonymous converter has per-IP usage limits and accepts the guarded WeasyPrint engine only."
+    ]
+  },
+  {
+    "translation_group": "automatically-check-pdf-layout",
+    "primary_query_fr": "vérifier automatiquement la mise en page d'un PDF",
+    "primary_query_en": "automatically check PDF layout before delivery",
+    "search_intent_fr": "Une équipe veut détecter débordements, tableaux coupés et titres orphelins avant d'envoyer un PDF.",
+    "search_intent_en": "A product team wants to catch overflows, split tables and orphan headings before sending a PDF.",
+    "editorial_angle_fr": "Expliquez l'audit automatisé avant livraison via l'API : générer ou enregistrer le PDF, appeler POST /api/layout, interpréter le score et les constats, activer éventuellement autolayout, puis définir un seuil CI. Évitez le tutoriel général de contrôle visuel.",
+    "editorial_angle_en": "Focus on an automated pre-delivery audit through the API: generate or save the PDF, call POST /api/layout, interpret its score and findings, optionally enable autolayout, then define a CI threshold. Do not turn this into a generic visual-review tutorial.",
+    "audience_fr": "Équipe produit qui livre des rapports générés automatiquement",
+    "audience_en": "Product team shipping automatically generated customer reports",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "POST /api/layout audite un PDF déjà sauvegardé.",
+      "Les constats comprennent overflow, blank_page, widow_page, orphan_heading, split_table et long_table.",
+      "Les analyses et aperçus API sont authentifiés par clé.",
+      "Un score de layout est un signal de contrôle et ne certifie pas universellement le document.",
+      "A successful HTTP response does not guarantee that every page matches user intent."
+    ]
+  },
+  {
+    "translation_group": "design-pdf-themes",
+    "primary_query_fr": "créer des PDF cohérents avec un thème de marque",
+    "primary_query_en": "create branded PDFs with a reusable theme",
+    "search_intent_fr": "Une équipe veut appliquer les mêmes couleurs et règles de page à plusieurs types de documents générés.",
+    "search_intent_en": "A team wants to apply consistent colours and page rules across several generated document types.",
+    "audience_fr": "Développeur qui maintient plusieurs modèles PDF",
+    "audience_en": "Developer maintaining several PDF document templates",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "L'API accepte un thème nommé et peut épingler une version, par exemple report@1.",
+      "Les thèmes sont immuables par version ; une nouvelle version est nécessaire pour publier une modification visuelle.",
+      "GET /api/themes expose les thèmes et leurs couleurs, polices et URL d'aperçu.",
+      "The theme preview endpoint can render a sample page with an optional cover."
+    ]
+  },
+  {
+    "translation_group": "pdf-visual-regression-ci",
+    "primary_query_fr": "comparer des PDF dans une intégration continue",
+    "primary_query_en": "compare PDF output in continuous integration",
+    "search_intent_fr": "Une équipe veut repérer les changements visuels d'un document généré avant de fusionner une modification.",
+    "search_intent_en": "A team wants to spot visual changes in generated documents before merging a code change.",
+    "audience_fr": "Équipe qui génère des documents depuis un pipeline CI",
+    "audience_en": "Engineering team generating documents in a CI pipeline",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "POST /api/diff compare deux PDF sauvegardés et renvoie un verdict ainsi que des détails par page.",
+      "Le seuil de différence peut être réglé par requête.",
+      "Les deux documents peuvent être générés depuis la même source avec des versions différentes de CSS ou de thème.",
+      "A visual diff is a review signal and cannot determine whether a changed document is factually correct."
+    ]
+  },
+  {
+    "translation_group": "preview-pdf-pages-before-delivery",
+    "primary_query_fr": "prévisualiser les pages d'un PDF généré par API",
+    "primary_query_en": "preview pages of a PDF generated by an API",
+    "search_intent_fr": "Un développeur veut inspecter les pages d'un rendu dans son outil avant de le transmettre à un utilisateur.",
+    "search_intent_en": "A developer wants to inspect rendered pages in an application before showing a document to a user.",
+    "audience_fr": "Développeur d'une application qui crée des documents",
+    "audience_en": "Developer building an application that creates documents",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "POST /api/preview peut rendre Markdown, HTML ou un template Tera en PNG.",
+      "La route prend en charge une page, plusieurs pages et une planche contact.",
+      "PDF_PREVIEW_MAX_PAGES limite le nombre de pages rendues.",
+      "A preview helps inspect layout but does not validate the document's data or meaning."
+    ]
+  },
+  {
+    "translation_group": "merge-generated-pdf-files",
+    "primary_query_fr": "fusionner des fichiers PDF générés par une application",
+    "primary_query_en": "merge PDF files generated by an application",
+    "search_intent_fr": "Une application produit plusieurs PDF qu'elle veut assembler dans un ordre déterminé avant téléchargement.",
+    "search_intent_en": "An application creates several PDFs and needs to combine them in a chosen order before download.",
+    "audience_fr": "Développeur qui compose un dossier documentaire",
+    "audience_en": "Developer assembling a customer document pack",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "POST /api/merge fusionne au moins deux PDF déjà sauvegardés, dans l'ordre fourni.",
+      "L'API peut renvoyer le document fusionné en binaire ou le sauvegarder avec client_id et pdf_name.",
+      "Les entrées sont des PDF produits ou accessibles au service par leur chemin de téléchargement.",
+      "The API requires an individual key for merge operations."
+    ]
+  },
+  {
+    "translation_group": "tera-template-json-pdf",
+    "primary_query_fr": "générer des PDF depuis un template et des données JSON",
+    "primary_query_en": "generate PDFs from a template and JSON data",
+    "search_intent_fr": "Un développeur veut garder le modèle d'un document séparé des données propres à chaque client.",
+    "search_intent_en": "A developer wants to keep document structure separate from each customer's data.",
+    "audience_fr": "Développeur d'un produit SaaS qui émet des documents récurrents",
+    "audience_en": "Developer at a SaaS product that creates recurring documents",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "POST /api/render accepte un template HTML Tera et un objet JSON data.",
+      "Le service rend le template avec les données puis convertit le résultat en PDF.",
+      "La structure peut contenir des boucles Tera pour des listes de lignes ou d'éléments.",
+      "Template output still needs a PDF review when page layout matters."
+    ]
+  },
+  {
+    "translation_group": "secure-per-customer-api-keys",
+    "primary_query_fr": "gérer des clés API distinctes par intégration",
+    "primary_query_en": "manage separate API keys for each integration",
+    "search_intent_fr": "Un responsable d'API veut attribuer un accès par client et couper une intégration sans changer toutes les clés.",
+    "search_intent_en": "An API owner wants to assign access per customer and disable one integration without rotating every credential.",
+    "audience_fr": "Responsable technique qui administre plusieurs intégrations clientes",
+    "audience_en": "Technical owner administering multiple customer integrations",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "Le magasin de clés ne conserve que l'empreinte SHA-256 des clés utilisateur à forte entropie.",
+      "Chaque clé possède un ID et un libellé ; une clé peut être révoquée sans supprimer les autres.",
+      "Les clés sont transmises par X-API-Key ou Authorization: Bearer.",
+      "API credentials belong in a server-side secret store and must not be shipped to browser JavaScript."
+    ]
+  },
+  {
+    "translation_group": "password-protect-generated-pdf",
+    "primary_query_fr": "protéger un PDF généré par API avec un mot de passe",
+    "primary_query_en": "password-protect an API-generated PDF",
+    "search_intent_fr": "Une équipe veut ajouter une protection par mot de passe après avoir généré un document PDF.",
+    "search_intent_en": "A team wants to add password protection after generating a PDF document.",
+    "audience_fr": "Développeur qui automatise l'envoi de documents sensibles",
+    "audience_en": "Developer automating delivery of sensitive documents",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "POST /api/protect applique une protection par mot de passe à un PDF déjà sauvegardé.",
+      "La route exige une clé API et reçoit le chemin du document ainsi que le mot de passe.",
+      "Les mots de passe ne doivent pas être écrits dans les logs ou conservés dans le code source.",
+      "Password protection does not replace access control for the systems that store or send a PDF."
+    ]
+  },
+  {
+    "translation_group": "redact-personal-information-pdf",
+    "primary_query_fr": "caviarder des informations personnelles dans un PDF",
+    "primary_query_en": "redact personal information from a PDF",
+    "search_intent_fr": "Une équipe veut retirer des données identifiantes avant de partager une copie d'un document.",
+    "search_intent_en": "A team needs to remove identifying information before sharing a copy of a document.",
+    "audience_fr": "Équipe métier qui prépare des documents à partager",
+    "audience_en": "Operations team preparing documents for external sharing",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "POST /api/redact accepte des motifs et des catégories d'entités à rechercher dans un PDF sauvegardé.",
+      "Le mode flatten reconstruit les pages depuis des images après application des masques.",
+      "La réponse expose le nombre de correspondances par page.",
+      "Review the output visually; automated matching can miss information or redact a false positive."
+    ]
+  },
+  {
+    "translation_group": "markdown-charts-to-pdf",
+    "primary_query_fr": "ajouter un graphique à un rapport Markdown en PDF",
+    "primary_query_en": "add charts to a Markdown report rendered as PDF",
+    "search_intent_fr": "Un auteur veut montrer des données dans un rapport écrit en Markdown sans créer l'image du graphique manuellement.",
+    "search_intent_en": "An author wants charts in a Markdown report without creating each image separately.",
+    "audience_fr": "Équipe produit qui publie des rapports d'indicateurs",
+    "audience_en": "Product team publishing metric reports",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "Le moteur reconnaît les blocs fenced ```chart et génère un SVG intégré au document.",
+      "Les types de graphique incluent bar, line, area, pie et donut ainsi que des variantes empilées et groupées.",
+      "Les données de graphique sont transmises sous forme de JSON avec labels et series.",
+      "Charts can be disabled per request with options.charts set to false."
+    ]
+  },
+  {
+    "translation_group": "mermaid-diagrams-markdown-pdf",
+    "primary_query_fr": "insérer un diagramme Mermaid dans un PDF Markdown",
+    "primary_query_en": "include a Mermaid diagram in a Markdown PDF",
+    "search_intent_fr": "Une équipe technique veut intégrer un schéma de flux Mermaid dans un document de livraison.",
+    "search_intent_en": "A technical team wants a Mermaid flow diagram included in a delivery document.",
+    "audience_fr": "Développeur qui produit des guides techniques",
+    "audience_en": "Developer producing technical documentation",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "Les blocs fenced ```mermaid sont rendus en SVG via Mermaid Studio quand le service est configuré.",
+      "Un diagramme qui échoue reste un bloc de code accompagné d'un avertissement.",
+      "options.charts permet de désactiver l'expansion des graphiques et des diagrammes.",
+      "Mermaid rendering depends on an outbound service and should not be described as an offline feature."
+    ]
+  },
+  {
+    "translation_group": "public-markdown-pdf-converter",
+    "primary_query_fr": "convertisseur Markdown PDF en ligne sans compte",
+    "primary_query_en": "convert Markdown to PDF online without an account",
+    "search_intent_fr": "Un utilisateur veut essayer une conversion ponctuelle sans intégrer une API ni créer de compte.",
+    "search_intent_en": "A visitor needs a one-off conversion without an API integration or account setup.",
+    "audience_fr": "Utilisateur qui prépare un rapport ou une note en Markdown",
+    "audience_en": "Person preparing a report or note in Markdown",
+    "cta_fr": "/fr/convertir-markdown-pdf",
+    "cta_en": "/en/markdown-to-pdf",
+    "product_facts": [
+      "Le convertisseur public se trouve sur les routes localisées française et anglaise.",
+      "La page envoie le texte à POST / et renvoie le PDF directement au navigateur.",
+      "Les conversions anonymes ont une limite par adresse IP et le cache disque partagé est désactivé.",
+      "The public tool is for an individual conversion; saved files and automated workflows require an API key."
+    ]
+  },
+  {
+    "translation_group": "add-headers-footers-pdf-api",
+    "primary_query_fr": "ajouter un en-tête et un pied de page à un PDF généré",
+    "primary_query_en": "add headers and footers to an API-generated PDF",
+    "search_intent_fr": "Un développeur veut répéter un logo, un nom de société ou une pagination sur les pages d'un rapport.",
+    "search_intent_en": "A developer wants a logo, company name or page marker repeated across report pages.",
+    "audience_fr": "Développeur qui maintient des modèles de documents de marque",
+    "audience_en": "Developer maintaining branded document templates",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "Les routes de rendu acceptent header_html, footer_html, header_template et footer_template selon l'endpoint.",
+      "Les templates d'en-tête et de pied de page sont lus depuis le répertoire templates du service.",
+      "Les valeurs envoyées par le client ont priorité sur celles du thème.",
+      "Headers and footers are supported by HTML-based PDF engines; pdflatex ignores them."
+    ]
+  },
+  {
+    "translation_group": "inspect-multipage-pdf-layout",
+    "primary_query_fr": "repérer les problèmes de mise en page dans un rapport PDF",
+    "primary_query_en": "find layout problems in a generated multi-page PDF",
+    "search_intent_fr": "Une équipe veut une liste de contrôles concrets à faire sur un rapport PDF de plusieurs pages.",
+    "search_intent_en": "A team wants concrete checks for a multi-page PDF report before sending it.",
+    "editorial_angle_fr": "Concentrez-vous sur la vérification humaine d'un rapport de plusieurs pages : classer les constats, prévisualiser les pages concernées et décider quand demander une correction. Évitez l'intégration CI ou un guide générique de l'API.",
+    "editorial_angle_en": "Focus on a human review workflow for a multi-page report: triage findings, preview affected pages, and decide when a correction is needed. Do not present this as CI integration or a generic API guide.",
+    "audience_fr": "Responsable qui valide des rapports générés automatiquement",
+    "audience_en": "Owner reviewing automatically generated reports",
+    "cta_fr": "/fr/api-generation-pdf",
+    "cta_en": "/en/pdf-generation-api",
+    "product_facts": [
+      "L'analyse peut signaler les débordements, les pages blanches, les dernières pages presque vides, les titres isolés et les tableaux répartis sur plusieurs pages.",
+      "Le Layout Doctor peut essayer une passe de correction quand options.autolayout est activé.",
+      "Le rendu final reste à contrôler selon l'intention de l'auteur et le risque du document.",
+      "The layout report is a heuristic review aid and does not guarantee a correct document."
+    ]
+  }
+]

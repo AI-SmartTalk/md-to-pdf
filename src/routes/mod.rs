@@ -26,6 +26,7 @@ pub mod pages;
 pub mod pdfa;
 pub mod preview;
 pub mod protect;
+pub mod public_pages;
 pub mod rasterize;
 pub mod redact;
 pub mod render;

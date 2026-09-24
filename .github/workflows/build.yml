@@ -62,6 +62,19 @@ jobs:
       - name: Tests
         run: cargo test --locked --all-targets
 
+      - name: Installer Pandoc pour le rendu du contenu public
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pandoc
+
+      - name: Valider les pages localisées et leurs routes publiques
+        run: |
+          python3 scripts/build_localized_landings.py
+          python3 -m unittest tests.test_blog_locales tests.test_public_landings
+          output="$RUNNER_TEMP/md-to-pdf-public-pages"
+          python3 scripts/build_public_pages.py "$output"
+          python3 scripts/check_public_runtime.py --blog-output "$output"
+
   # Le test qui compte vraiment : l'image de production démarre, répond, et passe
   # la suite d'intégration. Un binaire qui compile mais dont l'image n'embarque
   # ni pandoc ni weasyprint est un déploiement cassé que `cargo build` valide.
