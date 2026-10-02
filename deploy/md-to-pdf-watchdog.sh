@@ -14,7 +14,7 @@
 set -uo pipefail
 
 COMPOSE_FILE="${COMPOSE_FILE:-/opt/md-to-pdf/docker-compose.prod.yml}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8000/api/health}"
+health() { docker exec "$CONTAINER" curl -fsS -m 5 http://127.0.0.1:8000/api/health; }
 CONTAINER="${CONTAINER:-md-to-pdf}"
 # Nombre d'échecs consécutifs avant redémarrage : une sonde isolée qui échoue
 # pendant un pic de charge ne doit pas provoquer une coupure.
@@ -37,20 +37,20 @@ fi
 
 failures=0
 for _ in $(seq 1 "$FAILURES_BEFORE_RESTART"); do
-    if curl -fsS -m 5 "$HEALTH_URL" > /dev/null 2>&1; then
+    if health > /dev/null 2>&1; then
         exit 0
     fi
     failures=$((failures + 1))
     [ "$failures" -lt "$FAILURES_BEFORE_RESTART" ] && sleep "$DELAY_BETWEEN_PROBES"
 done
 
-log "$failures sondes en échec sur $HEALTH_URL alors que le conteneur tourne — redémarrage"
+log "$failures sondes en échec dans $CONTAINER alors que le conteneur tourne — redémarrage"
 docker compose -f "$COMPOSE_FILE" restart md-to-pdf
 
 # Laisser le service revenir avant de rendre la main, pour que l'état du timer
 # reflète le résultat réel du redémarrage.
 for _ in $(seq 1 30); do
-    if curl -fsS -m 5 "$HEALTH_URL" > /dev/null 2>&1; then
+    if health > /dev/null 2>&1; then
         log "service rétabli"
         exit 0
     fi

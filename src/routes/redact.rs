@@ -466,8 +466,7 @@ impl PageText {
     }
 
     fn mark(&self, span: (usize, usize), marked: &mut [bool]) {
-        for index in span.0..span.1.min(self.owner.len()) {
-            let word = self.owner[index];
+        for &word in self.owner.iter().take(span.1).skip(span.0) {
             if word != NO_WORD {
                 marked[word] = true;
             }
