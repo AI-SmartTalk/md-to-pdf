@@ -1,0 +1,111 @@
+name: md-to-pdf
+
+services:
+  md-to-pdf:
+    image: "${APP_IMAGE:?APP_IMAGE doit être le digest publié par la CI}"
+    container_name: md-to-pdf
+    expose: ["8000"]
+    command: ["/bin/sh", "/usr/local/bin/run-core.sh"]
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=512m,mode=1777
+    environment:
+      VIRTUAL_HOST: "${PDF_DOMAIN:?PDF_DOMAIN requis}"
+      VIRTUAL_PORT: "8000"
+      LETSENCRYPT_HOST: "${PDF_DOMAIN}"
+      LETSENCRYPT_EMAIL: "${ACME_EMAIL:-pierre-antoine@aismarttalk.tech}"
+      # Clé opérateur historique, gardée pour compatibilité. Les clés clientes
+      # individuelles sont lues dans API_KEYS_FILE. Toute route /api/* protégée
+      # renvoie 401 si aucune clé valide ne leur est présentée.
+      API_KEY: "${API_KEY:?API_KEY est obligatoire — voir .env.example}"
+      API_KEYS_FILE: /home/rocket/secrets/api-keys.json
+      DOWNLOAD_SIGNING_KEY: "${DOWNLOAD_SIGNING_KEY:-}"
+      XDG_CACHE_HOME: /tmp/.cache
+      # Limite de temps pour pandoc / weasyprint / qpdf / pdftoppm
+      PDF_PROCESS_TIMEOUT_SECS: "${PDF_PROCESS_TIMEOUT_SECS:-60}"
+      # Limite de temps d'un rendu complet, passes correctives comprises. Les
+      # limites par processus ne s'additionnent pas : sans ce plafond une requête
+      # peut survivre au ProxyTimeout en gardant sa place dans la file.
+      PDF_RENDER_DEADLINE_SECS: "${PDF_RENDER_DEADLINE_SECS:-120}"
+      RUST_LOG: "${RUST_LOG:-info}"
+
+      # File d'attente de rendu et cache adressé par contenu
+      PDF_MAX_CONCURRENCY: "${PDF_MAX_CONCURRENCY:-1}"
+      PDF_QUEUE_TIMEOUT_SECS: "${PDF_QUEUE_TIMEOUT_SECS:-30}"
+      PDF_CACHE_ENABLED: "${PDF_CACHE_ENABLED:-true}"
+      PDF_CACHE_MAX_MB: "${PDF_CACHE_MAX_MB:-512}"
+      PDF_CACHE_TTL_SECS: "${PDF_CACHE_TTL_SECS:-604800}"
+      PDF_LAYOUT_MAX_PASSES: "${PDF_LAYOUT_MAX_PASSES:-1}"
+      PDF_PREVIEW_MAX_PAGES: "${PDF_PREVIEW_MAX_PAGES:-20}"
+
+      # Anti-SSRF. Une liste d'hôtes vide vaut « tout hôte public » ; les
+      # adresses privées et les endpoints de métadonnées restent refusés.
+      PDF_ALLOWED_URL_HOSTS: "${PDF_ALLOWED_URL_HOSTS:-}"
+      PDF_URL_STRICT_HOSTS: "${PDF_URL_STRICT_HOSTS:-false}"
+      PDF_ALLOW_LOCAL_ASSETS: "${PDF_ALLOW_LOCAL_ASSETS:-false}"
+      PDF_URLGUARD_TIMEOUT_SECS: "${PDF_URLGUARD_TIMEOUT_SECS:-10}"
+      PDF_URLGUARD_MAX_BYTES: "${PDF_URLGUARD_MAX_BYTES:-10485760}"
+      PDF_URLGUARD_MAX_REDIRECTS: "${PDF_URLGUARD_MAX_REDIRECTS:-3}"
+      PDF_URLGUARD_ALLOW_FILES: "${PDF_URLGUARD_ALLOW_FILES:-}"
+      PDF_URLGUARD_LOG: "${PDF_URLGUARD_LOG:-}"
+      PDF_URL_GUARD: "${PDF_URL_GUARD:-}"
+      # Moteurs offerts à POST / (sans clé). Vide = weasyprint seul, le seul qui
+      # rende derrière le récupérateur gardé.
+      PDF_UNAUTHENTICATED_ENGINES: "${PDF_UNAUTHENTICATED_ENGINES:-}"
+
+      # Diagrammes. Le conteneur doit joindre ce service en sortie ; une URL
+      # explicitement vide désactive proprement les blocs ```mermaid.
+      MERMAID_API_URL: "${MERMAID_API_URL:-https://mermaid.aismarttalk.tech/api/v1}"
+      MERMAID_API_KEY: "${MERMAID_API_KEY:-}"
+      MERMAID_TIMEOUT_SECS: "${MERMAID_TIMEOUT_SECS:-15}"
+
+      # Observabilité. Sans LOG420_INGEST_TOKEN rien ne part vers log420.
+      LOG420_URL: "${LOG420_URL:-https://log420.aist-core.fr}"
+      LOG420_INGEST_TOKEN: "${LOG420_INGEST_TOKEN:-}"
+      LOG420_REGION: "${LOG420_REGION:-eu}"
+      SERVICE_NAME: "${SERVICE_NAME:-md-to-pdf}"
+    volumes:
+      - ./deploy/run-core.sh:/usr/local/bin/run-core.sh:ro
+      # Les clés personnelles ne persistent que sous forme de hash et le service
+      # n'a besoin que d'un accès en lecture.
+      - ./secrets:/home/rocket/secrets:ro
+      # Les PDFs sauvegardés doivent survivre à un redéploiement, sinon chaque
+      # download_url déjà distribué devient un 404.
+      - pdf-storage:/home/rocket/public/pdf
+      # Le cache de rendu est adressé par contenu : sans volume il repart à zéro
+      # à chaque déploiement et le premier rendu de chaque document se repaie.
+      - pdf-cache:/home/rocket/public/cache
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      # La première conversion charge pandoc et les polices : laisser le temps
+      # au conteneur de se poser avant de le déclarer malade.
+      start_period: 20s
+      retries: 3
+    # Un document pathologique ne doit pas emporter la machine avec lui :
+    # WeasyPrint et pdflatex peuvent consommer beaucoup sur un gros document.
+    mem_limit: "${MEM_LIMIT:-1g}"
+    cpus: ${CPUS:-2.0}
+    pids_limit: 256
+    stop_grace_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - ai-toolkit-network
+
+volumes:
+  pdf-storage:
+  pdf-cache:
+
+networks:
+  ai-toolkit-network:
+    external: true
